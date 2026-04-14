@@ -1,0 +1,1 @@
+{"version":1,"defects":{"ArcaServiceTest::testTestAuthenticationWritesTokenCacheWhenReadinessIsComplete":1},"times":{"ArcaServiceTest::testSanitizeSettingsCreatesDefaultWritableCachePath":0.075,"ArcaServiceTest::testValidateSettingsRejectsInvalidCuitWhenArcaEnabled":0.006,"ArcaServiceTest::testTestAuthenticationWritesTokenCacheWhenReadinessIsComplete":0.005}}

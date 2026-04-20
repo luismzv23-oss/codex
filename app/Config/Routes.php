@@ -179,9 +179,15 @@ $routes->group('api/v1', ['namespace' => 'App\Controllers\Api\V1'], static funct
     $routes->post('auth/login', 'AuthController::login');
     $routes->post('auth/forgot-password', 'AuthController::forgotPassword');
     $routes->post('auth/reset-password', 'AuthController::resetPassword');
+    $routes->post('auth/refresh', 'AuthController::refresh');
 
     $routes->get('auth/me', 'AuthController::me', ['filter' => 'apiauth']);
     $routes->post('auth/logout', 'AuthController::logout', ['filter' => 'apiauth']);
+
+    // 2FA endpoints (require authentication)
+    $routes->post('auth/2fa/setup', 'AuthController::twoFactorSetup', ['filter' => 'apiauth']);
+    $routes->post('auth/2fa/confirm', 'AuthController::twoFactorConfirm', ['filter' => 'apiauth']);
+    $routes->post('auth/2fa/disable', 'AuthController::twoFactorDisable', ['filter' => 'apiauth']);
 
     $routes->get('dashboard', 'DashboardController::index', ['filter' => 'apipermission:dashboard.view']);
     $routes->get('dashboard/readiness', 'DashboardController::readiness', ['filter' => 'apipermission:dashboard.view']);
@@ -307,4 +313,33 @@ $routes->group('api/v1', ['namespace' => 'App\Controllers\Api\V1'], static funct
     $routes->post('settings/taxes', 'SettingsController::storeTax', ['filter' => 'apipermission:taxes.manage']);
     $routes->post('settings/currencies', 'SettingsController::storeCurrency', ['filter' => 'apipermission:currencies.manage']);
     $routes->post('settings/voucher-sequences', 'SettingsController::storeVoucherSequence', ['filter' => 'apipermission:voucher_sequences.manage']);
+
+    // ── Accounting (Phase 3) ─────────────────────────────
+    $routes->get('accounting/chart', 'AccountingController::chartOfAccounts', ['filter' => 'apipermission:systems.view']);
+    $routes->post('accounting/accounts', 'AccountingController::storeAccount', ['filter' => 'apipermission:systems.manage']);
+    $routes->post('accounting/journal-entries', 'AccountingController::storeJournalEntry', ['filter' => 'apipermission:systems.manage']);
+    $routes->post('accounting/journal-entries/(:segment)/post', 'AccountingController::postEntry/$1', ['filter' => 'apipermission:systems.manage']);
+    $routes->get('accounting/trial-balance', 'AccountingController::trialBalance', ['filter' => 'apipermission:systems.view']);
+    $routes->get('accounting/balance-sheet', 'AccountingController::balanceSheet', ['filter' => 'apipermission:systems.view']);
+    $routes->get('accounting/income-statement', 'AccountingController::incomeStatement', ['filter' => 'apipermission:systems.view']);
+    $routes->get('accounting/ledger/(:segment)', 'AccountingController::accountLedger/$1', ['filter' => 'apipermission:systems.view']);
+
+    // ── Business Intelligence (Phase 5) ──────────────────
+    $routes->get('bi/executive', 'BiController::executive', ['filter' => 'apipermission:dashboard.view']);
+    $routes->get('bi/forecast', 'BiController::forecast', ['filter' => 'apipermission:dashboard.view']);
+    $routes->get('bi/cash-flow', 'BiController::cashFlow', ['filter' => 'apipermission:dashboard.view']);
+    $routes->get('bi/alerts', 'BiController::alerts', ['filter' => 'apipermission:dashboard.view']);
+    $routes->get('bi/libro-iva/ventas', 'BiController::libroIvaVentas', ['filter' => 'apipermission:systems.view']);
+    $routes->get('bi/libro-iva/compras', 'BiController::libroIvaCompras', ['filter' => 'apipermission:systems.view']);
+    $routes->get('bi/libro-iva/export', 'BiController::exportLibroIva', ['filter' => 'apipermission:systems.view']);
+
+    // ── Codex Assist AI (Phase 6) ────────────────────────
+    $routes->post('assist/ask', 'AssistController::ask', ['filter' => 'apiauth']);
+    $routes->get('assist/guide/(:segment)', 'AssistController::guide/$1', ['filter' => 'apiauth']);
+    $routes->get('assist/alerts', 'AssistController::alerts', ['filter' => 'apiauth']);
+
+    // ── Notifications (Phase 4) ──────────────────────────
+    $routes->get('notifications', 'NotificationsController::index', ['filter' => 'apiauth']);
+    $routes->post('notifications/(:segment)/read', 'NotificationsController::markRead/$1', ['filter' => 'apiauth']);
+    $routes->post('notifications/read-all', 'NotificationsController::markAllRead', ['filter' => 'apiauth']);
 });

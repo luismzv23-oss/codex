@@ -20,9 +20,15 @@ class AuthController extends BaseController
             return redirect()->back()->withInput()->with('errors', $this->validator->getErrors());
         }
 
-        if (! auth()->attempt((string) $this->request->getPost('login'), (string) $this->request->getPost('password'))) {
+        $login = (string) $this->request->getPost('login');
+
+        if (! auth()->attempt($login, (string) $this->request->getPost('password'))) {
+            service('audit')->logLogin('', false, 'Failed login attempt for: ' . $login);
             return redirect()->back()->withInput()->with('error', 'Credenciales invalidas o usuario inactivo.');
         }
+
+        $user = auth()->user();
+        service('audit')->logLogin($user['id'] ?? '', true);
 
         return redirect()->to('/dashboard');
     }
@@ -65,7 +71,7 @@ class AuthController extends BaseController
     public function updatePassword(string $selector, string $token)
     {
         $rules = [
-            'password' => 'required|min_length[8]|max_length[255]',
+            'password'         => 'required|min_length[8]|max_length[255]|strong_password|not_common_password',
             'password_confirm' => 'required|matches[password]',
         ];
 

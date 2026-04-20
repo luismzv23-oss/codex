@@ -290,6 +290,7 @@ class ArcaService
 
         $readiness = $this->readiness($settings);
         $payload = $this->buildPayloadPreview($sale, $documentType, $company, $settings, $items, $pointOfSale, $service);
+        $environment = $settings['arca_environment'] ?? 'homologacion';
 
         if (! $readiness['ready']) {
             return [
@@ -297,26 +298,243 @@ class ArcaService
                 'result_code' => 'CFG001',
                 'message' => 'No se pudo autorizar: configuracion ARCA incompleta.',
                 'service_slug' => $service['slug'],
-                'environment' => $settings['arca_environment'] ?? 'homologacion',
+                'environment' => $environment,
                 'request_payload' => $payload,
                 'response_payload' => ['ready' => false, 'checks' => $readiness['checks']],
             ];
         }
 
+        // ── MOCK mode for development ──
+        if ($environment === 'desarrollo') {
+            return $this->mockAuthorize($sale, $company, $settings, $payload, $service);
+        }
+
+        // ── REAL SOAP integration ──
+        $startTime = microtime(true);
+
+        try {
+            $settings = $this->sanitizeSettings($settings, $company['id'] ?? null);
+
+            // 1. Authenticate with WSAA
+            $wsaaService = $service['slug'] === 'wsmtxca' ? 'wsmtxca' : 'wsfe';
+            $wsaa = new \App\Libraries\Arca\WsaaClient(
+                $settings['certificate_path'],
+                $settings['private_key_path'],
+                $settings['token_cache_path'],
+                $environment
+            );
+            $ticket = $wsaa->authenticate($wsaaService);
+
+            // 2. Call the appropriate fiscal WS
+            $cuit = $settings['arca_cuit'];
+            $response = null;
+
+            if ($service['slug'] === 'wsmtxca') {
+                $response = $this->callWsmtxca($ticket, $cuit, $environment, $sale, $documentType, $items, $pointOfSale);
+            } else {
+                $response = $this->callWsfev1($ticket, $cuit, $environment, $sale, $documentType, $items, $pointOfSale, $settings);
+            }
+
+            $durationMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            // 3. Log the integration
+            $this->logIntegration(
+                $company['id'] ?? null,
+                $service['slug'],
+                'authorize',
+                $environment,
+                $response->status,
+                'sale', $sale['id'] ?? null,
+                $response->cae,
+                $response->requestPayload,
+                $response->responsePayload,
+                $response->isAuthorized() ? null : $response->message,
+                $durationMs
+            );
+
+            // 4. Return legacy-compatible format
+            return [
+                'status' => $response->status,
+                'result_code' => $response->resultCode ?? 'CAE_OK',
+                'message' => $response->message,
+                'service_slug' => $service['slug'],
+                'environment' => $environment,
+                'cae' => $response->cae,
+                'cae_due_date' => $response->caeDueDate,
+                'authorized_at' => $response->authorizedAt,
+                'request_payload' => $response->requestPayload,
+                'response_payload' => $response->responsePayload,
+                'observations' => $response->observations,
+                'errors' => $response->errors,
+            ];
+
+        } catch (\Throwable $e) {
+            $durationMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            $this->logIntegration(
+                $company['id'] ?? null, $service['slug'], 'authorize', $environment,
+                'error', 'sale', $sale['id'] ?? null, null,
+                $payload, ['exception' => $e->getMessage()],
+                $e->getMessage(), $durationMs
+            );
+
+            log_message('error', 'ArcaService::authorizeSale SOAP error: ' . $e->getMessage());
+
+            return [
+                'status' => 'error',
+                'result_code' => 'SOAP_ERR',
+                'message' => 'Error de comunicacion con AFIP: ' . $e->getMessage(),
+                'service_slug' => $service['slug'],
+                'environment' => $environment,
+                'request_payload' => $payload,
+                'response_payload' => ['exception' => $e->getMessage()],
+            ];
+        }
+    }
+
+    // ── SOAP callers ─────────────────────────────────────
+
+    private function callWsfev1(
+        \App\Libraries\Arca\AuthTicket $ticket, string $cuit, string $env,
+        array $sale, array $documentType, array $items, array $pointOfSale, array $settings
+    ): \App\Libraries\Arca\ArcaResponse {
+        $client = new \App\Libraries\Arca\WsfeClient($ticket, $cuit, $env);
+
+        $ptoVta    = (int) ($pointOfSale['code'] ?? $pointOfSale['number'] ?? 1);
+        $cbteTipo  = (int) ($documentType['afip_code'] ?? 6);
+        $lastNum   = $client->FECompUltimoAutorizado($ptoVta, $cbteTipo);
+        $nextNum   = $lastNum + 1;
+
+        $subtotal = (float) ($sale['subtotal'] ?? 0);
+        $taxTotal = (float) ($sale['tax_total'] ?? 0);
+        $total    = (float) ($sale['total'] ?? 0);
+
+        // Build IVA array from items
+        $ivaByRate = [];
+        foreach ($items as $item) {
+            $afipCode = (int) ($item['afip_iva_code'] ?? 5); // Default 21%
+            $lineNet  = (float) ($item['line_total'] ?? 0) - (float) ($item['line_tax'] ?? 0);
+            $lineTax  = (float) ($item['line_tax'] ?? 0);
+
+            if (! isset($ivaByRate[$afipCode])) {
+                $ivaByRate[$afipCode] = ['Id' => $afipCode, 'BaseImp' => 0, 'Importe' => 0];
+            }
+            $ivaByRate[$afipCode]['BaseImp'] += $lineNet;
+            $ivaByRate[$afipCode]['Importe'] += $lineTax;
+        }
+
+        // Determine document type for customer
+        $docTipo = 80; // CUIT by default
+        $docNro  = $sale['customer_document_snapshot'] ?? '0';
+        $taxProfile = $sale['customer_tax_profile'] ?? '';
+        if ($taxProfile === 'consumidor_final' || $cbteTipo === 6 || $cbteTipo === 11) {
+            $docTipo = 99; // Consumidor final
+            $docNro  = '0';
+        }
+
+        $invoiceData = [
+            'punto_venta'  => $ptoVta,
+            'cbte_tipo'    => $cbteTipo,
+            'concepto'     => 1, // Productos
+            'doc_tipo'     => $docTipo,
+            'doc_nro'      => (int) preg_replace('/\D/', '', $docNro),
+            'cbte_desde'   => $nextNum,
+            'cbte_hasta'   => $nextNum,
+            'cbte_fch'     => date('Ymd', strtotime($sale['sale_date'] ?? 'now')),
+            'imp_total'    => $total,
+            'imp_tot_conc' => 0,
+            'imp_neto'     => $subtotal,
+            'imp_op_ex'    => 0,
+            'imp_iva'      => $taxTotal,
+            'imp_trib'     => 0,
+            'mon_id'       => ($sale['currency_code'] ?? 'ARS') === 'ARS' ? 'PES' : ($sale['currency_code'] ?? 'PES'),
+            'mon_cotiz'    => (float) ($sale['exchange_rate'] ?? 1),
+            'iva'          => array_values($ivaByRate),
+        ];
+
+        return $client->FECAESolicitar($invoiceData);
+    }
+
+    private function callWsmtxca(
+        \App\Libraries\Arca\AuthTicket $ticket, string $cuit, string $env,
+        array $sale, array $documentType, array $items, array $pointOfSale
+    ): \App\Libraries\Arca\ArcaResponse {
+        $client = new \App\Libraries\Arca\WsmtxcaClient($ticket, $cuit, $env);
+
+        $ptoVta   = (int) ($pointOfSale['code'] ?? $pointOfSale['number'] ?? 1);
+        $cbteTipo = (int) ($documentType['afip_code'] ?? 6);
+        $lastNum  = $client->consultarUltimoComprobanteAutorizado($ptoVta, $cbteTipo);
+        $nextNum  = $lastNum + 1;
+
+        $mtxcaItems = [];
+        $ivaSubtotals = [];
+
+        foreach ($items as $item) {
+            $afipCode = (int) ($item['afip_iva_code'] ?? 5);
+            $qty      = (float) ($item['quantity'] ?? 1);
+            $price    = (float) ($item['unit_price'] ?? 0);
+            $lineTax  = (float) ($item['line_tax'] ?? 0);
+            $lineTotal = (float) ($item['line_total'] ?? 0);
+            $lineNet  = $lineTotal - $lineTax;
+
+            $mtxcaItems[] = [
+                'codigo'          => $item['sku'] ?? '',
+                'descripcion'     => $item['product_name'] ?? '',
+                'cantidad'        => $qty,
+                'unidad_medida'   => 7,
+                'precio_unitario' => $price,
+                'condicion_iva'   => $afipCode,
+                'importe_iva'     => $lineTax,
+                'importe_item'    => $lineTotal,
+            ];
+
+            if (! isset($ivaSubtotals[$afipCode])) {
+                $ivaSubtotals[$afipCode] = ['codigo' => $afipCode, 'importe' => 0, 'base' => 0];
+            }
+            $ivaSubtotals[$afipCode]['importe'] += $lineTax;
+            $ivaSubtotals[$afipCode]['base']    += $lineNet;
+        }
+
+        $comprobante = [
+            'cbte_tipo'     => $cbteTipo,
+            'punto_venta'   => $ptoVta,
+            'cbte_nro'      => $nextNum,
+            'fecha_emision' => $sale['sale_date'] ?? date('Y-m-d'),
+            'doc_tipo'      => 80,
+            'doc_nro'       => $sale['customer_document_snapshot'] ?? '',
+            'imp_neto'      => (float) ($sale['subtotal'] ?? 0),
+            'imp_tot_conc'  => 0,
+            'imp_op_ex'     => 0,
+            'imp_subtotal'  => (float) ($sale['subtotal'] ?? 0),
+            'imp_trib'      => 0,
+            'imp_total'     => (float) ($sale['total'] ?? 0),
+            'mon_id'        => ($sale['currency_code'] ?? 'ARS') === 'ARS' ? 'PES' : ($sale['currency_code'] ?? 'PES'),
+            'mon_cotiz'     => (float) ($sale['exchange_rate'] ?? 1),
+            'items'         => $mtxcaItems,
+            'iva_subtotals' => array_values($ivaSubtotals),
+        ];
+
+        return $client->autorizarComprobante($comprobante);
+    }
+
+    // ── Mock for development ─────────────────────────────
+
+    private function mockAuthorize(array $sale, array $company, array $settings, array $payload, array $service): array
+    {
         $hashSource = implode('|', [
             (string) ($sale['id'] ?? ''),
             (string) ($sale['sale_number'] ?? ''),
             (string) ($company['id'] ?? ''),
-            (string) ($settings['arca_environment'] ?? 'homologacion'),
+            (string) ($settings['arca_environment'] ?? 'desarrollo'),
         ]);
         $cae = str_pad((string) abs(crc32($hashSource)), 14, '0', STR_PAD_LEFT);
 
         return [
             'status' => 'authorized',
             'result_code' => 'CAE_OK',
-            'message' => 'Comprobante autorizado en modo integrado local.',
+            'message' => 'Comprobante autorizado en modo desarrollo (simulado).',
             'service_slug' => $service['slug'],
-            'environment' => $settings['arca_environment'] ?? 'homologacion',
+            'environment' => 'desarrollo',
             'cae' => $cae,
             'cae_due_date' => date('Y-m-d 23:59:59', strtotime('+10 days')),
             'authorized_at' => date('Y-m-d H:i:s'),
@@ -324,10 +542,43 @@ class ArcaService
             'response_payload' => [
                 'cae' => $cae,
                 'observations' => [],
-                'environment' => $settings['arca_environment'] ?? 'homologacion',
+                'environment' => 'desarrollo',
                 'service' => $service['slug'],
+                'mode' => 'mock',
             ],
         ];
+    }
+
+    // ── Integration logging ──────────────────────────────
+
+    private function logIntegration(
+        ?string $companyId, string $serviceSlug, string $operation, string $environment,
+        string $status, ?string $sourceType, ?string $sourceId, ?string $cae,
+        array $requestPayload, array $responsePayload, ?string $errorMessage, int $durationMs
+    ): void {
+        try {
+            db_connect()->table('integration_logs')->insert([
+                'id'               => app_uuid(),
+                'company_id'       => $companyId,
+                'provider'         => 'arca',
+                'service'          => $serviceSlug . ($operation ? "/{$operation}" : ''),
+                'reference_type'   => $sourceType,
+                'reference_id'     => $sourceId,
+                'status'           => $status,
+                'request_payload'  => json_encode($requestPayload),
+                'response_payload' => json_encode(array_merge($responsePayload, array_filter([
+                    'cae'          => $cae,
+                    'environment'  => $environment,
+                    'duration_ms'  => $durationMs,
+                ]))),
+                'message'          => $errorMessage ? mb_substr($errorMessage, 0, 255) : null,
+                'user_id'          => session()->get('user_id'),
+                'created_at'       => date('Y-m-d H:i:s'),
+                'updated_at'       => date('Y-m-d H:i:s'),
+            ]);
+        } catch (\Throwable $e) {
+            log_message('error', 'ArcaService::logIntegration failed: ' . $e->getMessage());
+        }
     }
 
     public function consultSale(array $sale, array $settings): array

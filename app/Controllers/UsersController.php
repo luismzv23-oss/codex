@@ -52,7 +52,7 @@ class UsersController extends BaseController
         }
 
         $rules = $this->rules();
-        $rules['password'] = 'required|min_length[8]|max_length[255]';
+        $rules['password'] = 'required|min_length[8]|max_length[255]|strong_password|not_common_password';
 
         if (! $this->validate($rules)) {
             return redirect()->back()->withInput()->with('errors', $this->validator->getErrors());
@@ -121,7 +121,7 @@ class UsersController extends BaseController
         $rules = $this->rules($id);
 
         if ((string) $this->request->getPost('password') !== '') {
-            $rules['password'] = 'min_length[8]|max_length[255]';
+            $rules['password'] = 'min_length[8]|max_length[255]|strong_password|not_common_password';
         }
 
         if (! $this->validate($rules)) {

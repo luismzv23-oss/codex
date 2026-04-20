@@ -3,6 +3,7 @@
 namespace App\Controllers;
 
 use App\Libraries\AccountingService;
+use App\Libraries\EventBus;
 use App\Libraries\CashService;
 use App\Models\BranchModel;
 use App\Models\CashCheckModel;
@@ -330,6 +331,7 @@ class PurchasesController extends BaseController
         ]);
 
         (new AccountingService())->syncPurchaseReceipt($companyId, (string) $receiptId, $this->currentUser()['id']);
+        EventBus::emit('inventory.stock_received', ['company_id' => $companyId, 'receipt_id' => $receiptId]);
 
         $db->transComplete();
 
@@ -675,6 +677,7 @@ class PurchasesController extends BaseController
         ]);
 
         (new AccountingService())->syncPurchasePayment($companyId, (string) $paymentId, $this->currentUser()['id']);
+        EventBus::emit('purchase.payment_made', ['company_id' => $companyId, 'payment_id' => $paymentId, 'amount' => $amount, 'supplier_id' => $payable['supplier_id']]);
 
         $db->transComplete();
         if (! $db->transStatus()) {

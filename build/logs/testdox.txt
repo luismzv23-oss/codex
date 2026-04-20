@@ -1,0 +1,5 @@
+Arca Service
+ [x] Sanitize settings creates default writable cache path
+ [x] Validate settings rejects invalid cuit when arca enabled
+ [ ] Test authentication writes token cache when readiness is complete
+

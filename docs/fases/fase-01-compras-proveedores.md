@@ -1,5 +1,6 @@
 # Fase 01: Compras y Proveedores
 
+
 ## Objetivo
 Incorporar el circuito de abastecimiento para registrar proveedores, emitir ordenes de compra, recepcionar mercaderia y devolver productos al proveedor con impacto directo en Inventario.
 

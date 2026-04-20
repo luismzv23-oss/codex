@@ -2,552 +2,404 @@
 
 namespace App\Libraries;
 
-use App\Models\AccountingAccountModel;
-use App\Models\AccountingEntryItemModel;
-use App\Models\AccountingEntryModel;
-use App\Models\BranchModel;
-use App\Models\CashClosureModel;
-use App\Models\CustomerModel;
-use App\Models\PurchasePaymentModel;
-use App\Models\PurchaseReceiptModel;
-use App\Models\PurchaseReturnModel;
-use App\Models\SaleItemModel;
-use App\Models\SaleModel;
-use App\Models\SaleReturnItemModel;
-use App\Models\SaleReturnModel;
-use App\Models\SalesDocumentTypeModel;
-use App\Models\SalesReceiptModel;
-use App\Models\SupplierModel;
-use App\Models\VatPurchaseBookModel;
-use App\Models\VatSalesBookModel;
-use App\Models\VoucherSequenceModel;
-
+/**
+ * AccountingService — Core accounting engine.
+ * Handles chart of accounts, journal entries, and financial statements.
+ */
 class AccountingService
 {
-    private const DEFAULT_ACCOUNTS = [
-        ['code' => '1.1.01', 'name' => 'Caja y bancos', 'category' => 'asset', 'nature' => 'debit', 'system_key' => 'cash'],
-        ['code' => '1.1.02', 'name' => 'Creditos por ventas', 'category' => 'asset', 'nature' => 'debit', 'system_key' => 'accounts_receivable'],
-        ['code' => '1.1.03', 'name' => 'IVA credito fiscal', 'category' => 'asset', 'nature' => 'debit', 'system_key' => 'vat_credit'],
-        ['code' => '1.1.04', 'name' => 'Inventario de mercaderias', 'category' => 'asset', 'nature' => 'debit', 'system_key' => 'inventory'],
-        ['code' => '2.1.01', 'name' => 'Proveedores', 'category' => 'liability', 'nature' => 'credit', 'system_key' => 'accounts_payable'],
-        ['code' => '2.1.02', 'name' => 'IVA debito fiscal', 'category' => 'liability', 'nature' => 'credit', 'system_key' => 'vat_debit'],
-        ['code' => '4.1.01', 'name' => 'Ventas', 'category' => 'revenue', 'nature' => 'credit', 'system_key' => 'sales_revenue'],
-        ['code' => '4.1.02', 'name' => 'Devoluciones sobre compras', 'category' => 'revenue', 'nature' => 'credit', 'system_key' => 'purchase_returns'],
-        ['code' => '4.1.03', 'name' => 'Sobrantes de caja', 'category' => 'revenue', 'nature' => 'credit', 'system_key' => 'cash_overage'],
-        ['code' => '5.1.01', 'name' => 'Costo de ventas', 'category' => 'expense', 'nature' => 'debit', 'system_key' => 'cost_of_goods_sold'],
-        ['code' => '5.1.02', 'name' => 'Devoluciones sobre ventas', 'category' => 'expense', 'nature' => 'debit', 'system_key' => 'sales_returns'],
-        ['code' => '5.1.03', 'name' => 'Faltantes de caja', 'category' => 'expense', 'nature' => 'debit', 'system_key' => 'cash_shortage'],
-    ];
-
-    public function ensureDefaults(string $companyId): void
+    /**
+     * Create a journal entry with balanced debit/credit lines.
+     */
+    public function createJournalEntry(string $companyId, array $data, array $lines): array
     {
-        $accountModel = new AccountingAccountModel();
-        foreach (self::DEFAULT_ACCOUNTS as $row) {
-            if (! $accountModel->where('company_id', $companyId)->where('system_key', $row['system_key'])->first()) {
-                $accountModel->insert(array_merge($row, ['company_id' => $companyId, 'active' => 1]));
+        $db = db_connect();
+        $db->transBegin();
+
+        try {
+            $totalDebit  = array_sum(array_column($lines, 'debit'));
+            $totalCredit = array_sum(array_column($lines, 'credit'));
+
+            if (round($totalDebit, 2) !== round($totalCredit, 2)) {
+                throw new \RuntimeException("Asiento desbalanceado: Debe={$totalDebit}, Haber={$totalCredit}");
             }
-        }
 
-        $branch = (new BranchModel())->where('company_id', $companyId)->where('code', 'MAIN')->first();
-        $sequenceModel = new VoucherSequenceModel();
-        if (! $sequenceModel->where('company_id', $companyId)->where('document_type', 'ASIENTO')->first()) {
-            $sequenceModel->insert([
-                'company_id' => $companyId,
-                'branch_id' => $branch['id'] ?? null,
-                'document_type' => 'ASIENTO',
-                'prefix' => 'AST',
-                'current_number' => 1,
-                'active' => 1,
-            ]);
-        }
-    }
+            $lastEntry = $db->table('journal_entries')
+                ->where('company_id', $companyId)
+                ->selectMax('entry_number')
+                ->get()->getRowArray();
+            $nextNumber = ((int) ($lastEntry['entry_number'] ?? 0)) + 1;
 
-    public function syncSale(string $companyId, string $saleId, ?string $userId = null): void
-    {
-        $this->ensureDefaults($companyId);
-        $sale = (new SaleModel())->find($saleId);
-        if (! $sale) {
-            $this->removeSource('sale', $saleId);
-            return;
-        }
+            $entryId = app_uuid();
+            $entry = [
+                'id'             => $entryId,
+                'company_id'     => $companyId,
+                'entry_number'   => $nextNumber,
+                'entry_date'     => $data['entry_date'] ?? date('Y-m-d'),
+                'description'    => $data['description'] ?? '',
+                'reference_type' => $data['reference_type'] ?? 'manual',
+                'reference_id'   => $data['reference_id'] ?? null,
+                'status'         => $data['status'] ?? 'draft',
+                'total_debit'    => round($totalDebit, 2),
+                'total_credit'   => round($totalCredit, 2),
+                'user_id'        => $data['user_id'] ?? (auth_user()['id'] ?? null),
+                'posted_at'      => ($data['status'] ?? 'draft') === 'posted' ? date('Y-m-d H:i:s') : null,
+                'created_at'     => date('Y-m-d H:i:s'),
+            ];
 
-        $documentType = ! empty($sale['document_type_id']) ? (new SalesDocumentTypeModel())->find($sale['document_type_id']) : null;
-        $category = (string) ($documentType['category'] ?? '');
-        $accountable = in_array($category, ['invoice', 'ticket', 'debit_note'], true) && in_array(($sale['status'] ?? ''), ['confirmed', 'returned_partial', 'returned_total'], true);
+            $db->table('journal_entries')->insert($entry);
 
-        if (! $accountable) {
-            $this->removeSource('sale', $saleId);
-            if (in_array(($sale['status'] ?? ''), ['cancelled', 'draft'], true)) {
-                $this->removeVatSalesBook('sale', $saleId);
+            foreach ($lines as $line) {
+                $db->table('journal_entry_lines')->insert([
+                    'id'               => app_uuid(),
+                    'journal_entry_id' => $entryId,
+                    'account_id'       => $line['account_id'],
+                    'description'      => $line['description'] ?? null,
+                    'debit'            => (float) ($line['debit'] ?? 0),
+                    'credit'           => (float) ($line['credit'] ?? 0),
+                    'created_at'       => date('Y-m-d H:i:s'),
+                ]);
             }
-            return;
-        }
 
-        $total = round((float) ($sale['total'] ?? 0), 2);
-        $tax = round((float) ($sale['tax_total'] ?? 0), 2);
-        $net = max(0.0, round($total - $tax, 2));
-        $paid = min($total, round((float) ($sale['paid_total'] ?? 0), 2));
-        $balance = max(0.0, round($total - $paid, 2));
-        $costTotal = 0.0;
-        foreach ((new SaleItemModel())->where('sale_id', $saleId)->findAll() as $item) {
-            $costTotal += ((float) ($item['unit_cost'] ?? 0)) * ((float) ($item['quantity'] ?? 0));
+            $db->transCommit();
+            return ['ok' => true, 'entry_id' => $entryId, 'entry_number' => $nextNumber];
+        } catch (\Throwable $e) {
+            $db->transRollback();
+            return ['ok' => false, 'error' => $e->getMessage()];
         }
-        $costTotal = round($costTotal, 2);
-
-        $lines = [];
-        if ($paid > 0) {
-            $lines[] = $this->line($companyId, 'cash', 'Cobro registrado en venta', $paid, 0, 'sale', $saleId);
-        }
-        if ($balance > 0) {
-            $lines[] = $this->line($companyId, 'accounts_receivable', 'Saldo pendiente de cobro', $balance, 0, 'sale', $saleId);
-        }
-        if ($net > 0) {
-            $lines[] = $this->line($companyId, 'sales_revenue', 'Ventas netas', 0, $net, 'sale', $saleId);
-        }
-        if ($tax > 0) {
-            $lines[] = $this->line($companyId, 'vat_debit', 'IVA debito fiscal', 0, $tax, 'sale', $saleId);
-        }
-        if ($costTotal > 0 && (int) ($documentType['impacts_stock'] ?? 0) === 1) {
-            $lines[] = $this->line($companyId, 'cost_of_goods_sold', 'Costo de ventas', $costTotal, 0, 'sale', $saleId);
-            $lines[] = $this->line($companyId, 'inventory', 'Salida de inventario', 0, $costTotal, 'sale', $saleId);
-        }
-
-        if ($lines === []) {
-            $this->removeSource('sale', $saleId);
-            return;
-        }
-
-        $this->replaceEntry($companyId, 'sale', $saleId, [
-            'entry_date' => $sale['confirmed_at'] ?? $sale['issue_date'] ?? date('Y-m-d H:i:s'),
-            'source_number' => $sale['sale_number'] ?? null,
-            'description' => 'Asiento de venta ' . ($sale['sale_number'] ?? $saleId),
-            'posted_by' => $userId ?? ($sale['confirmed_by'] ?? $sale['created_by'] ?? null),
-        ], $lines);
-
-        $customer = ! empty($sale['customer_id']) ? (new CustomerModel())->find($sale['customer_id']) : null;
-        $this->replaceVatSalesBook('sale', $saleId, [
-            'company_id' => $companyId,
-            'source_type' => 'sale',
-            'source_id' => $saleId,
-            'sale_id' => $saleId,
-            'document_type_id' => $sale['document_type_id'] ?? null,
-            'document_number' => $sale['sale_number'] ?? '',
-            'issue_date' => $sale['issue_date'] ?? date('Y-m-d H:i:s'),
-            'customer_name' => (string) ($sale['customer_name_snapshot'] ?? ($customer['name'] ?? 'Consumidor Final')),
-            'customer_document' => $sale['customer_document_snapshot'] ?? ($customer['document_number'] ?? null),
-            'customer_tax_profile' => $sale['customer_tax_profile'] ?? ($customer['tax_profile'] ?? null),
-            'net_amount' => $net,
-            'tax_amount' => $tax,
-            'total_amount' => $total,
-            'currency_code' => $sale['currency_code'] ?? 'ARS',
-            'status' => (string) ($sale['status'] ?? 'confirmed'),
-        ]);
     }
 
-    public function syncSaleReturn(string $companyId, string $returnId, ?string $userId = null): void
+    public function postEntry(string $entryId): bool
     {
-        $this->ensureDefaults($companyId);
-        $return = (new SaleReturnModel())->find($returnId);
-        if (! $return || ($return['status'] ?? '') !== 'confirmed') {
-            $this->removeSource('sale_return', $returnId);
-            $this->removeVatSalesBook('sale_return', $returnId);
-            return;
-        }
-
-        $sale = (new SaleModel())->find((string) $return['sale_id']);
-        if (! $sale) {
-            return;
-        }
-
-        $total = round((float) ($return['total'] ?? 0), 2);
-        $saleTotal = max(0.01, (float) ($sale['total'] ?? 0));
-        $tax = round($total * (((float) ($sale['tax_total'] ?? 0)) / $saleTotal), 2);
-        $net = max(0.0, round($total - $tax, 2));
-        $costTotal = 0.0;
-        foreach ((new SaleReturnItemModel())->where('sale_return_id', $returnId)->findAll() as $item) {
-            $saleItem = (new SaleItemModel())->find($item['sale_item_id']);
-            $costTotal += ((float) ($saleItem['unit_cost'] ?? 0)) * ((float) ($item['quantity'] ?? 0));
-        }
-        $costTotal = round($costTotal, 2);
-
-        $lines = [];
-        if ($net > 0) {
-            $lines[] = $this->line($companyId, 'sales_returns', 'Nota de credito / devolucion de venta', $net, 0, 'sale_return', $returnId);
-        }
-        if ($tax > 0) {
-            $lines[] = $this->line($companyId, 'vat_debit', 'Reversion IVA debito fiscal', $tax, 0, 'sale_return', $returnId);
-        }
-        if ($total > 0) {
-            $lines[] = $this->line($companyId, 'accounts_receivable', 'Credito al cliente', 0, $total, 'sale_return', $returnId);
-        }
-        if ($costTotal > 0) {
-            $lines[] = $this->line($companyId, 'inventory', 'Reingreso por devolucion', $costTotal, 0, 'sale_return', $returnId);
-            $lines[] = $this->line($companyId, 'cost_of_goods_sold', 'Reversion costo de ventas', 0, $costTotal, 'sale_return', $returnId);
-        }
-
-        if ($lines !== []) {
-            $this->replaceEntry($companyId, 'sale_return', $returnId, [
-                'entry_date' => $return['created_at'] ?? date('Y-m-d H:i:s'),
-                'source_number' => $return['return_number'] ?? $return['credit_note_number'] ?? null,
-                'description' => 'Asiento de devolucion de venta ' . ($return['return_number'] ?? $returnId),
-                'posted_by' => $userId ?? ($return['created_by'] ?? null),
-            ], $lines);
-        }
-
-        $customer = ! empty($sale['customer_id']) ? (new CustomerModel())->find($sale['customer_id']) : null;
-        $this->replaceVatSalesBook('sale_return', $returnId, [
-            'company_id' => $companyId,
-            'source_type' => 'sale_return',
-            'source_id' => $returnId,
-            'sale_id' => $sale['id'],
-            'document_type_id' => $sale['document_type_id'] ?? null,
-            'document_number' => $return['credit_note_number'] ?? $return['return_number'] ?? '',
-            'issue_date' => $return['created_at'] ?? date('Y-m-d H:i:s'),
-            'customer_name' => (string) ($sale['customer_name_snapshot'] ?? ($customer['name'] ?? 'Consumidor Final')),
-            'customer_document' => $sale['customer_document_snapshot'] ?? ($customer['document_number'] ?? null),
-            'customer_tax_profile' => $sale['customer_tax_profile'] ?? ($customer['tax_profile'] ?? null),
-            'net_amount' => -1 * $net,
-            'tax_amount' => -1 * $tax,
-            'total_amount' => -1 * $total,
-            'currency_code' => $sale['currency_code'] ?? 'ARS',
-            'status' => 'credit_note',
-        ]);
+        return db_connect()->table('journal_entries')
+            ->where('id', $entryId)->where('status', 'draft')
+            ->update(['status' => 'posted', 'posted_at' => date('Y-m-d H:i:s')]);
     }
 
-    public function syncPurchaseReceipt(string $companyId, string $receiptId, ?string $userId = null): void
+    public function journalFromSale(string $companyId, array $sale, array $map): array
     {
-        $this->ensureDefaults($companyId);
-        $receipt = (new PurchaseReceiptModel())->find($receiptId);
-        if (! $receipt) {
-            $this->removeSource('purchase_receipt', $receiptId);
-            $this->removeVatPurchaseBook('purchase_receipt', $receiptId);
-            return;
-        }
-
-        $total = round((float) ($receipt['total'] ?? 0), 2);
-        $tax = round((float) ($receipt['tax_total'] ?? 0), 2);
-        $net = max(0.0, round($total - $tax, 2));
-
         $lines = [];
-        if ($net > 0) {
-            $lines[] = $this->line($companyId, 'inventory', 'Ingreso de inventario por compra', $net, 0, 'purchase_receipt', $receiptId);
-        }
-        if ($tax > 0) {
-            $lines[] = $this->line($companyId, 'vat_credit', 'IVA credito fiscal', $tax, 0, 'purchase_receipt', $receiptId);
-        }
-        if ($total > 0) {
-            $lines[] = $this->line($companyId, 'accounts_payable', 'Cuenta a pagar proveedor', 0, $total, 'purchase_receipt', $receiptId);
-        }
+        $total = (float) ($sale['total'] ?? 0);
+        $sub   = (float) ($sale['subtotal'] ?? 0);
+        $tax   = (float) ($sale['tax_total'] ?? 0);
 
-        if ($lines !== []) {
-            $this->replaceEntry($companyId, 'purchase_receipt', $receiptId, [
-                'entry_date' => $receipt['received_at'] ?? $receipt['issued_at'] ?? date('Y-m-d H:i:s'),
-                'source_number' => $receipt['receipt_number'] ?? null,
-                'description' => 'Asiento de compra ' . ($receipt['receipt_number'] ?? $receiptId),
-                'posted_by' => $userId ?? ($receipt['created_by'] ?? null),
-            ], $lines);
-        }
+        if (!empty($map['receivable'])) $lines[] = ['account_id' => $map['receivable'], 'debit' => $total, 'credit' => 0, 'description' => 'Venta #' . ($sale['sale_number'] ?? '')];
+        if (!empty($map['revenue']))    $lines[] = ['account_id' => $map['revenue'], 'debit' => 0, 'credit' => $sub, 'description' => 'Ingreso por venta'];
+        if (!empty($map['iva_debito']) && $tax > 0) $lines[] = ['account_id' => $map['iva_debito'], 'debit' => 0, 'credit' => $tax, 'description' => 'IVA Debito Fiscal'];
 
-        $supplier = (new SupplierModel())->find((string) ($receipt['supplier_id'] ?? ''));
-        $this->replaceVatPurchaseBook('purchase_receipt', $receiptId, [
-            'company_id' => $companyId,
-            'source_type' => 'purchase_receipt',
-            'source_id' => $receiptId,
-            'purchase_receipt_id' => $receiptId,
-            'supplier_id' => $receipt['supplier_id'] ?? null,
-            'document_number' => $receipt['receipt_number'] ?? '',
-            'supplier_document' => $receipt['supplier_document'] ?? null,
-            'issue_date' => $receipt['issued_at'] ?? date('Y-m-d H:i:s'),
-            'supplier_name' => $supplier['name'] ?? 'Proveedor',
-            'supplier_tax_id' => $supplier['tax_id'] ?? null,
-            'supplier_vat_condition' => $supplier['vat_condition'] ?? null,
-            'net_amount' => $net,
-            'tax_amount' => $tax,
-            'total_amount' => $total,
-            'currency_code' => $receipt['currency_code'] ?? 'ARS',
-            'status' => (string) ($receipt['status'] ?? 'registered'),
-        ]);
-    }
-
-    public function syncPurchaseReturn(string $companyId, string $returnId, ?string $userId = null): void
-    {
-        $this->ensureDefaults($companyId);
-        $return = (new PurchaseReturnModel())->find($returnId);
-        if (! $return) {
-            $this->removeSource('purchase_return', $returnId);
-            $this->removeVatPurchaseBook('purchase_return', $returnId);
-            return;
-        }
-
-        $total = round((float) ($return['total'] ?? 0), 2);
-        $tax = round((float) ($return['tax_total'] ?? 0), 2);
-        $net = max(0.0, round($total - $tax, 2));
-
-        $lines = [];
-        if ($total > 0) {
-            $lines[] = $this->line($companyId, 'accounts_payable', 'Reversion cuenta a pagar por devolucion', $total, 0, 'purchase_return', $returnId);
-        }
-        if ($net > 0) {
-            $lines[] = $this->line($companyId, 'purchase_returns', 'Devolucion a proveedor', 0, $net, 'purchase_return', $returnId);
-        }
-        if ($tax > 0) {
-            $lines[] = $this->line($companyId, 'vat_credit', 'Reversion IVA credito fiscal', 0, $tax, 'purchase_return', $returnId);
-        }
-
-        if ($lines !== []) {
-            $this->replaceEntry($companyId, 'purchase_return', $returnId, [
-                'entry_date' => $return['issued_at'] ?? date('Y-m-d H:i:s'),
-                'source_number' => $return['return_number'] ?? null,
-                'description' => 'Asiento de devolucion a proveedor ' . ($return['return_number'] ?? $returnId),
-                'posted_by' => $userId ?? ($return['created_by'] ?? null),
-            ], $lines);
-        }
-
-        $supplier = (new SupplierModel())->find((string) ($return['supplier_id'] ?? ''));
-        $receipt = ! empty($return['purchase_receipt_id']) ? (new PurchaseReceiptModel())->find($return['purchase_receipt_id']) : null;
-        $this->replaceVatPurchaseBook('purchase_return', $returnId, [
-            'company_id' => $companyId,
-            'source_type' => 'purchase_return',
-            'source_id' => $returnId,
-            'purchase_receipt_id' => $return['purchase_receipt_id'] ?? null,
-            'supplier_id' => $return['supplier_id'] ?? null,
-            'document_number' => $return['return_number'] ?? '',
-            'supplier_document' => null,
-            'issue_date' => $return['issued_at'] ?? date('Y-m-d H:i:s'),
-            'supplier_name' => $supplier['name'] ?? 'Proveedor',
-            'supplier_tax_id' => $supplier['tax_id'] ?? null,
-            'supplier_vat_condition' => $supplier['vat_condition'] ?? null,
-            'net_amount' => -1 * $net,
-            'tax_amount' => -1 * $tax,
-            'total_amount' => -1 * $total,
-            'currency_code' => $receipt['currency_code'] ?? 'ARS',
-            'status' => (string) ($return['status'] ?? 'issued'),
-        ]);
-    }
-
-    public function syncSalesReceipt(string $companyId, string $receiptId, ?string $userId = null): void
-    {
-        $this->ensureDefaults($companyId);
-        $receipt = (new SalesReceiptModel())->find($receiptId);
-        if (! $receipt) {
-            $this->removeSource('sales_receipt', $receiptId);
-            return;
-        }
-
-        $total = round((float) ($receipt['total_amount'] ?? 0), 2);
-        if ($total <= 0) {
-            $this->removeSource('sales_receipt', $receiptId);
-            return;
-        }
-
-        $lines = [
-            $this->line($companyId, 'cash', 'Ingreso de cobranza', $total, 0, 'sales_receipt', $receiptId),
-            $this->line($companyId, 'accounts_receivable', 'Aplicacion sobre cuentas a cobrar', 0, $total, 'sales_receipt', $receiptId),
-        ];
-
-        $this->replaceEntry($companyId, 'sales_receipt', $receiptId, [
-            'entry_date' => $receipt['issue_date'] ?? date('Y-m-d H:i:s'),
-            'source_number' => $receipt['receipt_number'] ?? null,
-            'description' => 'Asiento de cobranza ' . ($receipt['receipt_number'] ?? $receiptId),
-            'posted_by' => $userId ?? ($receipt['created_by'] ?? null),
+        return $this->createJournalEntry($companyId, [
+            'description' => 'Venta #' . ($sale['sale_number'] ?? ''), 'entry_date' => $sale['sale_date'] ?? date('Y-m-d'),
+            'reference_type' => 'sale', 'reference_id' => $sale['id'] ?? null, 'status' => 'posted',
         ], $lines);
     }
 
-    public function syncPurchasePayment(string $companyId, string $paymentId, ?string $userId = null): void
+    public function journalFromPurchase(string $companyId, array $inv, array $map): array
     {
-        $this->ensureDefaults($companyId);
-        $payment = (new PurchasePaymentModel())->find($paymentId);
-        if (! $payment) {
-            $this->removeSource('purchase_payment', $paymentId);
-            return;
-        }
+        $lines = [];
+        $total = (float) ($inv['total'] ?? 0);
+        $sub   = (float) ($inv['subtotal'] ?? 0);
+        $tax   = (float) ($inv['tax_total'] ?? 0);
 
-        $amount = round((float) ($payment['amount'] ?? 0), 2);
-        if ($amount <= 0) {
-            $this->removeSource('purchase_payment', $paymentId);
-            return;
-        }
+        if (!empty($map['expense']))     $lines[] = ['account_id' => $map['expense'], 'debit' => $sub, 'credit' => 0, 'description' => 'Compra FC #' . ($inv['invoice_number'] ?? '')];
+        if (!empty($map['iva_credito']) && $tax > 0) $lines[] = ['account_id' => $map['iva_credito'], 'debit' => $tax, 'credit' => 0, 'description' => 'IVA Credito Fiscal'];
+        if (!empty($map['payable']))     $lines[] = ['account_id' => $map['payable'], 'debit' => 0, 'credit' => $total, 'description' => 'Proveedor'];
 
-        $lines = [
-            $this->line($companyId, 'accounts_payable', 'Cancelacion de cuenta a pagar', $amount, 0, 'purchase_payment', $paymentId),
-            $this->line($companyId, 'cash', 'Egreso de caja por pago a proveedor', 0, $amount, 'purchase_payment', $paymentId),
-        ];
-
-        $this->replaceEntry($companyId, 'purchase_payment', $paymentId, [
-            'entry_date' => $payment['paid_at'] ?? date('Y-m-d H:i:s'),
-            'source_number' => $payment['payment_number'] ?? null,
-            'description' => 'Asiento de pago a proveedor ' . ($payment['payment_number'] ?? $paymentId),
-            'posted_by' => $userId ?? ($payment['created_by'] ?? null),
+        return $this->createJournalEntry($companyId, [
+            'description' => 'Compra FC #' . ($inv['invoice_number'] ?? ''), 'entry_date' => $inv['invoice_date'] ?? date('Y-m-d'),
+            'reference_type' => 'purchase', 'reference_id' => $inv['id'] ?? null, 'status' => 'posted',
         ], $lines);
     }
 
-    public function syncCashClosure(string $companyId, string $closureId, ?string $userId = null): void
+    public function trialBalance(string $companyId, string $asOfDate): array
     {
-        $this->ensureDefaults($companyId);
-        $closure = (new CashClosureModel())->find($closureId);
-        if (! $closure) {
-            $this->removeSource('cash_closure', $closureId);
-            return;
-        }
+        $rows = db_connect()->query("
+            SELECT a.id, a.code, a.name, a.account_type, a.is_group, a.level,
+                COALESCE(SUM(jl.debit),0) AS total_debit, COALESCE(SUM(jl.credit),0) AS total_credit,
+                COALESCE(SUM(jl.debit),0) - COALESCE(SUM(jl.credit),0) AS balance
+            FROM accounts a
+            LEFT JOIN journal_entry_lines jl ON jl.account_id = a.id
+            LEFT JOIN journal_entries je ON je.id = jl.journal_entry_id AND je.status='posted' AND je.entry_date <= ?
+            WHERE a.company_id = ? AND a.active = 1
+            GROUP BY a.id, a.code, a.name, a.account_type, a.is_group, a.level ORDER BY a.code
+        ", [$asOfDate, $companyId])->getResultArray();
 
-        $difference = round((float) ($closure['difference_amount'] ?? 0), 2);
-        if (abs($difference) < 0.01) {
-            $this->removeSource('cash_closure', $closureId);
-            return;
-        }
-
-        if ($difference > 0) {
-            $lines = [
-                $this->line($companyId, 'cash', 'Sobrante de caja', $difference, 0, 'cash_closure', $closureId),
-                $this->line($companyId, 'cash_overage', 'Sobrante detectado en arqueo', 0, $difference, 'cash_closure', $closureId),
-            ];
-        } else {
-            $amount = abs($difference);
-            $lines = [
-                $this->line($companyId, 'cash_shortage', 'Faltante de caja', $amount, 0, 'cash_closure', $closureId),
-                $this->line($companyId, 'cash', 'Faltante detectado en arqueo', 0, $amount, 'cash_closure', $closureId),
-            ];
-        }
-
-        $this->replaceEntry($companyId, 'cash_closure', $closureId, [
-            'entry_date' => $closure['closed_at'] ?? date('Y-m-d H:i:s'),
-            'source_number' => $closure['id'],
-            'description' => 'Asiento por cierre de caja',
-            'posted_by' => $userId ?? ($closure['closed_by'] ?? null),
-        ], $lines);
+        $td = array_sum(array_column($rows, 'total_debit'));
+        $tc = array_sum(array_column($rows, 'total_credit'));
+        return ['as_of_date' => $asOfDate, 'accounts' => $rows, 'total_debit' => $td, 'total_credit' => $tc, 'balanced' => round($td,2) === round($tc,2)];
     }
 
-    private function replaceEntry(string $companyId, string $sourceType, string $sourceId, array $meta, array $lines): void
+    public function balanceSheet(string $companyId, string $asOfDate): array
     {
-        $entryModel = new AccountingEntryModel();
-        $itemModel = new AccountingEntryItemModel();
-        $existing = $entryModel->where('company_id', $companyId)->where('source_type', $sourceType)->where('source_id', $sourceId)->first();
-
-        $entryNumber = $existing['entry_number'] ?? $this->nextEntryNumber($companyId);
-        if ($existing) {
-            $itemModel->where('accounting_entry_id', $existing['id'])->delete();
-            $entryModel->delete($existing['id']);
-        }
-
-        $totals = $this->totals($lines);
-        if (round($totals['debit'], 2) !== round($totals['credit'], 2)) {
-            throw new \RuntimeException('El asiento contable no esta balanceado para ' . $sourceType . ':' . $sourceId);
-        }
-
-        $entryId = $entryModel->insert([
-            'company_id' => $companyId,
-            'entry_number' => $entryNumber,
-            'entry_date' => $meta['entry_date'] ?? date('Y-m-d H:i:s'),
-            'source_type' => $sourceType,
-            'source_id' => $sourceId,
-            'source_number' => $meta['source_number'] ?? null,
-            'description' => $meta['description'] ?? $sourceType,
-            'status' => 'posted',
-            'total_debit' => $totals['debit'],
-            'total_credit' => $totals['credit'],
-            'posted_by' => $meta['posted_by'] ?? null,
-            'posted_at' => date('Y-m-d H:i:s'),
-        ], true);
-
-        foreach (array_values($lines) as $index => $line) {
-            $itemModel->insert([
-                'accounting_entry_id' => $entryId,
-                'account_id' => $line['account_id'],
-                'line_number' => $index + 1,
-                'description' => $line['description'],
-                'debit' => $line['debit'],
-                'credit' => $line['credit'],
-                'reference_type' => $line['reference_type'] ?? null,
-                'reference_id' => $line['reference_id'] ?? null,
-            ]);
-        }
-    }
-
-    private function removeSource(string $sourceType, string $sourceId): void
-    {
-        $entryModel = new AccountingEntryModel();
-        $itemModel = new AccountingEntryItemModel();
-        $existing = $entryModel->where('source_type', $sourceType)->where('source_id', $sourceId)->first();
-        if (! $existing) {
-            return;
-        }
-
-        $itemModel->where('accounting_entry_id', $existing['id'])->delete();
-        $entryModel->delete($existing['id']);
-    }
-
-    private function replaceVatSalesBook(string $sourceType, string $sourceId, array $payload): void
-    {
-        $model = new VatSalesBookModel();
-        $existing = $model->where('company_id', $payload['company_id'])->where('source_type', $sourceType)->where('source_id', $sourceId)->first();
-        if ($existing) {
-            $model->update($existing['id'], $payload);
-            return;
-        }
-
-        $model->insert($payload);
-    }
-
-    private function replaceVatPurchaseBook(string $sourceType, string $sourceId, array $payload): void
-    {
-        $model = new VatPurchaseBookModel();
-        $existing = $model->where('company_id', $payload['company_id'])->where('source_type', $sourceType)->where('source_id', $sourceId)->first();
-        if ($existing) {
-            $model->update($existing['id'], $payload);
-            return;
-        }
-
-        $model->insert($payload);
-    }
-
-    private function removeVatSalesBook(string $sourceType, string $sourceId): void
-    {
-        (new VatSalesBookModel())->where('source_type', $sourceType)->where('source_id', $sourceId)->delete();
-    }
-
-    private function removeVatPurchaseBook(string $sourceType, string $sourceId): void
-    {
-        (new VatPurchaseBookModel())->where('source_type', $sourceType)->where('source_id', $sourceId)->delete();
-    }
-
-    private function nextEntryNumber(string $companyId): string
-    {
-        $model = new VoucherSequenceModel();
-        $sequence = $model->where('company_id', $companyId)->where('document_type', 'ASIENTO')->first();
-        if (! $sequence) {
-            $this->ensureDefaults($companyId);
-            $sequence = $model->where('company_id', $companyId)->where('document_type', 'ASIENTO')->first();
-        }
-
-        $number = (int) ($sequence['current_number'] ?? 1);
-        $formatted = strtoupper(trim((string) ($sequence['prefix'] ?? 'AST'))) . '-' . str_pad((string) $number, 8, '0', STR_PAD_LEFT);
-        $model->update($sequence['id'], ['current_number' => $number + 1]);
-
-        return $formatted;
-    }
-
-    private function line(string $companyId, string $systemKey, string $description, float $debit, float $credit, ?string $referenceType = null, ?string $referenceId = null): array
-    {
-        $account = (new AccountingAccountModel())->where('company_id', $companyId)->where('system_key', $systemKey)->first();
-        if (! $account) {
-            throw new \RuntimeException('Cuenta contable no disponible para system_key=' . $systemKey);
-        }
+        $trial = $this->trialBalance($companyId, $asOfDate);
+        $assets = array_filter($trial['accounts'], fn($a) => $a['account_type'] === 'asset');
+        $liabilities = array_filter($trial['accounts'], fn($a) => $a['account_type'] === 'liability');
+        $equity = array_filter($trial['accounts'], fn($a) => $a['account_type'] === 'equity');
+        $ta = array_sum(array_column($assets, 'balance'));
+        $tl = abs(array_sum(array_column($liabilities, 'balance')));
+        $te = abs(array_sum(array_column($equity, 'balance')));
+        $pl = $this->incomeStatement($companyId, date('Y-01-01'), $asOfDate);
 
         return [
-            'account_id' => $account['id'],
-            'description' => $description,
-            'debit' => round($debit, 2),
-            'credit' => round($credit, 2),
-            'reference_type' => $referenceType,
-            'reference_id' => $referenceId,
+            'as_of_date' => $asOfDate,
+            'assets' => ['accounts' => array_values($assets), 'total' => $ta],
+            'liabilities' => ['accounts' => array_values($liabilities), 'total' => $tl],
+            'equity' => ['accounts' => array_values($equity), 'total' => $te, 'net_income' => $pl['net_income'], 'total_with_income' => $te + $pl['net_income']],
+            'balanced' => round($ta, 2) === round($tl + $te + $pl['net_income'], 2),
         ];
     }
 
-    private function totals(array $lines): array
+    public function incomeStatement(string $companyId, string $from, string $to): array
     {
-        return [
-            'debit' => round(array_sum(array_map(static fn(array $line): float => (float) ($line['debit'] ?? 0), $lines)), 2),
-            'credit' => round(array_sum(array_map(static fn(array $line): float => (float) ($line['credit'] ?? 0), $lines)), 2),
+        $rows = db_connect()->query("
+            SELECT a.id, a.code, a.name, a.account_type,
+                COALESCE(SUM(jl.credit),0) - COALESCE(SUM(jl.debit),0) AS balance
+            FROM accounts a
+            LEFT JOIN journal_entry_lines jl ON jl.account_id = a.id
+            LEFT JOIN journal_entries je ON je.id = jl.journal_entry_id AND je.status='posted' AND je.entry_date BETWEEN ? AND ?
+            WHERE a.company_id = ? AND a.active = 1 AND a.account_type IN ('revenue','expense')
+            GROUP BY a.id, a.code, a.name, a.account_type ORDER BY a.account_type DESC, a.code
+        ", [$from, $to, $companyId])->getResultArray();
+
+        $rev = array_filter($rows, fn($a) => $a['account_type'] === 'revenue');
+        $exp = array_filter($rows, fn($a) => $a['account_type'] === 'expense');
+        $tr = array_sum(array_column($rev, 'balance'));
+        $te = abs(array_sum(array_column($exp, 'balance')));
+
+        return ['from_date' => $from, 'to_date' => $to, 'revenue' => ['accounts' => array_values($rev), 'total' => $tr],
+            'expenses' => ['accounts' => array_values($exp), 'total' => $te], 'net_income' => $tr - $te,
+            'profit_margin' => $tr > 0 ? round(($tr - $te) / $tr * 100, 2) : 0];
+    }
+
+    public function accountLedger(string $accountId, string $from, string $to): array
+    {
+        $rows = db_connect()->table('journal_entry_lines jl')
+            ->select('jl.*, je.entry_number, je.entry_date, je.description AS entry_description')
+            ->join('journal_entries je', 'je.id = jl.journal_entry_id')
+            ->where('jl.account_id', $accountId)->where('je.status', 'posted')
+            ->where('je.entry_date >=', $from)->where('je.entry_date <=', $to)
+            ->orderBy('je.entry_date')->orderBy('je.entry_number')->get()->getResultArray();
+
+        $bal = 0;
+        foreach ($rows as &$r) { $bal += (float)$r['debit'] - (float)$r['credit']; $r['running_balance'] = round($bal, 2); }
+        return ['account_id' => $accountId, 'from' => $from, 'to' => $to, 'entries' => $rows, 'final_balance' => $bal];
+    }
+
+    public function chartOfAccounts(string $companyId): array
+    {
+        $accounts = db_connect()->table('accounts')->where('company_id', $companyId)->where('active', 1)->orderBy('code')->get()->getResultArray();
+        return $this->buildTree($accounts);
+    }
+
+    private function buildTree(array $items, ?string $parentId = null): array
+    {
+        $result = [];
+        foreach ($items as $item) { if ($item['parent_id'] === $parentId) { $item['children'] = $this->buildTree($items, $item['id']); $result[] = $item; } }
+        return $result;
+    }
+
+    // ── Sync methods called by Sales/Purchases controllers ──
+
+    /**
+     * Sync accounting for a confirmed sale.
+     */
+    public function syncSale(string $companyId, string $saleId, string $userId): array
+    {
+        $db = db_connect();
+        $sale = $db->table('sales')->where('id', $saleId)->get()->getRowArray();
+        if (!$sale || ($sale['status'] ?? '') !== 'confirmed') {
+            return ['ok' => false, 'error' => 'Sale not found or not confirmed'];
+        }
+
+        // Check if already synced
+        $existing = $db->table('journal_entries')
+            ->where('company_id', $companyId)->where('reference_type', 'sale')->where('reference_id', $saleId)
+            ->countAllResults();
+        if ($existing > 0) return ['ok' => true, 'already_synced' => true];
+
+        $map = $this->getAccountMapping($companyId);
+        if (empty($map)) return ['ok' => true, 'skipped' => 'no_account_mapping'];
+
+        $sale['user_id'] = $userId;
+        return $this->journalFromSale($companyId, $sale, $map);
+    }
+
+    /**
+     * Sync accounting for a sales receipt (cobro).
+     */
+    public function syncSalesReceipt(string $companyId, string $receiptId, string $userId): array
+    {
+        $db = db_connect();
+        $receipt = $db->table('sales_receipts')->where('id', $receiptId)->get()->getRowArray();
+        if (!$receipt) return ['ok' => false, 'error' => 'Receipt not found'];
+
+        $map = $this->getAccountMapping($companyId);
+        if (empty($map)) return ['ok' => true, 'skipped' => 'no_account_mapping'];
+
+        $lines = [];
+        $amount = (float)($receipt['total'] ?? 0);
+
+        // Debit: Cash or Bank
+        $cashAccount = $map['cash'] ?? $map['bank'] ?? null;
+        if ($cashAccount) $lines[] = ['account_id' => $cashAccount, 'debit' => $amount, 'credit' => 0, 'description' => 'Cobro recibo #' . ($receipt['receipt_number'] ?? '')];
+
+        // Credit: Accounts Receivable
+        if (!empty($map['receivable'])) $lines[] = ['account_id' => $map['receivable'], 'debit' => 0, 'credit' => $amount, 'description' => 'Cobranza cliente'];
+
+        if (empty($lines)) return ['ok' => true, 'skipped' => 'no_accounts'];
+
+        return $this->createJournalEntry($companyId, [
+            'description' => 'Cobro recibo #' . ($receipt['receipt_number'] ?? ''),
+            'entry_date' => $receipt['receipt_date'] ?? date('Y-m-d'),
+            'reference_type' => 'sales_receipt', 'reference_id' => $receiptId,
+            'status' => 'posted', 'user_id' => $userId,
+        ], $lines);
+    }
+
+    /**
+     * Sync accounting for a sale return (NC).
+     */
+    public function syncSaleReturn(string $companyId, string $returnId, string $userId): array
+    {
+        $db = db_connect();
+        $ret = $db->table('sale_returns')->where('id', $returnId)->get()->getRowArray();
+        if (!$ret) return ['ok' => false, 'error' => 'Return not found'];
+
+        $map = $this->getAccountMapping($companyId);
+        if (empty($map)) return ['ok' => true, 'skipped' => 'no_account_mapping'];
+
+        $lines = [];
+        $total = (float)($ret['total'] ?? 0);
+        $tax   = (float)($ret['tax_total'] ?? 0);
+        $sub   = $total - $tax;
+
+        // Reverse the sale entry
+        if (!empty($map['revenue']))    $lines[] = ['account_id' => $map['revenue'], 'debit' => $sub, 'credit' => 0, 'description' => 'NC - Devolucion venta'];
+        if (!empty($map['iva_debito']) && $tax > 0) $lines[] = ['account_id' => $map['iva_debito'], 'debit' => $tax, 'credit' => 0, 'description' => 'NC - IVA Debito Fiscal'];
+        if (!empty($map['receivable'])) $lines[] = ['account_id' => $map['receivable'], 'debit' => 0, 'credit' => $total, 'description' => 'NC - Cuenta cliente'];
+
+        if (empty($lines)) return ['ok' => true, 'skipped' => 'no_accounts'];
+
+        return $this->createJournalEntry($companyId, [
+            'description' => 'NC Devolucion #' . ($ret['return_number'] ?? ''),
+            'entry_date' => $ret['return_date'] ?? date('Y-m-d'),
+            'reference_type' => 'sale_return', 'reference_id' => $returnId,
+            'status' => 'posted', 'user_id' => $userId,
+        ], $lines);
+    }
+
+    /**
+     * Sync accounting for a purchase receipt (remito ingreso).
+     */
+    public function syncPurchaseReceipt(string $companyId, string $receiptId, string $userId): array
+    {
+        $db = db_connect();
+        $receipt = $db->table('purchase_receipts')->where('id', $receiptId)->get()->getRowArray();
+        if (!$receipt) return ['ok' => false, 'error' => 'Purchase receipt not found'];
+
+        $map = $this->getAccountMapping($companyId);
+        if (empty($map)) return ['ok' => true, 'skipped' => 'no_account_mapping'];
+
+        // Purchase receipts don't always generate journal entries (only invoices do)
+        // But if there's an inventory account, we can track the stock value
+        $invAccount = $map['inventory'] ?? null;
+        if (!$invAccount) return ['ok' => true, 'skipped' => 'no_inventory_account'];
+
+        $total = (float)($receipt['total'] ?? 0);
+        if ($total <= 0) return ['ok' => true, 'skipped' => 'zero_amount'];
+
+        $lines = [
+            ['account_id' => $invAccount, 'debit' => $total, 'credit' => 0, 'description' => 'Ingreso mercaderia'],
+            ['account_id' => $map['goods_received'] ?? $map['payable'] ?? $invAccount, 'debit' => 0, 'credit' => $total, 'description' => 'Mercaderia recibida'],
         ];
+
+        return $this->createJournalEntry($companyId, [
+            'description' => 'Remito ingreso #' . ($receipt['receipt_number'] ?? ''),
+            'entry_date' => $receipt['receipt_date'] ?? date('Y-m-d'),
+            'reference_type' => 'purchase_receipt', 'reference_id' => $receiptId,
+            'status' => 'posted', 'user_id' => $userId,
+        ], $lines);
+    }
+
+    /**
+     * Sync accounting for a purchase return.
+     */
+    public function syncPurchaseReturn(string $companyId, string $returnId, string $userId): array
+    {
+        $db = db_connect();
+        $ret = $db->table('purchase_returns')->where('id', $returnId)->get()->getRowArray();
+        if (!$ret) return ['ok' => false, 'error' => 'Purchase return not found'];
+
+        $map = $this->getAccountMapping($companyId);
+        if (empty($map)) return ['ok' => true, 'skipped' => 'no_account_mapping'];
+
+        $total = (float)($ret['total'] ?? 0);
+        $tax   = (float)($ret['tax_total'] ?? 0);
+        $sub   = $total - $tax;
+        $lines = [];
+
+        if (!empty($map['payable']))     $lines[] = ['account_id' => $map['payable'], 'debit' => $total, 'credit' => 0, 'description' => 'NC Proveedor - Devolucion'];
+        if (!empty($map['expense']))     $lines[] = ['account_id' => $map['expense'], 'debit' => 0, 'credit' => $sub, 'description' => 'Reversa gasto compra'];
+        if (!empty($map['iva_credito']) && $tax > 0) $lines[] = ['account_id' => $map['iva_credito'], 'debit' => 0, 'credit' => $tax, 'description' => 'Reversa IVA Credito'];
+
+        if (empty($lines)) return ['ok' => true, 'skipped' => 'no_accounts'];
+
+        return $this->createJournalEntry($companyId, [
+            'description' => 'NC Proveedor Dev. #' . ($ret['return_number'] ?? ''),
+            'entry_date' => $ret['return_date'] ?? date('Y-m-d'),
+            'reference_type' => 'purchase_return', 'reference_id' => $returnId,
+            'status' => 'posted', 'user_id' => $userId,
+        ], $lines);
+    }
+
+    /**
+     * Sync accounting for a purchase payment.
+     */
+    public function syncPurchasePayment(string $companyId, string $paymentId, string $userId): array
+    {
+        $db = db_connect();
+        $payment = $db->table('purchase_payments')->where('id', $paymentId)->get()->getRowArray();
+        if (!$payment) return ['ok' => false, 'error' => 'Payment not found'];
+
+        $map = $this->getAccountMapping($companyId);
+        if (empty($map)) return ['ok' => true, 'skipped' => 'no_account_mapping'];
+
+        $amount = (float)($payment['amount'] ?? 0);
+        $lines = [];
+
+        // Debit: Accounts Payable
+        if (!empty($map['payable'])) $lines[] = ['account_id' => $map['payable'], 'debit' => $amount, 'credit' => 0, 'description' => 'Pago proveedor'];
+        // Credit: Cash or Bank
+        $cashAccount = $map['cash'] ?? $map['bank'] ?? null;
+        if ($cashAccount) $lines[] = ['account_id' => $cashAccount, 'debit' => 0, 'credit' => $amount, 'description' => 'Egreso por pago'];
+
+        if (empty($lines)) return ['ok' => true, 'skipped' => 'no_accounts'];
+
+        return $this->createJournalEntry($companyId, [
+            'description' => 'Pago proveedor #' . ($payment['payment_number'] ?? $paymentId),
+            'entry_date' => $payment['payment_date'] ?? date('Y-m-d'),
+            'reference_type' => 'purchase_payment', 'reference_id' => $paymentId,
+            'status' => 'posted', 'user_id' => $userId,
+        ], $lines);
+    }
+
+    /**
+     * Get accounting mapping from company_settings.
+     */
+    private function getAccountMapping(string $companyId): array
+    {
+        $settings = db_connect()->table('company_settings')
+            ->where('company_id', $companyId)
+            ->like('key', 'account_', 'after')
+            ->get()->getResultArray();
+
+        $map = [];
+        foreach ($settings as $s) {
+            $key = str_replace('account_', '', $s['key'] ?? '');
+            if ($key !== '' && !empty($s['value'])) {
+                $map[$key] = $s['value'];
+            }
+        }
+        return $map;
     }
 }
+

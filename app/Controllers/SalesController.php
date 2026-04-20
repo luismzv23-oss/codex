@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Libraries\AccountingService;
 use App\Libraries\ArcaService;
+use App\Libraries\EventBus;
 use App\Libraries\CashService;
 use App\Models\CashCheckModel;
 use App\Models\CashPaymentGatewayModel;
@@ -377,6 +378,7 @@ class SalesController extends BaseController
         ]);
 
         (new AccountingService())->syncSalesReceipt($companyId, (string) $receiptId, $this->currentUser()['id']);
+        EventBus::emit('sale.payment_received', ['company_id' => $companyId, 'payment' => ['amount' => $total], 'receipt_id' => $receiptId]);
 
         $db->transComplete();
         if (! $db->transStatus()) {
@@ -1336,6 +1338,7 @@ class SalesController extends BaseController
         $this->syncReceivableForSale($id);
         $this->syncSaleCommission($context['company']['id'], $id);
         (new AccountingService())->syncSale($context['company']['id'], $id, $this->currentUser()['id']);
+        EventBus::emit('sale.cancelled', ['company_id' => $context['company']['id'], 'sale' => (new SaleModel())->find($id)]);
         $this->logAudit($context['company']['id'], 'sales', 'sale', $id, 'cancel', $sale, (new SaleModel())->find($id));
         $this->logDocumentEvent($context['company']['id'], 'sales', 'sale', $id, 'cancelled', ['sale_number' => $sale['sale_number'] ?? null]);
 
@@ -2987,6 +2990,7 @@ class SalesController extends BaseController
         $this->syncCashMovementsForSale($companyId, $saleId);
         $this->syncSaleCommission($companyId, $saleId);
         (new AccountingService())->syncSale($companyId, $saleId, $this->currentUser()['id']);
+        EventBus::emit('sale.confirmed', ['company_id' => $companyId, 'sale' => (new SaleModel())->find($saleId), 'items' => (new SaleItemModel())->where('sale_id', $saleId)->findAll()]);
         $db->transComplete();
 
         return $db->transStatus() ? true : 'No se pudo confirmar la venta.';

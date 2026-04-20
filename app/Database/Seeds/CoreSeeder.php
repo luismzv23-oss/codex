@@ -168,14 +168,27 @@ class CoreSeeder extends Seeder
             ]);
         }
 
-        if (! $taxModel->where('company_id', $companyId)->where('code', 'IVA')->first()) {
-            $taxModel->insert([
-                'company_id' => $companyId,
-                'name' => 'IVA General',
-                'code' => 'IVA',
-                'rate' => '16.00',
-                'active' => 1,
-            ]);
+        // ── Argentine IVA aliquots (AFIP codes) ──
+        $ivaAliquots = [
+            ['code' => 'IVA21',    'name' => 'IVA 21%',         'rate' => '21.00', 'afip_code' => 5,  'is_default' => 1],
+            ['code' => 'IVA10.5',  'name' => 'IVA 10.5%',       'rate' => '10.50', 'afip_code' => 4,  'is_default' => 0],
+            ['code' => 'IVA27',    'name' => 'IVA 27%',         'rate' => '27.00', 'afip_code' => 6,  'is_default' => 0],
+            ['code' => 'IVA5',     'name' => 'IVA 5%',          'rate' => '5.00',  'afip_code' => 8,  'is_default' => 0],
+            ['code' => 'IVA2.5',   'name' => 'IVA 2.5%',        'rate' => '2.50',  'afip_code' => 9,  'is_default' => 0],
+            ['code' => 'IVA0',     'name' => 'No Gravado',      'rate' => '0.00',  'afip_code' => 3,  'is_default' => 0],
+            ['code' => 'EXENTO',   'name' => 'Exento',          'rate' => '0.00',  'afip_code' => 2,  'is_default' => 0],
+        ];
+
+        foreach ($ivaAliquots as $aliquot) {
+            if (! $taxModel->where('company_id', $companyId)->where('code', $aliquot['code'])->first()) {
+                $taxModel->insert(array_merge(['company_id' => $companyId, 'active' => 1], $aliquot));
+            }
+        }
+
+        // Remove legacy IVA 16% if it still exists
+        $legacyIva = $taxModel->where('company_id', $companyId)->where('code', 'IVA')->where('rate', '16.00')->first();
+        if ($legacyIva) {
+            $taxModel->update($legacyIva['id'], ['code' => 'IVA21', 'name' => 'IVA 21%', 'rate' => '21.00', 'afip_code' => 5, 'is_default' => 1]);
         }
 
         if (! $salesAgentModel->where('company_id', $companyId)->where('code', 'VEN-GRAL')->first()) {
@@ -292,46 +305,57 @@ class CoreSeeder extends Seeder
             }
         }
 
-        if (! $userModel->where('username', 'superadmin')->first()) {
-            $userModel->insert([
-                'company_id' => null,
-                'branch_id' => null,
-                'role_id' => $roleIds['superadmin'],
-                'name' => 'Super Admin',
-                'username' => 'superadmin',
-                'email' => 'superadmin@codex.local',
-                'password_hash' => password_hash('SuperAdmin123*', PASSWORD_DEFAULT),
-                'must_change_password' => 0,
-                'active' => 1,
-            ]);
-        }
+        // ── Demo users: only use known passwords in development ──
+        $isDev = ENVIRONMENT === 'development' || ENVIRONMENT === 'testing';
 
-        if (! $userModel->where('username', 'admin')->first()) {
-            $userModel->insert([
-                'company_id' => $companyId,
-                'branch_id' => $branchId,
-                'role_id' => $roleIds['admin'],
-                'name' => 'Admin Demo',
-                'username' => 'admin',
-                'email' => 'admin@codex.local',
-                'password_hash' => password_hash('Admin123*', PASSWORD_DEFAULT),
-                'must_change_password' => 0,
-                'active' => 1,
-            ]);
-        }
+        $demoUsers = [
+            [
+                'username'    => 'superadmin',
+                'email'       => 'superadmin@codex.local',
+                'name'        => 'Super Admin',
+                'company_id'  => null,
+                'branch_id'   => null,
+                'role_id'     => $roleIds['superadmin'],
+                'dev_password' => 'SuperAdmin123*',
+            ],
+            [
+                'username'    => 'admin',
+                'email'       => 'admin@codex.local',
+                'name'        => 'Admin Demo',
+                'company_id'  => $companyId,
+                'branch_id'   => $branchId,
+                'role_id'     => $roleIds['admin'],
+                'dev_password' => 'Admin123*',
+            ],
+            [
+                'username'    => 'operador',
+                'email'       => 'operador@codex.local',
+                'name'        => 'Operador Demo',
+                'company_id'  => $companyId,
+                'branch_id'   => $branchId,
+                'role_id'     => $roleIds['operador'],
+                'dev_password' => 'Operador123*',
+            ],
+        ];
 
-        if (! $userModel->where('username', 'operador')->first()) {
-            $userModel->insert([
-                'company_id' => $companyId,
-                'branch_id' => $branchId,
-                'role_id' => $roleIds['operador'],
-                'name' => 'Operador Demo',
-                'username' => 'operador',
-                'email' => 'operador@codex.local',
-                'password_hash' => password_hash('Operador123*', PASSWORD_DEFAULT),
-                'must_change_password' => 0,
-                'active' => 1,
-            ]);
+        foreach ($demoUsers as $demoUser) {
+            if (! $userModel->where('username', $demoUser['username'])->first()) {
+                $password = $isDev
+                    ? $demoUser['dev_password']
+                    : bin2hex(random_bytes(16)) . 'A1!'; // Random secure password in production
+
+                $userModel->insert([
+                    'company_id'          => $demoUser['company_id'],
+                    'branch_id'           => $demoUser['branch_id'],
+                    'role_id'             => $demoUser['role_id'],
+                    'name'                => $demoUser['name'],
+                    'username'            => $demoUser['username'],
+                    'email'               => $demoUser['email'],
+                    'password_hash'       => password_hash($password, PASSWORD_DEFAULT),
+                    'must_change_password' => $isDev ? 0 : 1,
+                    'active'              => 1,
+                ]);
+            }
         }
 
         $admin = $userModel->where('username', 'admin')->first();

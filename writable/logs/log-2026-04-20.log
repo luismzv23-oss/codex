@@ -1,0 +1,19 @@
+ERROR - 2026-04-20 14:31:01 --> mysqli_sql_exception: Column 'company_id' cannot be null in C:\Users\luism\.gemini\antigravity\scratch\codex\vendor\codeigniter4\framework\system\Database\MySQLi\Connection.php:306
+Stack trace:
+#0 C:\Users\luism\.gemini\antigravity\scratch\codex\vendor\codeigniter4\framework\system\Database\MySQLi\Connection.php(306): mysqli->query('INSERT INTO `au...', 0)
+#1 C:\Users\luism\.gemini\antigravity\scratch\codex\vendor\codeigniter4\framework\system\Database\BaseConnection.php(693): CodeIgniter\Database\MySQLi\Connection->execute('INSERT INTO `au...')
+#2 C:\Users\luism\.gemini\antigravity\scratch\codex\vendor\codeigniter4\framework\system\Database\BaseConnection.php(607): CodeIgniter\Database\BaseConnection->simpleQuery('INSERT INTO `au...')
+#3 C:\Users\luism\.gemini\antigravity\scratch\codex\vendor\codeigniter4\framework\system\Database\BaseBuilder.php(2307): CodeIgniter\Database\BaseConnection->query('INSERT INTO `au...', Array, false)
+#4 C:\Users\luism\.gemini\antigravity\scratch\codex\vendor\codeigniter4\framework\system\Model.php(327): CodeIgniter\Database\BaseBuilder->insert()
+#5 C:\Users\luism\.gemini\antigravity\scratch\codex\vendor\codeigniter4\framework\system\BaseModel.php(805): CodeIgniter\Model->doInsert(Array)
+#6 C:\Users\luism\.gemini\antigravity\scratch\codex\vendor\codeigniter4\framework\system\Model.php(749): CodeIgniter\BaseModel->insert(Array, true)
+#7 C:\Users\luism\.gemini\antigravity\scratch\codex\app\Libraries\AuditService.php(53): CodeIgniter\Model->insert(Array)
+#8 C:\Users\luism\.gemini\antigravity\scratch\codex\app\Libraries\AuditService.php(124): App\Libraries\AuditService->log('auth', 'login_failed', 'user', '', NULL, NULL, 'Failed login at...')
+#9 C:\Users\luism\.gemini\antigravity\scratch\codex\app\Controllers\AuthController.php(26): App\Libraries\AuditService->logLogin('', false, 'Failed login at...')
+#10 C:\Users\luism\.gemini\antigravity\scratch\codex\vendor\codeigniter4\framework\system\CodeIgniter.php(943): App\Controllers\AuthController->attemptLogin()
+#11 C:\Users\luism\.gemini\antigravity\scratch\codex\vendor\codeigniter4\framework\system\CodeIgniter.php(503): CodeIgniter\CodeIgniter->runController(Object(App\Controllers\AuthController))
+#12 C:\Users\luism\.gemini\antigravity\scratch\codex\vendor\codeigniter4\framework\system\CodeIgniter.php(361): CodeIgniter\CodeIgniter->handleRequest(NULL, Object(Config\Cache), false)
+#13 C:\Users\luism\.gemini\antigravity\scratch\codex\public\index.php(55): CodeIgniter\CodeIgniter->run()
+#14 C:\Users\luism\.gemini\antigravity\scratch\codex\vendor\codeigniter4\framework\system\Commands\Server\rewrite.php(47): require_once('C:\\Users\\luism\\...')
+#15 {main}
+ERROR - 2026-04-20 14:31:01 --> AuditService::log failed: Column 'company_id' cannot be null

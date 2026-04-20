@@ -7,6 +7,8 @@ use App\Filters\ApiAuthFilter;
 use App\Filters\ApiPermissionFilter;
 use App\Filters\GuestFilter;
 use App\Filters\PermissionFilter;
+use App\Filters\SecurityHeadersFilter;
+use App\Filters\ThrottleFilter;
 use CodeIgniter\Config\BaseConfig;
 use CodeIgniter\Filters\CSRF;
 use CodeIgniter\Filters\DebugToolbar;
@@ -36,6 +38,8 @@ class Filters extends BaseConfig
         'apipermission' => ApiPermissionFilter::class,
         'guest'         => GuestFilter::class,
         'permission'    => PermissionFilter::class,
+        'throttle'        => ThrottleFilter::class,
+        'securityheaders' => SecurityHeadersFilter::class,
     ];
 
     /**
@@ -52,6 +56,7 @@ class Filters extends BaseConfig
         ],
         'after' => [
             'toolbar',
+            'securityheaders',
             // 'honeypot',
             // 'secureheaders',
         ],
@@ -81,5 +86,7 @@ class Filters extends BaseConfig
      *
      * @var array<string, array<string, list<string>>>
      */
-    public array $filters = [];
+    public array $filters = [
+        'throttle' => ['before' => ['login', 'api/*']],
+    ];
 }

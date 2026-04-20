@@ -11,6 +11,8 @@ class TaxModel extends BaseUuidModel
         'name',
         'code',
         'rate',
+        'afip_code',
+        'is_default',
         'active',
         'created_at',
         'updated_at',

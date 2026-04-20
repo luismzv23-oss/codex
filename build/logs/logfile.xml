@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="" tests="3" assertions="5" errors="0" warnings="0" failures="0" skipped="1" time="0.084883">
+    <testsuite name="App" tests="3" assertions="5" errors="0" warnings="0" failures="0" skipped="1" time="0.084883">
+      <testsuite name="ArcaServiceTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\ArcaServiceTest.php" tests="3" assertions="5" errors="0" warnings="0" failures="0" skipped="1" time="0.084883">
+        <testcase name="testSanitizeSettingsCreatesDefaultWritableCachePath" class="ArcaServiceTest" classname="ArcaServiceTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\ArcaServiceTest.php" line="22" assertions="3" time="0.074551"/>
+        <testcase name="testValidateSettingsRejectsInvalidCuitWhenArcaEnabled" class="ArcaServiceTest" classname="ArcaServiceTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\ArcaServiceTest.php" line="36" assertions="2" time="0.005519"/>
+        <testcase name="testTestAuthenticationWritesTokenCacheWhenReadinessIsComplete" class="ArcaServiceTest" classname="ArcaServiceTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\ArcaServiceTest.php" line="51" assertions="0" time="0.004813">
+          <skipped/>
+        </testcase>
+      </testsuite>
+    </testsuite>
+  </testsuite>
+</testsuites>

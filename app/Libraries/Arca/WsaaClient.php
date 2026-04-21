@@ -96,27 +96,7 @@ class WsaaClient
             $loginResponse = $response->loginCmsReturn ?? '';
 
         } catch (\SoapFault $e) {
-            $msg = $e->getMessage();
-
-            // Translate known AFIP errors to actionable messages
-            if (str_contains($msg, 'Zero length BigInteger')) {
-                throw new \RuntimeException(
-                    'WSAA: El certificado no esta asociado al CUIT en AFIP. '
-                    . 'Ingresa a https://auth.afip.gob.ar → Administracion de Certificados Digitales → '
-                    . 'Asociar certificado al servicio (wsfe/wsmtxca). Error original: ' . $msg,
-                    0, $e
-                );
-            }
-
-            if (str_contains($msg, 'ns1:cms.sign.invalid')) {
-                throw new \RuntimeException(
-                    'WSAA: La firma CMS es invalida. Verifica que el certificado (.crt) y la clave privada (.key) '
-                    . 'coincidan y sean los que generaste con el CSR enviado a AFIP. Error: ' . $msg,
-                    0, $e
-                );
-            }
-
-            throw new \RuntimeException('WSAA SOAP error: ' . $msg, (int) $e->getCode(), $e);
+            throw new \RuntimeException('WSAA SOAP error: ' . $e->getMessage(), (int) $e->getCode(), $e);
         }
 
         // Parse response XML
@@ -171,7 +151,9 @@ XML;
 
     /**
      * Sign the TRA with the certificate and key using PKCS#7 (CMS).
-     * Uses file:// protocol for cert/key — the standard approach for AFIP integration.
+     *
+     * Follows the exact pattern from afipsdk/afip.php — the battle-tested
+     * reference implementation for AFIP integration in PHP.
      */
     private function signTra(string $tra): string
     {
@@ -210,41 +192,43 @@ XML;
             throw new \RuntimeException('PKCS#7 signing failed: ' . $error);
         }
 
-        $cmsContent = (string) file_get_contents($tmpCms);
+        // ── Extract CMS body — AFIP SDK pattern ──────────────
+        // Read the signed S/MIME file directly from disk.
+        // Skip MIME headers (everything up to and including the blank line).
+        // Take everything after as the CMS body (preserving line breaks).
+        $inf = fopen($tmpCms, 'r');
+        $cms = '';
+        $headerDone = false;
+
+        while (! feof($inf)) {
+            $buffer = fgets($inf);
+            if ($buffer === false) {
+                break;
+            }
+
+            // Skip until we find the blank line separating headers from body
+            if (! $headerDone) {
+                if (trim($buffer) === '') {
+                    $headerDone = true;
+                }
+                continue;
+            }
+
+            $cms .= $buffer;
+        }
+
+        fclose($inf);
 
         @unlink($tmpTra);
         @unlink($tmpCms);
 
-        // The CMS output is in S/MIME format. We need only the base64 body.
-        // Remove everything before the first empty line (MIME headers).
-        // Then remove any MIME boundary lines (------xxxx--).
-        $inf = fopen('php://memory', 'r+');
-        fwrite($inf, $cmsContent);
-        rewind($inf);
+        $cms = trim($cms);
 
-        $inHeader = true;
-        $body = '';
-        while (($line = fgets($inf)) !== false) {
-            // Skip until we pass the empty line separating headers from body
-            if ($inHeader) {
-                if (trim($line) === '') {
-                    $inHeader = false;
-                }
-                continue;
-            }
-            // Skip MIME boundary lines
-            if (str_starts_with(trim($line), '------')) {
-                continue;
-            }
-            $body .= trim($line);
-        }
-        fclose($inf);
-
-        if ($body === '') {
-            throw new \RuntimeException('CMS signing produced empty body. Raw length: ' . strlen($cmsContent));
+        if ($cms === '') {
+            throw new \RuntimeException('CMS signing produced empty body.');
         }
 
-        return $body;
+        return $cms;
     }
 
     private function cacheTicket(AuthTicket $ticket): void

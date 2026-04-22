@@ -50,6 +50,7 @@ class WsfeClient
                         'ImpOpEx'     => (float) ($invoiceData['imp_op_ex'] ?? 0),      // Exento
                         'ImpIVA'      => (float) ($invoiceData['imp_iva'] ?? 0),        // IVA total
                         'ImpTrib'     => (float) ($invoiceData['imp_trib'] ?? 0),       // Otros tributos
+                        'CondicionIVAReceptorId' => (int) ($invoiceData['condicion_iva_receptor_id'] ?? 5),
                         'MonId'       => $invoiceData['mon_id'] ?? 'PES',
                         'MonCotiz'    => (float) ($invoiceData['mon_cotiz'] ?? 1),
                     ],

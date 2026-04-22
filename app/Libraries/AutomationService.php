@@ -176,8 +176,13 @@ class AutomationService
 
     private static function getAccountMapping(string $companyId): array
     {
-        $db = db_connect();
-        $settings = $db->table('company_settings')->where('company_id', $companyId)->get()->getResultArray();
+        try {
+            $db = db_connect();
+            $query = $db->table('company_settings')->where('company_id', $companyId)->get();
+            $settings = $query ? $query->getResultArray() : [];
+        } catch (\Throwable $e) {
+            return [];
+        }
         $map = [];
         foreach ($settings as $s) {
             if (str_starts_with($s['key'] ?? '', 'account_')) {

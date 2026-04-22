@@ -394,6 +394,40 @@ class ArcaService
 
     // ── SOAP callers ─────────────────────────────────────
 
+    private function resolveIvaConditionId(string $profile): int
+    {
+        $profile = strtolower(trim($profile));
+
+        $map = [
+            'responsable_inscripto'       => 1,
+            'responsable inscripto'       => 1,
+            'iva responsable inscripto'   => 1,
+            'responsable_no_inscripto'    => 2,
+            'responsable no inscripto'    => 2,
+            'iva responsable no inscripto'=> 2,
+            'no_responsable'              => 3,
+            'no responsable'              => 3,
+            'iva no responsable'          => 3,
+            'exento'                      => 4,
+            'sujeto exento'               => 4,
+            'iva_exento'                  => 4,
+            'iva sujeto exento'           => 4,
+            'consumidor_final'            => 5,
+            'consumidor final'            => 5,
+            'monotributo'                 => 6,
+            'responsable_monotributo'     => 6,
+            'responsable monotributo'     => 6,
+            'monotributista social'       => 13,
+            'monotributo social'          => 13,
+            'cliente del exterior'        => 9,
+            'proveedor del exterior'      => 8,
+            'no_categorizado'             => 7,
+            'no categorizado'             => 7,
+        ];
+
+        return $map[$profile] ?? 5; // Default to Consumidor Final
+    }
+
     private function callWsfev1(
         \App\Libraries\Arca\AuthTicket $ticket, string $cuit, string $env,
         array $sale, array $documentType, array $items, array $pointOfSale, array $settings
@@ -423,13 +457,35 @@ class ArcaService
             $ivaByRate[$afipCode]['Importe'] += $lineTax;
         }
 
+        // AFIP requires: when ImpIVA = 0 the Iva/AlicIva block must still be
+        // present with Id = 3 (IVA 0%) and the full neto as BaseImp.
+        if ($taxTotal == 0 && $subtotal > 0) {
+            // Replace whatever was accumulated with the mandatory 0% entry
+            $ivaByRate = [
+                3 => ['Id' => 3, 'BaseImp' => round($subtotal, 2), 'Importe' => 0],
+            ];
+        }
+
+        // Remove entries with zero BaseImp (no taxable base)
+        $ivaByRate = array_filter($ivaByRate, static fn($a) => round($a['BaseImp'], 2) > 0);
+
+        // Round all values for AFIP
+        foreach ($ivaByRate as &$aliq) {
+            $aliq['BaseImp'] = round($aliq['BaseImp'], 2);
+            $aliq['Importe'] = round($aliq['Importe'], 2);
+        }
+        unset($aliq);
+
         // Determine document type for customer
         $docTipo = 80; // CUIT by default
         $docNro  = $sale['customer_document_snapshot'] ?? '0';
         $taxProfile = $sale['customer_tax_profile'] ?? '';
+        $condicionIvaReceptorId = $this->resolveIvaConditionId($taxProfile);
+
         if ($taxProfile === 'consumidor_final' || $cbteTipo === 6 || $cbteTipo === 11) {
             $docTipo = 99; // Consumidor final
             $docNro  = '0';
+            $condicionIvaReceptorId = 5;
         }
 
         $invoiceData = [
@@ -447,6 +503,7 @@ class ArcaService
             'imp_op_ex'    => 0,
             'imp_iva'      => $taxTotal,
             'imp_trib'     => 0,
+            'condicion_iva_receptor_id' => $condicionIvaReceptorId,
             'mon_id'       => ($sale['currency_code'] ?? 'ARS') === 'ARS' ? 'PES' : ($sale['currency_code'] ?? 'PES'),
             'mon_cotiz'    => (float) ($sale['exchange_rate'] ?? 1),
             'iva'          => array_values($ivaByRate),
@@ -495,13 +552,43 @@ class ArcaService
             $ivaSubtotals[$afipCode]['base']    += $lineNet;
         }
 
+        $taxTotal = (float) ($sale['tax_total'] ?? 0);
+        $subtotal = (float) ($sale['subtotal'] ?? 0);
+
+        // AFIP requires: when ImpIVA = 0, AlicIva must contain Id=3 (IVA 0%)
+        if ($taxTotal == 0 && $subtotal > 0) {
+            $ivaSubtotals = [
+                3 => ['codigo' => 3, 'importe' => 0, 'base' => round($subtotal, 2)],
+            ];
+        }
+
+        // Remove entries with zero base and round
+        $ivaSubtotals = array_filter($ivaSubtotals, static fn($a) => round($a['base'], 2) > 0);
+        foreach ($ivaSubtotals as &$sub) {
+            $sub['importe'] = round($sub['importe'], 2);
+            $sub['base']    = round($sub['base'], 2);
+        }
+        unset($sub);
+
+        $taxProfile = $sale['customer_tax_profile'] ?? '';
+        $condicionIvaReceptorId = $this->resolveIvaConditionId($taxProfile);
+
+        $docTipo = 80; // CUIT by default
+        $docNro  = $sale['customer_document_snapshot'] ?? '0';
+        if ($taxProfile === 'consumidor_final' || $cbteTipo === 6 || $cbteTipo === 11) {
+            $docTipo = 99; // Consumidor final
+            $docNro  = '0';
+            $condicionIvaReceptorId = 5;
+        }
+
         $comprobante = [
             'cbte_tipo'     => $cbteTipo,
             'punto_venta'   => $ptoVta,
             'cbte_nro'      => $nextNum,
             'fecha_emision' => $sale['sale_date'] ?? date('Y-m-d'),
-            'doc_tipo'      => 80,
-            'doc_nro'       => $sale['customer_document_snapshot'] ?? '',
+            'doc_tipo'      => $docTipo,
+            'doc_nro'       => $docNro,
+            'condicion_iva_receptor_id' => $condicionIvaReceptorId,
             'imp_neto'      => (float) ($sale['subtotal'] ?? 0),
             'imp_tot_conc'  => 0,
             'imp_op_ex'     => 0,

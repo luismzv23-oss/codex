@@ -110,6 +110,7 @@ class WsmtxcaClient
             'fechaEmision'           => $data['fecha_emision'] ?? date('Y-m-d'),
             'codigoTipoDocumento'    => (int) ($data['doc_tipo'] ?? 80),
             'numeroDocumento'        => (string) ($data['doc_nro'] ?? ''),
+            'codigoCondicionIVAReceptor' => (int) ($data['condicion_iva_receptor_id'] ?? 5),
             'importeGravado'         => (float) ($data['imp_neto'] ?? 0),
             'importeNoGravado'       => (float) ($data['imp_tot_conc'] ?? 0),
             'importeExento'          => (float) ($data['imp_op_ex'] ?? 0),

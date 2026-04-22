@@ -387,10 +387,17 @@ class AccountingService
      */
     private function getAccountMapping(string $companyId): array
     {
-        $settings = db_connect()->table('company_settings')
-            ->where('company_id', $companyId)
-            ->like('key', 'account_', 'after')
-            ->get()->getResultArray();
+        try {
+            $query = db_connect()->table('company_settings')
+                ->where('company_id', $companyId)
+                ->like('key', 'account_', 'after')
+                ->get();
+
+            $settings = $query ? $query->getResultArray() : [];
+        } catch (\Throwable $e) {
+            log_message('warning', 'getAccountMapping: ' . $e->getMessage());
+            return [];
+        }
 
         $map = [];
         foreach ($settings as $s) {

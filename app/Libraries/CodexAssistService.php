@@ -108,7 +108,8 @@ class CodexAssistService
 
         // 4. Certificate expiring soon
         try {
-            $settings = $db->table('company_settings')->where('company_id', $companyId)->get()->getResultArray();
+            $csQuery = $db->table('company_settings')->where('company_id', $companyId)->get();
+            $settings = $csQuery ? $csQuery->getResultArray() : [];
             $settingsMap = [];
             foreach ($settings as $s) $settingsMap[$s['key']] = $s['value'];
 

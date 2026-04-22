@@ -400,7 +400,7 @@ class ArcaService
     ): \App\Libraries\Arca\ArcaResponse {
         $client = new \App\Libraries\Arca\WsfeClient($ticket, $cuit, $env);
 
-        $ptoVta    = (int) ($pointOfSale['code'] ?? $pointOfSale['number'] ?? 1);
+        $ptoVta    = (int) ($pointOfSale['afip_pos_number'] ?? 1);
         $cbteTipo  = (int) ($documentType['afip_code'] ?? 6);
         $lastNum   = $client->FECompUltimoAutorizado($ptoVta, $cbteTipo);
         $nextNum   = $lastNum + 1;
@@ -461,7 +461,7 @@ class ArcaService
     ): \App\Libraries\Arca\ArcaResponse {
         $client = new \App\Libraries\Arca\WsmtxcaClient($ticket, $cuit, $env);
 
-        $ptoVta   = (int) ($pointOfSale['code'] ?? $pointOfSale['number'] ?? 1);
+        $ptoVta   = (int) ($pointOfSale['afip_pos_number'] ?? 1);
         $cbteTipo = (int) ($documentType['afip_code'] ?? 6);
         $lastNum  = $client->consultarUltimoComprobanteAutorizado($ptoVta, $cbteTipo);
         $nextNum  = $lastNum + 1;

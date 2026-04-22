@@ -13,6 +13,7 @@ class SalesPointOfSaleModel extends BaseUuidModel
         'document_type_id',
         'name',
         'code',
+        'afip_pos_number',
         'channel',
         'active',
         'created_at',

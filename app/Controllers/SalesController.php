@@ -104,6 +104,9 @@ class SalesController extends BaseController
             'promotions' => $this->activePromotions($context['company']['id']),
             'documentTypes' => $this->documentTypeOptions($context['company']['id'], 'standard'),
             'pointsOfSale' => $this->pointOfSaleOptions($context['company']['id'], 'standard'),
+            'agents' => $this->salesAgentOptions($context['company']['id']),
+            'zones' => $this->salesZoneOptions($context['company']['id']),
+            'conditions' => $this->salesConditionOptions($context['company']['id']),
             'currencyOptions' => $this->companyCurrencyOptions($context['company']['id'], $this->salesSettings($context['company']['id'])['default_currency_code'] ?? ($context['company']['currency_code'] ?? null)),
             'salesSettings' => $this->salesSettings($context['company']['id']),
             'currencyCode' => $context['company']['currency_code'] ?? 'ARS',
@@ -388,6 +391,106 @@ class SalesController extends BaseController
         $this->logAudit($companyId, 'sales', 'receipt', $receiptId, 'create', null, (new SalesReceiptModel())->find($receiptId));
 
         return $this->popupOrRedirect($this->salesRoute('ventas/cobranzas', $companyId), 'Recibo registrado correctamente.');
+    }
+
+    public function receiptDetail(string $id)
+    {
+        $context = $this->salesContext('view');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+
+        $companyId = $context['company']['id'];
+        $receipt = (new SalesReceiptModel())->where('company_id', $companyId)->where('id', $id)->first();
+        if (! $receipt) {
+            return redirect()->to($this->salesRoute('ventas/cobranzas', $companyId))->with('error', 'Recibo no encontrado.');
+        }
+
+        $receiptItems = db_connect()->table('sales_receipt_items sri')
+            ->select('sri.*, c.name AS customer_name')
+            ->join('sales_receivables sr', 'sr.id = sri.sales_receivable_id', 'left')
+            ->join('customers c', 'c.id = sr.customer_id', 'left')
+            ->where('sri.sales_receipt_id', $id)
+            ->orderBy('sri.created_at', 'ASC')
+            ->get()
+            ->getResultArray();
+
+        $customer = ! empty($receipt['customer_id']) ? (new CustomerModel())->find($receipt['customer_id']) : null;
+
+        return view('sales/receipt_detail', [
+            'pageTitle' => 'Detalle de recibo',
+            'context' => $context,
+            'companies' => $this->salesCompanies(),
+            'selectedCompanyId' => $companyId,
+            'receipt' => $receipt,
+            'receiptItems' => $receiptItems,
+            'customer' => $customer,
+            'isPopup' => $this->isPopupRequest(),
+        ]);
+    }
+
+    public function voidReceipt(string $id)
+    {
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+
+        $companyId = $context['company']['id'];
+        $receipt = (new SalesReceiptModel())->where('company_id', $companyId)->where('id', $id)->first();
+        if (! $receipt) {
+            return redirect()->to($this->salesRoute('ventas/cobranzas', $companyId))->with('error', 'Recibo no encontrado.');
+        }
+
+        if (($receipt['status'] ?? '') === 'voided') {
+            return redirect()->to($this->salesRoute('ventas/cobranzas', $companyId))->with('error', 'El recibo ya fue anulado.');
+        }
+
+        $db = db_connect();
+        $db->transStart();
+
+        // Reverse receipt items - restore balances on receivables
+        $receiptItems = (new SalesReceiptItemModel())->where('sales_receipt_id', $id)->findAll();
+        $receivableModel = new SalesReceivableModel();
+        $salePaymentModel = new SalePaymentModel();
+
+        foreach ($receiptItems as $item) {
+            $receivable = $receivableModel->find($item['sales_receivable_id']);
+            if ($receivable) {
+                $newPaid = max(0, (float) ($receivable['paid_amount'] ?? 0) - (float) ($item['applied_amount'] ?? 0));
+                $newBalance = max(0, (float) ($receivable['total_amount'] ?? 0) - $newPaid);
+                $receivableModel->update($item['sales_receivable_id'], [
+                    'paid_amount' => $newPaid,
+                    'balance_amount' => $newBalance,
+                    'status' => $newBalance <= 0 ? 'paid' : ($newPaid > 0 ? 'partial' : 'pending'),
+                ]);
+            }
+
+            // Remove the associated sale payment created from this receipt
+            $salePaymentModel
+                ->where('sale_id', $item['sale_id'])
+                ->where('reference', $receipt['receipt_number'])
+                ->delete();
+
+            // Refresh sale payment status
+            $this->refreshSalePaymentStatus($item['sale_id']);
+            $this->syncReceivableForSale($item['sale_id']);
+        }
+
+        // Mark receipt as voided
+        (new SalesReceiptModel())->update($id, [
+            'status' => 'voided',
+            'notes' => trim(($receipt['notes'] ?? '') . ' [ANULADO ' . date('d/m/Y H:i') . ']'),
+        ]);
+
+        $this->logAudit($companyId, 'sales', 'receipt', $id, 'void', $receipt, (new SalesReceiptModel())->find($id));
+
+        $db->transComplete();
+        if (! $db->transStatus()) {
+            return redirect()->to($this->salesRoute('ventas/cobranzas', $companyId))->with('error', 'No se pudo anular el recibo.');
+        }
+
+        return redirect()->to($this->salesRoute('ventas/cobranzas', $companyId))->with('message', 'Recibo anulado correctamente. Los saldos han sido restaurados.');
     }
 
     public function reportsPdf()
@@ -2054,16 +2157,34 @@ class SalesController extends BaseController
 
     private function receivableSummary(string $companyId): array
     {
-        $row = db_connect()->table('sales_receivables')
+        $db = db_connect();
+        $row = $db->table('sales_receivables')
             ->select('COUNT(id) AS pending, COALESCE(SUM(balance_amount), 0) AS balance', false)
             ->where('company_id', $companyId)
             ->whereIn('status', ['pending', 'partial'])
             ->get()
             ->getRowArray();
 
+        $overdueRow = $db->table('sales_receivables')
+            ->select('COUNT(id) AS overdue', false)
+            ->where('company_id', $companyId)
+            ->whereIn('status', ['pending', 'partial'])
+            ->where('due_date <', date('Y-m-d'))
+            ->where('due_date IS NOT NULL')
+            ->get()
+            ->getRowArray();
+
+        $receiptsRow = $db->table('sales_receipts')
+            ->select('COUNT(id) AS total', false)
+            ->where('company_id', $companyId)
+            ->get()
+            ->getRowArray();
+
         return [
             'pending' => (int) ($row['pending'] ?? 0),
             'balance' => (float) ($row['balance'] ?? 0),
+            'overdue' => (int) ($overdueRow['overdue'] ?? 0),
+            'receipts_count' => (int) ($receiptsRow['total'] ?? 0),
         ];
     }
 

@@ -20,6 +20,7 @@ class SalesReceiptModel extends BaseUuidModel
         'total_amount',
         'reference',
         'external_reference',
+        'status',
         'notes',
         'created_by',
         'created_at',

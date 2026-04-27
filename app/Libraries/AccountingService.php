@@ -383,6 +383,65 @@ class AccountingService
     }
 
     /**
+     * Sync accounting for a cash closure.
+     */
+    public function syncCashClosure(string $companyId, string $closureId, string $userId): array
+    {
+        $db = db_connect();
+        $closure = $db->table('cash_closures')->where('id', $closureId)->get()->getRowArray();
+        if (!$closure) {
+            return ['ok' => false, 'error' => 'Cash closure not found'];
+        }
+
+        // Check if already synced
+        $existing = $db->table('journal_entries')
+            ->where('company_id', $companyId)
+            ->where('reference_type', 'cash_closure')
+            ->where('reference_id', $closureId)
+            ->countAllResults();
+        if ($existing > 0) {
+            return ['ok' => true, 'already_synced' => true];
+        }
+
+        $map = $this->getAccountMapping($companyId);
+        if (empty($map)) {
+            return ['ok' => true, 'skipped' => 'no_account_mapping'];
+        }
+
+        $difference = (float) ($closure['difference_amount'] ?? 0);
+        if (abs($difference) < 0.01) {
+            return ['ok' => true, 'skipped' => 'no_difference'];
+        }
+
+        $lines = [];
+        $cashAccount = $map['cash'] ?? $map['bank'] ?? null;
+        $differenceAccount = $map['cash_difference'] ?? $map['expense'] ?? null;
+
+        if (!$cashAccount || !$differenceAccount) {
+            return ['ok' => true, 'skipped' => 'no_accounts'];
+        }
+
+        if ($difference > 0) {
+            // Sobrante de caja: debito Caja, credito Diferencia
+            $lines[] = ['account_id' => $cashAccount, 'debit' => abs($difference), 'credit' => 0, 'description' => 'Sobrante cierre de caja'];
+            $lines[] = ['account_id' => $differenceAccount, 'debit' => 0, 'credit' => abs($difference), 'description' => 'Sobrante cierre de caja'];
+        } else {
+            // Faltante de caja: debito Diferencia, credito Caja
+            $lines[] = ['account_id' => $differenceAccount, 'debit' => abs($difference), 'credit' => 0, 'description' => 'Faltante cierre de caja'];
+            $lines[] = ['account_id' => $cashAccount, 'debit' => 0, 'credit' => abs($difference), 'description' => 'Faltante cierre de caja'];
+        }
+
+        return $this->createJournalEntry($companyId, [
+            'description' => 'Cierre de caja - Diferencia $' . number_format(abs($difference), 2, '.', ''),
+            'entry_date' => $closure['closed_at'] ?? date('Y-m-d'),
+            'reference_type' => 'cash_closure',
+            'reference_id' => $closureId,
+            'status' => 'posted',
+            'user_id' => $userId,
+        ], $lines);
+    }
+
+    /**
      * Get accounting mapping from company_settings.
      */
     private function getAccountMapping(string $companyId): array

@@ -90,29 +90,40 @@ class SalesController extends BaseController
             return $context;
         }
 
+        $companyId = $context['company']['id'];
+
+        // Verify a POS cash session is open before allowing access
+        $cashSession = $this->resolveCashSession($companyId, 'pos');
+        if (! $cashSession) {
+            return redirect()
+                ->to($this->salesRoute('ventas', $companyId))
+                ->with('error', 'Para operar en POS debes abrir primero la caja CAJA-POS desde el modulo de Caja.');
+        }
+
         return view('sales/forms/sale', [
             'pageTitle' => 'POS Ventas',
             'context' => $context,
             'sale' => null,
             'saleItems' => [],
             'salePayments' => [],
-            'customers' => $this->customerOptions($context['company']['id']),
-            'warehouses' => $this->salesWarehouses($context['company']['id']),
-            'products' => $this->salesProductCatalog($context['company']['id']),
-            'taxes' => $this->taxOptions($context['company']['id']),
-            'priceLists' => $this->priceListOptions($context['company']['id']),
-            'promotions' => $this->activePromotions($context['company']['id']),
-            'documentTypes' => $this->documentTypeOptions($context['company']['id'], 'standard'),
-            'pointsOfSale' => $this->pointOfSaleOptions($context['company']['id'], 'standard'),
-            'agents' => $this->salesAgentOptions($context['company']['id']),
-            'zones' => $this->salesZoneOptions($context['company']['id']),
-            'conditions' => $this->salesConditionOptions($context['company']['id']),
-            'currencyOptions' => $this->companyCurrencyOptions($context['company']['id'], $this->salesSettings($context['company']['id'])['default_currency_code'] ?? ($context['company']['currency_code'] ?? null)),
-            'salesSettings' => $this->salesSettings($context['company']['id']),
+            'customers' => $this->customerOptions($companyId),
+            'warehouses' => $this->salesWarehouses($companyId),
+            'products' => $this->salesProductCatalog($companyId),
+            'taxes' => $this->taxOptions($companyId),
+            'priceLists' => $this->priceListOptions($companyId),
+            'promotions' => $this->activePromotions($companyId),
+            'documentTypes' => $this->documentTypeOptions($companyId, 'standard'),
+            'pointsOfSale' => $this->pointOfSaleOptions($companyId, 'standard'),
+            'agents' => $this->salesAgentOptions($companyId),
+            'zones' => $this->salesZoneOptions($companyId),
+            'conditions' => $this->salesConditionOptions($companyId),
+            'currencyOptions' => $this->companyCurrencyOptions($companyId, $this->salesSettings($companyId)['default_currency_code'] ?? ($context['company']['currency_code'] ?? null)),
+            'salesSettings' => $this->salesSettings($companyId),
             'currencyCode' => $context['company']['currency_code'] ?? 'ARS',
             'formAction' => site_url('ventas/pos'),
-            'companyId' => $context['company']['id'],
+            'companyId' => $companyId,
             'isPopup' => false,
+            'cashSession' => $cashSession,
         ]);
     }
 
@@ -127,7 +138,7 @@ class SalesController extends BaseController
         $companyId = $context['company']['id'];
         $cashSession = $this->resolveCashSession($companyId, 'pos');
         if (! $cashSession) {
-            return redirect()->back()->withInput()->with('error', 'Debes abrir una caja activa para operar POS.');
+            return redirect()->back()->withInput()->with('error', 'No se puede registrar la venta. Debes abrir primero la caja CAJA-POS desde el modulo de Caja.');
         }
         $payload = $this->salePayload($companyId);
 
@@ -912,18 +923,24 @@ class SalesController extends BaseController
             return $context;
         }
 
+        $companyId = $context['company']['id'];
+
+        // Auto-open CAJA-KIOSCO session when entering the kiosk screen
+        $cashSession = $this->resolveCashSession($companyId, 'kiosk');
+
         return view('sales/forms/kiosk', [
             'pageTitle' => 'Ticket Kiosco',
-            'products' => $this->salesProductCatalog($context['company']['id']),
-            'warehouses' => $this->salesWarehouses($context['company']['id']),
-            'currencyOptions' => $this->companyCurrencyOptions($context['company']['id'], $this->salesSettings($context['company']['id'])['default_currency_code'] ?? ($context['company']['currency_code'] ?? null)),
-            'companyId' => $context['company']['id'],
+            'products' => $this->salesProductCatalog($companyId),
+            'warehouses' => $this->salesWarehouses($companyId),
+            'currencyOptions' => $this->companyCurrencyOptions($companyId, $this->salesSettings($companyId)['default_currency_code'] ?? ($context['company']['currency_code'] ?? null)),
+            'companyId' => $companyId,
             'formAction' => site_url('ventas/kiosco'),
             'isPopup' => $this->isPopupRequest(),
-            'settings' => $this->salesSettings($context['company']['id']),
-            'documentReference' => $this->previewDocumentReference($context['company']['id'], 'kiosk'),
-            'documentType' => $this->defaultDocumentType($context['company']['id'], 'kiosk'),
-            'pointOfSale' => $this->defaultPointOfSale($context['company']['id'], 'kiosk'),
+            'settings' => $this->salesSettings($companyId),
+            'documentReference' => $this->previewDocumentReference($companyId, 'kiosk'),
+            'documentType' => $this->defaultDocumentType($companyId, 'kiosk'),
+            'pointOfSale' => $this->defaultPointOfSale($companyId, 'kiosk'),
+            'cashSession' => $cashSession,
         ]);
     }
 
@@ -937,7 +954,11 @@ class SalesController extends BaseController
         $companyId = $context['company']['id'];
         $cashSession = $this->resolveCashSession($companyId, 'kiosk');
         if (! $cashSession) {
-            return redirect()->back()->withInput()->with('error', 'Debes abrir una caja activa para operar Kiosco.');
+            $msg = 'No se puede registrar la venta. Debes abrir primero la caja CAJA-KIOSCO desde el modulo de Caja.';
+            if ($this->request->isAJAX()) {
+                return $this->response->setJSON(['status' => 'error', 'message' => $msg, 'csrf_token' => csrf_hash()])->setStatusCode(422);
+            }
+            return redirect()->back()->withInput()->with('error', $msg);
         }
         $consumer = $this->ensureConsumerFinalCustomer($companyId);
         $kioskDocumentType = $this->defaultDocumentType($companyId, 'kiosk');
@@ -975,6 +996,9 @@ class SalesController extends BaseController
         $result = $this->confirmSaleTransaction($companyId, $saleId);
 
         if ($result !== true) {
+            if ($this->request->isAJAX()) {
+                return $this->response->setJSON(['status' => 'error', 'message' => $result, 'csrf_token' => csrf_hash()])->setStatusCode(422);
+            }
             return redirect()->to($this->salesRoute('ventas/kiosco', $companyId))->with('error', $result);
         }
 
@@ -983,6 +1007,16 @@ class SalesController extends BaseController
             'sale_number' => $documentReference,
             'cash_session_id' => $cashSession['id'],
         ], 'Venta kiosco confirmada y lista para impresion.');
+
+        if ($this->request->isAJAX()) {
+            return $this->response->setJSON([
+                'status' => 'ok',
+                'message' => 'Factura kiosco registrada correctamente.',
+                'sale_number' => $documentReference,
+                'sale_id' => $saleId,
+                'csrf_token' => csrf_hash(),
+            ]);
+        }
 
         return redirect()->to($this->salesRoute('ventas', $companyId))->with('message', 'Factura kiosco registrada correctamente.');
     }
@@ -3016,7 +3050,19 @@ class SalesController extends BaseController
     {
         $service = new CashService();
         $service->ensureDefaults($companyId, $this->currentUser()['branch_id'] ?? null);
-        return $service->activeSessionForChannel($companyId, $channel);
+
+        $session = $service->activeSessionForChannel($companyId, $channel);
+
+        // Auto-open kiosk cash session if none is active
+        if (! $session && $channel === 'kiosk') {
+            $session = $service->autoOpenKioskSession(
+                $companyId,
+                $this->currentUser()['id'],
+                $this->currentUser()['branch_id'] ?? null
+            );
+        }
+
+        return $session;
     }
 
     private function syncCashMovementsForSale(string $companyId, string $saleId): void

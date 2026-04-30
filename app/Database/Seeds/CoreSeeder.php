@@ -23,21 +23,18 @@ class CoreSeeder extends Seeder
 {
     public function run()
     {
-        $roleModel = new RoleModel();
+        $permissionIds = $this->seedPermissions();
+        $roleIds = $this->seedRoles($permissionIds);
+        [$companyId, $branchId] = $this->seedCompanyAndBranch();
+        $this->seedCurrencyAndTaxes($companyId);
+        $this->seedSalesDefaults($companyId, $branchId);
+        $systemIds = $this->seedSystems($companyId);
+        $this->seedDemoUsers($companyId, $branchId, $roleIds, $systemIds);
+    }
+
+    private function seedPermissions(): array
+    {
         $permissionModel = new PermissionModel();
-        $rolePermissionModel = new RolePermissionModel();
-        $companyModel = new CompanyModel();
-        $branchModel = new BranchModel();
-        $companySystemModel = new CompanySystemModel();
-        $currencyModel = new CurrencyModel();
-        $taxModel = new TaxModel();
-        $systemModel = new SystemModel();
-        $salesAgentModel = new SalesAgentModel();
-        $salesZoneModel = new SalesZoneModel();
-        $salesConditionModel = new SalesConditionModel();
-        $voucherSequenceModel = new VoucherSequenceModel();
-        $userModel = new UserModel();
-        $userSystemModel = new UserSystemModel();
 
         $permissions = [
             ['module' => 'dashboard', 'name' => 'Ver dashboard', 'slug' => 'dashboard.view'],
@@ -67,6 +64,14 @@ class CoreSeeder extends Seeder
 
             $permissionIds[$permission['slug']] = $permissionModel->insert($permission, true);
         }
+
+        return $permissionIds;
+    }
+
+    private function seedRoles(array $permissionIds): array
+    {
+        $roleModel = new RoleModel();
+        $rolePermissionModel = new RolePermissionModel();
 
         $roles = [
             'superadmin' => [
@@ -134,6 +139,17 @@ class CoreSeeder extends Seeder
             }
         }
 
+        return $roleIds;
+    }
+
+    /**
+     * @return array{0: string, 1: string} [$companyId, $branchId]
+     */
+    private function seedCompanyAndBranch(): array
+    {
+        $companyModel = new CompanyModel();
+        $branchModel = new BranchModel();
+
         $company = $companyModel->where('name', 'Empresa Demo')->first();
         $companyId = $company['id'] ?? $companyModel->insert([
             'name' => 'Empresa Demo',
@@ -155,6 +171,14 @@ class CoreSeeder extends Seeder
             'phone' => '+58 000 0000000',
             'active' => 1,
         ], true);
+
+        return [$companyId, $branchId];
+    }
+
+    private function seedCurrencyAndTaxes(string $companyId): void
+    {
+        $currencyModel = new CurrencyModel();
+        $taxModel = new TaxModel();
 
         if (! $currencyModel->where('company_id', $companyId)->where('code', 'ARS')->first()) {
             $currencyModel->insert([
@@ -190,6 +214,14 @@ class CoreSeeder extends Seeder
         if ($legacyIva) {
             $taxModel->update($legacyIva['id'], ['code' => 'IVA21', 'name' => 'IVA 21%', 'rate' => '21.00', 'afip_code' => 5, 'is_default' => 1]);
         }
+    }
+
+    private function seedSalesDefaults(string $companyId, string $branchId): void
+    {
+        $salesAgentModel = new SalesAgentModel();
+        $salesZoneModel = new SalesZoneModel();
+        $salesConditionModel = new SalesConditionModel();
+        $voucherSequenceModel = new VoucherSequenceModel();
 
         if (! $salesAgentModel->where('company_id', $companyId)->where('code', 'VEN-GRAL')->first()) {
             $salesAgentModel->insert([
@@ -239,6 +271,12 @@ class CoreSeeder extends Seeder
                 'active' => 1,
             ]);
         }
+    }
+
+    private function seedSystems(string $companyId): array
+    {
+        $systemModel = new SystemModel();
+        $companySystemModel = new CompanySystemModel();
 
         $systems = [
             [
@@ -304,6 +342,14 @@ class CoreSeeder extends Seeder
                 ]);
             }
         }
+
+        return $systemIds;
+    }
+
+    private function seedDemoUsers(string $companyId, string $branchId, array $roleIds, array $systemIds): void
+    {
+        $userModel = new UserModel();
+        $userSystemModel = new UserSystemModel();
 
         // ── Demo users: only use known passwords in development ──
         $isDev = ENVIRONMENT === 'development' || ENVIRONMENT === 'testing';
@@ -372,6 +418,5 @@ class CoreSeeder extends Seeder
                 }
             }
         }
-           
     }
 }

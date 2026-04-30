@@ -1,5 +1,16 @@
+Example Database
+ [ ] Model find all
+ [ ] Soft delete leaves row
+
+Example Session
+ [x] Session simple
+
 Arca Service
  [x] Sanitize settings creates default writable cache path
  [x] Validate settings rejects invalid cuit when arca enabled
  [ ] Test authentication writes token cache when readiness is complete
+
+Health
+ [x] Is defined app path
+ [x] Base url has been set
 

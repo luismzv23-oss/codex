@@ -1864,7 +1864,19 @@ class SalesController extends BaseApiController
     {
         $service = new CashService();
         $service->ensureDefaults($companyId, $this->apiUser()['branch_id'] ?? null);
-        return $service->activeSessionForChannel($companyId, $channel);
+
+        $session = $service->activeSessionForChannel($companyId, $channel);
+
+        // Auto-open kiosk cash session if none is active
+        if (! $session && $channel === 'kiosk') {
+            $session = $service->autoOpenKioskSession(
+                $companyId,
+                $this->apiUser()['id'],
+                $this->apiUser()['branch_id'] ?? null
+            );
+        }
+
+        return $session;
     }
 
     private function syncCashMovementsForSale(string $companyId, string $saleId): void

@@ -1,13 +1,44 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <testsuites>
-  <testsuite name="" tests="3" assertions="5" errors="0" warnings="0" failures="0" skipped="1" time="0.084883">
-    <testsuite name="App" tests="3" assertions="5" errors="0" warnings="0" failures="0" skipped="1" time="0.084883">
-      <testsuite name="ArcaServiceTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\ArcaServiceTest.php" tests="3" assertions="5" errors="0" warnings="0" failures="0" skipped="1" time="0.084883">
-        <testcase name="testSanitizeSettingsCreatesDefaultWritableCachePath" class="ArcaServiceTest" classname="ArcaServiceTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\ArcaServiceTest.php" line="22" assertions="3" time="0.074551"/>
-        <testcase name="testValidateSettingsRejectsInvalidCuitWhenArcaEnabled" class="ArcaServiceTest" classname="ArcaServiceTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\ArcaServiceTest.php" line="36" assertions="2" time="0.005519"/>
-        <testcase name="testTestAuthenticationWritesTokenCacheWhenReadinessIsComplete" class="ArcaServiceTest" classname="ArcaServiceTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\ArcaServiceTest.php" line="51" assertions="0" time="0.004813">
+  <testsuite name="" tests="8" assertions="9" errors="2" warnings="0" failures="0" skipped="1" time="0.284296">
+    <testsuite name="App" tests="8" assertions="9" errors="2" warnings="0" failures="0" skipped="1" time="0.284296">
+      <testsuite name="ExampleDatabaseTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\database\ExampleDatabaseTest.php" tests="2" assertions="0" errors="2" warnings="0" failures="0" skipped="0" time="0.191252">
+        <testcase name="testModelFindAll" class="ExampleDatabaseTest" classname="ExampleDatabaseTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\database\ExampleDatabaseTest.php" line="17" assertions="0" time="0.186397">
+          <error type="CodeIgniter\Database\Exceptions\DatabaseException">ExampleDatabaseTest::testModelFindAll
+CodeIgniter\Database\Exceptions\DatabaseException: Unable to connect to the database.&#13;
+Main connection [SQLite3]: Class "SQLite3" not found
+
+C:\Users\luism\.gemini\antigravity\scratch\codex\vendor\codeigniter4\framework\system\Database\BaseConnection.php:428
+C:\Users\luism\.gemini\antigravity\scratch\codex\vendor\codeigniter4\framework\system\Database\SQLite3\Connection.php:59
+C:\Users\luism\.gemini\antigravity\scratch\codex\vendor\codeigniter4\framework\system\Test\DatabaseTestTrait.php:80
+C:\Users\luism\.gemini\antigravity\scratch\codex\vendor\codeigniter4\framework\system\Test\DatabaseTestTrait.php:56
+C:\Users\luism\.gemini\antigravity\scratch\codex\vendor\codeigniter4\framework\system\Test\CIUnitTestCase.php:249</error>
+        </testcase>
+        <testcase name="testSoftDeleteLeavesRow" class="ExampleDatabaseTest" classname="ExampleDatabaseTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\database\ExampleDatabaseTest.php" line="28" assertions="0" time="0.004856">
+          <error type="CodeIgniter\Database\Exceptions\DatabaseException">ExampleDatabaseTest::testSoftDeleteLeavesRow
+CodeIgniter\Database\Exceptions\DatabaseException: Unable to connect to the database.&#13;
+Main connection [SQLite3]: Class "SQLite3" not found
+
+C:\Users\luism\.gemini\antigravity\scratch\codex\vendor\codeigniter4\framework\system\Database\BaseConnection.php:428
+C:\Users\luism\.gemini\antigravity\scratch\codex\vendor\codeigniter4\framework\system\Database\SQLite3\Connection.php:59
+C:\Users\luism\.gemini\antigravity\scratch\codex\vendor\codeigniter4\framework\system\Test\DatabaseTestTrait.php:80
+C:\Users\luism\.gemini\antigravity\scratch\codex\vendor\codeigniter4\framework\system\Test\DatabaseTestTrait.php:56
+C:\Users\luism\.gemini\antigravity\scratch\codex\vendor\codeigniter4\framework\system\Test\CIUnitTestCase.php:249</error>
+        </testcase>
+      </testsuite>
+      <testsuite name="ExampleSessionTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\session\ExampleSessionTest.php" tests="1" assertions="1" errors="0" warnings="0" failures="0" skipped="0" time="0.006015">
+        <testcase name="testSessionSimple" class="ExampleSessionTest" classname="ExampleSessionTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\session\ExampleSessionTest.php" line="10" assertions="1" time="0.006015"/>
+      </testsuite>
+      <testsuite name="ArcaServiceTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\ArcaServiceTest.php" tests="3" assertions="5" errors="0" warnings="0" failures="0" skipped="1" time="0.026560">
+        <testcase name="testSanitizeSettingsCreatesDefaultWritableCachePath" class="ArcaServiceTest" classname="ArcaServiceTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\ArcaServiceTest.php" line="22" assertions="3" time="0.009584"/>
+        <testcase name="testValidateSettingsRejectsInvalidCuitWhenArcaEnabled" class="ArcaServiceTest" classname="ArcaServiceTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\ArcaServiceTest.php" line="36" assertions="2" time="0.008155"/>
+        <testcase name="testTestAuthenticationWritesTokenCacheWhenReadinessIsComplete" class="ArcaServiceTest" classname="ArcaServiceTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\ArcaServiceTest.php" line="51" assertions="0" time="0.008822">
           <skipped/>
         </testcase>
+      </testsuite>
+      <testsuite name="HealthTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\HealthTest.php" tests="2" assertions="3" errors="0" warnings="0" failures="0" skipped="0" time="0.060469">
+        <testcase name="testIsDefinedAppPath" class="HealthTest" classname="HealthTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\HealthTest.php" line="12" assertions="1" time="0.003091"/>
+        <testcase name="testBaseUrlHasBeenSet" class="HealthTest" classname="HealthTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\HealthTest.php" line="17" assertions="2" time="0.057378"/>
       </testsuite>
     </testsuite>
   </testsuite>

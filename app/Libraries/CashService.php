@@ -17,10 +17,6 @@ class CashService
     public function ensureDefaults(string $companyId, ?string $branchId = null): void
     {
         $registerModel = new CashRegisterModel();
-        $existing = $registerModel->where('company_id', $companyId)->countAllResults();
-        if ($existing > 0) {
-            return;
-        }
 
         $branchId ??= (new BranchModel())->where('company_id', $companyId)->where('active', 1)->orderBy('code', 'ASC')->first()['id'] ?? null;
         $defaults = [
@@ -334,5 +330,85 @@ class CashService
     public function ownedSession(string $companyId, string $sessionId): ?array
     {
         return (new CashSessionModel())->where('company_id', $companyId)->where('id', $sessionId)->first();
+    }
+
+    /**
+     * Auto-open a kiosk cash session if none exists.
+     *
+     * Ensures CAJA-KIOSCO register exists, then opens a new session with
+     * $0 initial amount. Returns the session array ready for use.
+     */
+    public function autoOpenKioskSession(string $companyId, string $userId, ?string $branchId = null): ?array
+    {
+        $registerModel = new CashRegisterModel();
+
+        // 1. Find or create the CAJA-KIOSCO register
+        $register = $registerModel
+            ->where('company_id', $companyId)
+            ->where('code', 'CAJA-KIOSCO')
+            ->where('active', 1)
+            ->first();
+
+        if (! $register) {
+            $branchId ??= (new BranchModel())
+                ->where('company_id', $companyId)
+                ->where('active', 1)
+                ->orderBy('code', 'ASC')
+                ->first()['id'] ?? null;
+
+            $registerId = $registerModel->insert([
+                'company_id'    => $companyId,
+                'branch_id'     => $branchId,
+                'name'          => 'Caja Kiosco',
+                'code'          => 'CAJA-KIOSCO',
+                'register_type' => 'kiosk',
+                'is_default'    => 0,
+                'active'        => 1,
+            ], true);
+
+            $register = $registerModel->find($registerId);
+        }
+
+        if (! $register) {
+            return null;
+        }
+
+        $registerId = $register['id'];
+
+        // 2. Check if there's already an open session on this register
+        $sessionModel = new CashSessionModel();
+        $existing = $sessionModel
+            ->where('company_id', $companyId)
+            ->where('cash_register_id', $registerId)
+            ->where('status', 'open')
+            ->first();
+
+        if ($existing) {
+            // Already open — return it enriched with register data
+            return array_merge($existing, [
+                'register_name' => $register['name'],
+                'register_code' => $register['code'],
+                'register_type' => $register['register_type'],
+            ]);
+        }
+
+        // 3. Open a new session with $0 initial amount
+        $sessionId = $this->openSession($companyId, $registerId, $userId, 0.00, 'Apertura automatica desde Kiosco');
+
+        if (! $sessionId) {
+            return null;
+        }
+
+        $session = $sessionModel->find($sessionId);
+
+        if (! $session) {
+            return null;
+        }
+
+        return array_merge($session, [
+            'register_name' => $register['name'],
+            'register_code' => $register['code'],
+            'register_type' => $register['register_type'],
+        ]);
     }
 }

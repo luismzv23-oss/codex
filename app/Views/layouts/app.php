@@ -14,6 +14,8 @@ $isPopup = $request->getGet('popup') === '1';
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link href="<?= base_url('assets/css/app.css') ?>" rel="stylesheet">
+    <link href="<?= base_url('assets/css/codex-assist.css') ?>" rel="stylesheet">
+    <meta name="codex-api-base" content="<?= site_url('api/v1') ?>">
     <style>
         body.popup-mode {
             background: #f6f1eb;
@@ -401,6 +403,7 @@ $isPopup = $request->getGet('popup') === '1';
                 document.querySelectorAll('table[data-codex-pagination]').forEach(buildPagination);
             })();
         </script>
+        <script src="<?= base_url('assets/js/codex-assist-widget.js') ?>" defer></script>
     <?php endif; ?>
 </body>
 </html>

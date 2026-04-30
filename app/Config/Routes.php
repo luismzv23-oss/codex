@@ -76,6 +76,7 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     $routes->get('inventario/revalorizaciones/nueva', 'InventoryController::createRevaluationForm', ['filter' => 'permission:systems.view']);
     $routes->post('inventario/revalorizaciones', 'InventoryController::storeRevaluation', ['filter' => 'permission:systems.view']);
     $routes->get('ventas', 'SalesController::index', ['filter' => 'permission:systems.view']);
+    $routes->get('ventas/diarios', 'SalesController::daily', ['filter' => 'permission:systems.view']);
     $routes->get('ventas/pos', 'SalesController::pos', ['filter' => 'permission:systems.view']);
     $routes->post('ventas/pos', 'SalesController::storePos', ['filter' => 'permission:systems.view']);
     $routes->get('ventas/kiosco', 'SalesController::kiosk', ['filter' => 'permission:systems.view']);

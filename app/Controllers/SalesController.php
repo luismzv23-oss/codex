@@ -65,20 +65,50 @@ class SalesController extends BaseController
         }
 
         $filters = $this->salesFilters();
+        // Force only ARCA-submitted or authorized records on this screen
+        $companyId = $context['company']['id'];
+        $arcaSales = $this->salesRowsArca($companyId, $filters);
 
         return view('sales/index', [
             'pageTitle' => 'Ventas',
             'user' => $this->currentUser(),
             'context' => $context,
             'companies' => $this->salesCompanies(),
-            'selectedCompanyId' => $context['company']['id'],
-            'customers' => $this->customerOptions($context['company']['id']),
-            'summary' => $this->salesSummary($context['company']['id'], $filters),
+            'selectedCompanyId' => $companyId,
+            'customers' => $this->customerOptions($companyId),
+            'summary' => $this->salesSummary($companyId, $filters),
             'filters' => $filters,
-            'sales' => $this->salesRows($context['company']['id'], $filters),
-            'priceLists' => $this->priceListOptions($context['company']['id']),
-            'promotions' => $this->activePromotions($context['company']['id']),
-            'receivableSummary' => $this->receivableSummary($context['company']['id']),
+            'sales' => $arcaSales,
+            'priceLists' => $this->priceListOptions($companyId),
+            'promotions' => $this->activePromotions($companyId),
+            'receivableSummary' => $this->receivableSummary($companyId),
+        ]);
+    }
+
+    public function daily()
+    {
+        $context = $this->salesContext('view');
+
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+
+        $filters = $this->salesFilters();
+        $companyId = $context['company']['id'];
+
+        return view('sales/daily', [
+            'pageTitle' => 'Diarios',
+            'user' => $this->currentUser(),
+            'context' => $context,
+            'companies' => $this->salesCompanies(),
+            'selectedCompanyId' => $companyId,
+            'customers' => $this->customerOptions($companyId),
+            'summary' => $this->salesSummary($companyId, $filters),
+            'filters' => $filters,
+            'sales' => $this->salesRows($companyId, $filters),
+            'priceLists' => $this->priceListOptions($companyId),
+            'promotions' => $this->activePromotions($companyId),
+            'receivableSummary' => $this->receivableSummary($companyId),
         ]);
     }
 
@@ -94,7 +124,7 @@ class SalesController extends BaseController
 
         // Verify a POS cash session is open before allowing access
         $cashSession = $this->resolveCashSession($companyId, 'pos');
-        if (! $cashSession) {
+        if (!$cashSession) {
             return redirect()
                 ->to($this->salesRoute('ventas', $companyId))
                 ->with('error', 'Para operar en POS debes abrir primero la caja CAJA-POS desde el modulo de Caja.');
@@ -137,7 +167,7 @@ class SalesController extends BaseController
 
         $companyId = $context['company']['id'];
         $cashSession = $this->resolveCashSession($companyId, 'pos');
-        if (! $cashSession) {
+        if (!$cashSession) {
             return redirect()->back()->withInput()->with('error', 'No se puede registrar la venta. Debes abrir primero la caja CAJA-POS desde el modulo de Caja.');
         }
         $payload = $this->salePayload($companyId);
@@ -206,21 +236,23 @@ class SalesController extends BaseController
 
         $report = $this->salesReportData($context['company']['id'], $this->reportFilters());
         $filename = 'ventas-reportes-' . date('Ymd-His') . '.csv';
-        $rows = [[
-            'Fecha',
-            'Comprobante',
-            'Cliente',
-            'Estado',
-            'Vendedor',
-            'Zona',
-            'Total',
-            'Cobrado',
-            'Margen',
-        ]];
+        $rows = [
+            [
+                'Fecha',
+                'Comprobante',
+                'Cliente',
+                'Estado',
+                'Vendedor',
+                'Zona',
+                'Total',
+                'Cobrado',
+                'Margen',
+            ]
+        ];
 
         foreach (($report['sales'] ?? []) as $sale) {
             $rows[] = [
-                (string) (! empty($sale['issue_date']) ? date('d/m/Y H:i', strtotime($sale['issue_date'])) : ''),
+                (string) (!empty($sale['issue_date']) ? date('d/m/Y H:i', strtotime($sale['issue_date'])) : ''),
                 (string) ($sale['sale_number'] ?? ''),
                 (string) ($sale['customer_name'] ?? $sale['customer_name_snapshot'] ?? 'Consumidor Final'),
                 (string) ($sale['status'] ?? ''),
@@ -302,7 +334,7 @@ class SalesController extends BaseController
         }
 
         $cashSession = (new CashService())->activeSessionForChannel($companyId, 'general');
-        if (! $cashSession) {
+        if (!$cashSession) {
             return redirect()->back()->withInput()->with('error', 'Debes abrir una caja activa para registrar la cobranza.');
         }
 
@@ -395,7 +427,7 @@ class SalesController extends BaseController
         EventBus::emit('sale.payment_received', ['company_id' => $companyId, 'payment' => ['amount' => $total], 'receipt_id' => $receiptId]);
 
         $db->transComplete();
-        if (! $db->transStatus()) {
+        if (!$db->transStatus()) {
             return redirect()->back()->withInput()->with('error', 'No se pudo registrar el recibo.');
         }
 
@@ -413,7 +445,7 @@ class SalesController extends BaseController
 
         $companyId = $context['company']['id'];
         $receipt = (new SalesReceiptModel())->where('company_id', $companyId)->where('id', $id)->first();
-        if (! $receipt) {
+        if (!$receipt) {
             return redirect()->to($this->salesRoute('ventas/cobranzas', $companyId))->with('error', 'Recibo no encontrado.');
         }
 
@@ -426,7 +458,7 @@ class SalesController extends BaseController
             ->get()
             ->getResultArray();
 
-        $customer = ! empty($receipt['customer_id']) ? (new CustomerModel())->find($receipt['customer_id']) : null;
+        $customer = !empty($receipt['customer_id']) ? (new CustomerModel())->find($receipt['customer_id']) : null;
 
         return view('sales/receipt_detail', [
             'pageTitle' => 'Detalle de recibo',
@@ -449,7 +481,7 @@ class SalesController extends BaseController
 
         $companyId = $context['company']['id'];
         $receipt = (new SalesReceiptModel())->where('company_id', $companyId)->where('id', $id)->first();
-        if (! $receipt) {
+        if (!$receipt) {
             return redirect()->to($this->salesRoute('ventas/cobranzas', $companyId))->with('error', 'Recibo no encontrado.');
         }
 
@@ -497,7 +529,7 @@ class SalesController extends BaseController
         $this->logAudit($companyId, 'sales', 'receipt', $id, 'void', $receipt, (new SalesReceiptModel())->find($id));
 
         $db->transComplete();
-        if (! $db->transStatus()) {
+        if (!$db->transStatus()) {
             return redirect()->to($this->salesRoute('ventas/cobranzas', $companyId))->with('error', 'No se pudo anular el recibo.');
         }
 
@@ -680,7 +712,7 @@ class SalesController extends BaseController
         $settings = $this->salesSettings($context['company']['id']);
         $arcaService = new ArcaService();
         $currencyCode = trim((string) $this->request->getPost('default_currency_code'));
-        if ($currencyCode !== '' && ! $this->isAllowedCurrencyCode($currencyCode, $context['company']['id'], $settings['default_currency_code'] ?? null)) {
+        if ($currencyCode !== '' && !$this->isAllowedCurrencyCode($currencyCode, $context['company']['id'], $settings['default_currency_code'] ?? null)) {
             return redirect()->back()->withInput()->with('error', 'La moneda por defecto de Ventas debe pertenecer a las monedas activas de la empresa.');
         }
 
@@ -692,7 +724,7 @@ class SalesController extends BaseController
             'token_cache_path' => trim((string) $this->request->getPost('token_cache_path')),
         ];
         $validation = $arcaService->validateSettings($settingsPayload, $context['company']['id']);
-        if (! $validation['valid']) {
+        if (!$validation['valid']) {
             return redirect()->back()->withInput()->with('error', implode(' ', $validation['errors']));
         }
         $normalized = $validation['settings'];
@@ -890,7 +922,7 @@ class SalesController extends BaseController
         }
 
         $sale = $this->ownedSale($context['company']['id'], $id);
-        if (! $sale) {
+        if (!$sale) {
             return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('error', 'Comprobante no disponible.');
         }
 
@@ -908,7 +940,7 @@ class SalesController extends BaseController
         }
 
         $sale = $this->ownedSale($context['company']['id'], $id);
-        if (! $sale) {
+        if (!$sale) {
             return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('error', 'Comprobante no disponible.');
         }
 
@@ -953,7 +985,7 @@ class SalesController extends BaseController
 
         $companyId = $context['company']['id'];
         $cashSession = $this->resolveCashSession($companyId, 'kiosk');
-        if (! $cashSession) {
+        if (!$cashSession) {
             $msg = 'No se puede registrar la venta. Debes abrir primero la caja CAJA-KIOSCO desde el modulo de Caja.';
             if ($this->request->isAJAX()) {
                 return $this->response->setJSON(['status' => 'error', 'message' => $msg, 'csrf_token' => csrf_hash()])->setStatusCode(422);
@@ -1299,7 +1331,7 @@ class SalesController extends BaseController
         }
 
         $sale = $this->ownedSale($context['company']['id'], $id);
-        if (! $sale) {
+        if (!$sale) {
             return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('error', 'Venta no disponible.');
         }
 
@@ -1332,7 +1364,7 @@ class SalesController extends BaseController
             'formAction' => site_url('ventas/' . $id . '/actualizar'),
             'companyId' => $context['company']['id'],
             'isPopup' => $this->isPopupRequest(),
-            'sourceSale' => ! empty($sale['source_sale_id']) ? $this->ownedSale($context['company']['id'], (string) $sale['source_sale_id']) : null,
+            'sourceSale' => !empty($sale['source_sale_id']) ? $this->ownedSale($context['company']['id'], (string) $sale['source_sale_id']) : null,
         ]);
     }
 
@@ -1345,7 +1377,7 @@ class SalesController extends BaseController
         }
 
         $sourceSale = $this->ownedSale($context['company']['id'], $id);
-        if (! $sourceSale) {
+        if (!$sourceSale) {
             return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('error', 'Documento origen no disponible.');
         }
 
@@ -1355,11 +1387,11 @@ class SalesController extends BaseController
             ->where('active', 1)
             ->first();
 
-        if (! $targetDocument) {
+        if (!$targetDocument) {
             return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('error', 'El comprobante destino no esta disponible.');
         }
 
-        if (! $this->canConvertDocument($sourceSale, $targetDocument)) {
+        if (!$this->canConvertDocument($sourceSale, $targetDocument)) {
             return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('error', 'La conversion solicitada no es valida para este documento.');
         }
 
@@ -1377,7 +1409,7 @@ class SalesController extends BaseController
         }
 
         $sale = $this->ownedSale($context['company']['id'], $id);
-        if (! $sale) {
+        if (!$sale) {
             return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('error', 'Venta no disponible.');
         }
 
@@ -1407,7 +1439,7 @@ class SalesController extends BaseController
         }
 
         $sale = $this->ownedSale($context['company']['id'], $id);
-        if (! $sale) {
+        if (!$sale) {
             return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('error', 'Venta no disponible.');
         }
 
@@ -1436,7 +1468,7 @@ class SalesController extends BaseController
         }
 
         $sale = $this->ownedSale($context['company']['id'], $id);
-        if (! $sale) {
+        if (!$sale) {
             return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('error', 'Venta no disponible.');
         }
 
@@ -1448,7 +1480,7 @@ class SalesController extends BaseController
         $db->transStart();
 
         if (($sale['status'] ?? '') === 'confirmed') {
-            $documentType = ! empty($sale['document_type_id']) ? (new SalesDocumentTypeModel())->find($sale['document_type_id']) : null;
+            $documentType = !empty($sale['document_type_id']) ? (new SalesDocumentTypeModel())->find($sale['document_type_id']) : null;
             $category = (string) ($documentType['category'] ?? 'invoice');
             $items = $this->saleItems($id);
 
@@ -1468,7 +1500,7 @@ class SalesController extends BaseController
 
         $db->transComplete();
 
-        if (! $db->transStatus()) {
+        if (!$db->transStatus()) {
             return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('error', 'No se pudo cancelar la venta.');
         }
 
@@ -1491,7 +1523,7 @@ class SalesController extends BaseController
         }
 
         $sale = $this->ownedSale($context['company']['id'], $id);
-        if (! $sale || ! in_array($sale['status'], ['confirmed', 'returned_partial'], true)) {
+        if (!$sale || !in_array($sale['status'], ['confirmed', 'returned_partial'], true)) {
             return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('error', 'La venta no admite devoluciones.');
         }
 
@@ -1515,12 +1547,12 @@ class SalesController extends BaseController
         }
 
         $sale = $this->ownedSale($context['company']['id'], $id);
-        if (! $sale || ! in_array($sale['status'], ['confirmed', 'returned_partial'], true)) {
+        if (!$sale || !in_array($sale['status'], ['confirmed', 'returned_partial'], true)) {
             return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('error', 'La venta no admite devoluciones.');
         }
 
         $warehouseId = trim((string) $this->request->getPost('warehouse_id')) ?: ($sale['warehouse_id'] ?: null);
-        if (! $warehouseId || ! $this->ownedWarehouse($context['company']['id'], $warehouseId)) {
+        if (!$warehouseId || !$this->ownedWarehouse($context['company']['id'], $warehouseId)) {
             return redirect()->back()->withInput()->with('error', 'Debes seleccionar un deposito valido para reingresar stock.');
         }
 
@@ -1582,7 +1614,7 @@ class SalesController extends BaseController
         $this->syncSaleReturnStatus($id);
         $db->transComplete();
 
-        if (! $db->transStatus()) {
+        if (!$db->transStatus()) {
             return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('error', 'No se pudo registrar la devolucion.');
         }
 
@@ -1605,7 +1637,7 @@ class SalesController extends BaseController
         }
 
         $sale = $this->ownedSale($context['company']['id'], $id);
-        if (! $sale) {
+        if (!$sale) {
             return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('error', 'Venta no disponible.');
         }
 
@@ -1623,17 +1655,17 @@ class SalesController extends BaseController
     private function salesContext(string $requiredAccess = 'view')
     {
         $companyId = $this->resolveSalesCompanyId();
-        if (! $companyId) {
+        if (!$companyId) {
             return redirect()->to('/sistemas')->with('error', 'Debes seleccionar una empresa para operar Ventas.');
         }
 
         $company = (new CompanyModel())->find($companyId);
-        if (! $company) {
+        if (!$company) {
             return redirect()->to('/sistemas')->with('error', 'La empresa seleccionada no existe.');
         }
 
         $system = (new SystemModel())->where('slug', 'ventas')->first();
-        if (! $system || (int) ($system['active'] ?? 0) !== 1) {
+        if (!$system || (int) ($system['active'] ?? 0) !== 1) {
             return redirect()->to('/sistemas')->with('error', 'El sistema Ventas no esta disponible.');
         }
 
@@ -1644,8 +1676,8 @@ class SalesController extends BaseController
             ->where('active', 1)
             ->first();
 
-        if (! $this->isSuperadmin()) {
-            if (! $companyAssignment) {
+        if (!$this->isSuperadmin()) {
+            if (!$companyAssignment) {
                 return redirect()->to('/sistemas')->with('error', 'La empresa no tiene Ventas asignado.');
             }
 
@@ -1656,14 +1688,14 @@ class SalesController extends BaseController
                 ->where('active', 1)
                 ->first();
 
-            if (! $userAssignment) {
+            if (!$userAssignment) {
                 return redirect()->to('/sistemas')->with('error', 'Tu usuario no tiene acceso activo a Ventas.');
             }
 
             $accessLevel = $userAssignment['access_level'] ?? 'view';
         }
 
-        if ($requiredAccess === 'manage' && ! $this->isSuperadmin() && $accessLevel !== 'manage') {
+        if ($requiredAccess === 'manage' && !$this->isSuperadmin() && $accessLevel !== 'manage') {
             return redirect()->to($this->salesRoute('ventas', $companyId))->with('error', 'Tu usuario solo tiene acceso de consulta en Ventas.');
         }
 
@@ -1694,7 +1726,7 @@ class SalesController extends BaseController
 
     private function salesCompanies(): array
     {
-        if (! $this->isSuperadmin()) {
+        if (!$this->isSuperadmin()) {
             return [];
         }
 
@@ -1703,7 +1735,7 @@ class SalesController extends BaseController
 
     private function salesRoute(string $path, ?string $companyId): string
     {
-        if (! $this->isSuperadmin() || ! $companyId) {
+        if (!$this->isSuperadmin() || !$companyId) {
             return site_url($path);
         }
 
@@ -1716,7 +1748,7 @@ class SalesController extends BaseController
         $sequenceModel = new VoucherSequenceModel();
 
         foreach ([['document_type' => 'VENTA', 'prefix' => 'VTA'], ['document_type' => 'FACTURA', 'prefix' => 'FAC'], ['document_type' => 'TICKET', 'prefix' => 'TCK'], ['document_type' => 'NC', 'prefix' => 'NC'], ['document_type' => 'RECIBO', 'prefix' => 'REC']] as $row) {
-            if (! $sequenceModel->where('company_id', $companyId)->where('document_type', $row['document_type'])->first()) {
+            if (!$sequenceModel->where('company_id', $companyId)->where('document_type', $row['document_type'])->first()) {
                 $sequenceModel->insert([
                     'company_id' => $companyId,
                     'branch_id' => $branch['id'] ?? null,
@@ -1729,7 +1761,7 @@ class SalesController extends BaseController
         }
 
         $customerModel = new CustomerModel();
-        if (! $customerModel->where('company_id', $companyId)->where('name', 'Consumidor Final')->first()) {
+        if (!$customerModel->where('company_id', $companyId)->where('name', 'Consumidor Final')->first()) {
             $customerModel->insert([
                 'company_id' => $companyId,
                 'branch_id' => $branch['id'] ?? null,
@@ -1748,7 +1780,7 @@ class SalesController extends BaseController
         }
 
         $priceListModel = new SalesPriceListModel();
-        if (! $priceListModel->where('company_id', $companyId)->where('is_default', 1)->first()) {
+        if (!$priceListModel->where('company_id', $companyId)->where('is_default', 1)->first()) {
             $priceListModel->insert([
                 'company_id' => $companyId,
                 'name' => 'Lista General',
@@ -1793,10 +1825,10 @@ class SalesController extends BaseController
                 continue;
             }
 
-                $documentTypeIds[$definition['code']] = $documentTypeModel->insert(array_merge($definition, [
-                    'company_id' => $companyId,
-                    'active' => 1,
-                ]), true);
+            $documentTypeIds[$definition['code']] = $documentTypeModel->insert(array_merge($definition, [
+                'company_id' => $companyId,
+                'active' => 1,
+            ]), true);
         }
 
         $pointDefinitions = [
@@ -1873,7 +1905,7 @@ class SalesController extends BaseController
     private function previewDocumentReference(string $companyId, string $channel = 'standard'): string
     {
         $documentType = $this->defaultDocumentType($companyId, $channel);
-        if (! $documentType) {
+        if (!$documentType) {
             return '';
         }
 
@@ -1886,7 +1918,7 @@ class SalesController extends BaseController
             return false;
         }
 
-        $sourceDocument = ! empty($sourceSale['document_type_id']) ? (new SalesDocumentTypeModel())->find($sourceSale['document_type_id']) : null;
+        $sourceDocument = !empty($sourceSale['document_type_id']) ? (new SalesDocumentTypeModel())->find($sourceSale['document_type_id']) : null;
         $sourceCategory = (string) ($sourceDocument['category'] ?? '');
         $targetCategory = (string) ($targetDocument['category'] ?? '');
 
@@ -1903,7 +1935,7 @@ class SalesController extends BaseController
         $pointOfSale = $this->defaultPointOfSale($companyId, $targetDocument['channel'] ?? 'standard');
         $saleNumber = $this->nextSequenceNumber($companyId, $targetDocument['sequence_key'], $targetDocument['default_prefix'] ?: 'DOC');
         $sourceItems = $this->saleItems($sourceSale['id']);
-        $sourceDocument = ! empty($sourceSale['document_type_id']) ? (new SalesDocumentTypeModel())->find($sourceSale['document_type_id']) : null;
+        $sourceDocument = !empty($sourceSale['document_type_id']) ? (new SalesDocumentTypeModel())->find($sourceSale['document_type_id']) : null;
 
         $saleId = (new SaleModel())->insert([
             'company_id' => $companyId,
@@ -2006,16 +2038,59 @@ class SalesController extends BaseController
             ->where('s.company_id', $companyId)
             ->orderBy('s.issue_date', 'DESC');
 
-        if (! empty($filters['status'])) {
+        if (!empty($filters['status'])) {
             $builder->where('s.status', $filters['status']);
         }
-        if (! empty($filters['customer_id'])) {
+        if (!empty($filters['customer_id'])) {
             $builder->where('s.customer_id', $filters['customer_id']);
         }
-        if (! empty($filters['date_from'])) {
+        if (!empty($filters['date_from'])) {
             $builder->where('s.issue_date >=', $filters['date_from'] . ' 00:00:00');
         }
-        if (! empty($filters['date_to'])) {
+        if (!empty($filters['date_to'])) {
+            $builder->where('s.issue_date <=', $filters['date_to'] . ' 23:59:59');
+        }
+
+        return $builder
+            ->join('sales_agents sa', 'sa.id = s.sales_agent_id', 'left')
+            ->join('sales_zones sz', 'sz.id = s.sales_zone_id', 'left')
+            ->join('sales_conditions sc', 'sc.id = s.sales_condition_id', 'left')
+            ->select('sa.name AS sales_agent_name, sz.name AS sales_zone_name, sc.name AS sales_condition_name')
+            ->get()
+            ->getResultArray();
+    }
+
+    /**
+     * Returns only sales that have been authorized by ARCA
+     * (have a CAE assigned and arca_status = 'Autorizado').
+     */
+    private function salesRowsArca(string $companyId, array $filters): array
+    {
+        $builder = db_connect()->table('sales s')
+            ->select('s.*, c.name AS customer_name, dt.name AS document_type_name, dt.code AS document_type_code, dt.category AS document_category, pos.name AS point_of_sale_name, w.name AS warehouse_name, u.name AS created_by_name, src.sale_number AS source_sale_number, src.document_code AS source_document_code, srcdt.name AS source_document_name')
+            ->join('customers c', 'c.id = s.customer_id', 'left')
+            ->join('sales_document_types dt', 'dt.id = s.document_type_id', 'left')
+            ->join('sales_points_of_sale pos', 'pos.id = s.point_of_sale_id', 'left')
+            ->join('inventory_warehouses w', 'w.id = s.warehouse_id', 'left')
+            ->join('users u', 'u.id = s.created_by', 'left')
+            ->join('sales src', 'src.id = s.source_sale_id', 'left')
+            ->join('sales_document_types srcdt', 'srcdt.id = src.document_type_id', 'left')
+            ->where('s.company_id', $companyId)
+            ->where('s.cae IS NOT NULL')
+            ->where('s.cae !=', '')
+            ->where('s.arca_status', 'authorized')
+            ->orderBy('s.issue_date', 'DESC');
+
+        if (!empty($filters['status'])) {
+            $builder->where('s.status', $filters['status']);
+        }
+        if (!empty($filters['customer_id'])) {
+            $builder->where('s.customer_id', $filters['customer_id']);
+        }
+        if (!empty($filters['date_from'])) {
+            $builder->where('s.issue_date >=', $filters['date_from'] . ' 00:00:00');
+        }
+        if (!empty($filters['date_to'])) {
             $builder->where('s.issue_date <=', $filters['date_to'] . ' 23:59:59');
         }
 
@@ -2034,16 +2109,16 @@ class SalesController extends BaseController
             ->where('s.company_id', $companyId)
             ->whereIn('s.status', ['confirmed', 'returned_partial', 'returned_total']);
 
-        if (! empty($filters['date_from'])) {
+        if (!empty($filters['date_from'])) {
             $base->where('s.issue_date >=', $filters['date_from'] . ' 00:00:00');
         }
-        if (! empty($filters['date_to'])) {
+        if (!empty($filters['date_to'])) {
             $base->where('s.issue_date <=', $filters['date_to'] . ' 23:59:59');
         }
-        if (! empty($filters['customer_id'])) {
+        if (!empty($filters['customer_id'])) {
             $base->where('s.customer_id', $filters['customer_id']);
         }
-        if (! empty($filters['warehouse_id'])) {
+        if (!empty($filters['warehouse_id'])) {
             $base->where('s.warehouse_id', $filters['warehouse_id']);
         }
 
@@ -2067,10 +2142,10 @@ class SalesController extends BaseController
             ->orderBy('qty', 'DESC')
             ->limit(10);
 
-        if (! empty($filters['date_from'])) {
+        if (!empty($filters['date_from'])) {
             $topProducts->where('s.issue_date >=', $filters['date_from'] . ' 00:00:00');
         }
-        if (! empty($filters['date_to'])) {
+        if (!empty($filters['date_to'])) {
             $topProducts->where('s.issue_date <=', $filters['date_to'] . ' 23:59:59');
         }
 
@@ -2083,10 +2158,10 @@ class SalesController extends BaseController
             ->orderBy('total', 'DESC')
             ->limit(10);
 
-        if (! empty($filters['date_from'])) {
+        if (!empty($filters['date_from'])) {
             $topCustomers->where('s.issue_date >=', $filters['date_from'] . ' 00:00:00');
         }
-        if (! empty($filters['date_to'])) {
+        if (!empty($filters['date_to'])) {
             $topCustomers->where('s.issue_date <=', $filters['date_to'] . ' 23:59:59');
         }
 
@@ -2257,7 +2332,7 @@ class SalesController extends BaseController
             $receivableId = trim((string) $receivableId);
             $appliedAmount = (float) ($amounts[$index] ?? 0);
             $receivable = $receivableId !== '' ? $model->where('company_id', $companyId)->find($receivableId) : null;
-            if (! $receivable || $appliedAmount <= 0) {
+            if (!$receivable || $appliedAmount <= 0) {
                 continue;
             }
 
@@ -2488,12 +2563,12 @@ class SalesController extends BaseController
         if ($documentContext['error'] !== null) {
             return redirect()->back()->withInput()->with('error', $documentContext['error']);
         }
-        if ($sourceSaleId && ! $this->ownedSale($companyId, $sourceSaleId)) {
+        if ($sourceSaleId && !$this->ownedSale($companyId, $sourceSaleId)) {
             return redirect()->back()->withInput()->with('error', 'El documento origen ya no esta disponible.');
         }
         $currencyCode = trim((string) ($input['currency_code'] ?? '')) ?: 'ARS';
         $salesSettings = $this->salesSettings($companyId);
-        if (! $this->isAllowedCurrencyCode($currencyCode, $companyId, $salesSettings['default_currency_code'] ?? null)) {
+        if (!$this->isAllowedCurrencyCode($currencyCode, $companyId, $salesSettings['default_currency_code'] ?? null)) {
             return redirect()->back()->withInput()->with('error', 'La moneda seleccionada debe pertenecer a las monedas activas de la empresa.');
         }
         $items = $this->parseSaleItems($companyId, $input);
@@ -2503,15 +2578,15 @@ class SalesController extends BaseController
             return redirect()->back()->withInput()->with('error', 'Debes agregar al menos un producto.');
         }
 
-        if (! $warehouseId || ! $this->ownedWarehouse($companyId, $warehouseId)) {
+        if (!$warehouseId || !$this->ownedWarehouse($companyId, $warehouseId)) {
             return redirect()->back()->withInput()->with('error', 'Debes seleccionar un deposito valido.');
         }
 
         $customer = null;
-        if ($customerId && ! $customer = (new CustomerModel())->where('company_id', $companyId)->where('id', $customerId)->where('active', 1)->first()) {
+        if ($customerId && !$customer = (new CustomerModel())->where('company_id', $companyId)->where('id', $customerId)->where('active', 1)->first()) {
             return redirect()->back()->withInput()->with('error', 'Debes seleccionar un cliente valido.');
         }
-        if ((int) ($documentContext['documentType']['requires_customer'] ?? 0) === 1 && ! $customerId) {
+        if ((int) ($documentContext['documentType']['requires_customer'] ?? 0) === 1 && !$customerId) {
             return redirect()->back()->withInput()->with('error', 'El comprobante seleccionado requiere un cliente.');
         }
         $dueDate = trim((string) ($input['due_date'] ?? ''));
@@ -2582,12 +2657,12 @@ class SalesController extends BaseController
     private function resolveDocumentContext(string $companyId, string $channel, string $documentTypeId, string $pointOfSaleId): array
     {
         $documentType = $documentTypeId !== '' ? (new SalesDocumentTypeModel())->where('company_id', $companyId)->where('id', $documentTypeId)->where('active', 1)->first() : $this->defaultDocumentType($companyId, $channel);
-        if (! $documentType) {
+        if (!$documentType) {
             return ['error' => 'Debes seleccionar un tipo de comprobante valido.', 'documentType' => null, 'pointOfSale' => null];
         }
 
         $pointOfSale = $pointOfSaleId !== '' ? (new SalesPointOfSaleModel())->where('company_id', $companyId)->where('id', $pointOfSaleId)->where('active', 1)->first() : $this->defaultPointOfSale($companyId, $channel);
-        if (! $pointOfSale) {
+        if (!$pointOfSale) {
             return ['error' => 'Debes seleccionar un punto de venta valido.', 'documentType' => null, 'pointOfSale' => null];
         }
 
@@ -2617,7 +2692,7 @@ class SalesController extends BaseController
             }
 
             $product = (new InventoryProductModel())->where('company_id', $companyId)->where('id', $productId)->where('active', 1)->first();
-            if (! $product) {
+            if (!$product) {
                 continue;
             }
 
@@ -2711,12 +2786,12 @@ class SalesController extends BaseController
 
     private function customerCreditSnapshot(string $companyId, ?string $customerId, float $documentTotal): array
     {
-        if (! $customerId) {
+        if (!$customerId) {
             return ['score' => 100.0, 'requires_authorization' => false, 'reason' => null];
         }
 
         $customer = (new CustomerModel())->where('company_id', $companyId)->where('id', $customerId)->first();
-        if (! $customer) {
+        if (!$customer) {
             return ['score' => 0.0, 'requires_authorization' => false, 'reason' => null];
         }
 
@@ -2793,7 +2868,7 @@ class SalesController extends BaseController
 
         $reason = trim((string) ($sale['authorization_reason'] ?? '')) ?: 'Operacion con autorizacion requerida.';
         $saleId = (string) ($sale['id'] ?? '');
-        if ($saleId !== '' && ! (new SalesAuthorizationModel())->where('sale_id', $saleId)->where('status', 'pending')->first()) {
+        if ($saleId !== '' && !(new SalesAuthorizationModel())->where('sale_id', $saleId)->where('status', 'pending')->first()) {
             (new SalesAuthorizationModel())->insert([
                 'company_id' => $companyId,
                 'sale_id' => $saleId,
@@ -2882,7 +2957,7 @@ class SalesController extends BaseController
         $rows = [];
         foreach ($requested as $saleItemId => $data) {
             $quantity = (float) ($data['quantity'] ?? 0);
-            if ($quantity <= 0 || ! isset($saleItems[$saleItemId])) {
+            if ($quantity <= 0 || !isset($saleItems[$saleItemId])) {
                 continue;
             }
 
@@ -2926,7 +3001,7 @@ class SalesController extends BaseController
     private function refreshSalePaymentStatus(string $saleId): void
     {
         $sale = (new SaleModel())->find($saleId);
-        if (! $sale) {
+        if (!$sale) {
             return;
         }
 
@@ -2942,13 +3017,13 @@ class SalesController extends BaseController
     private function syncReceivableForSale(string $saleId): void
     {
         $sale = (new SaleModel())->find($saleId);
-        if (! $sale) {
+        if (!$sale) {
             return;
         }
 
         $model = new SalesReceivableModel();
         $receivable = $model->where('sale_id', $saleId)->first();
-        $documentType = ! empty($sale['document_type_id']) ? (new SalesDocumentTypeModel())->find($sale['document_type_id']) : null;
+        $documentType = !empty($sale['document_type_id']) ? (new SalesDocumentTypeModel())->find($sale['document_type_id']) : null;
         if ((int) ($documentType['impacts_receivable'] ?? 0) !== 1) {
             if ($receivable) {
                 $model->delete($receivable['id']);
@@ -2990,7 +3065,7 @@ class SalesController extends BaseController
     private function syncSaleCommission(string $companyId, string $saleId): void
     {
         $sale = (new SaleModel())->find($saleId);
-        if (! $sale) {
+        if (!$sale) {
             return;
         }
 
@@ -3005,7 +3080,7 @@ class SalesController extends BaseController
         }
 
         $agent = (new SalesAgentModel())->where('company_id', $companyId)->find($sale['sales_agent_id']);
-        if (! $agent) {
+        if (!$agent) {
             if ($existing) {
                 $model->delete($existing['id']);
             }
@@ -3054,7 +3129,7 @@ class SalesController extends BaseController
         $session = $service->activeSessionForChannel($companyId, $channel);
 
         // Auto-open kiosk cash session if none is active
-        if (! $session && $channel === 'kiosk') {
+        if (!$session && $channel === 'kiosk') {
             $session = $service->autoOpenKioskSession(
                 $companyId,
                 $this->currentUser()['id'],
@@ -3068,7 +3143,7 @@ class SalesController extends BaseController
     private function syncCashMovementsForSale(string $companyId, string $saleId): void
     {
         $sale = (new SaleModel())->find($saleId);
-        if (! $sale || empty($sale['cash_session_id']) || empty($sale['cash_register_id'])) {
+        if (!$sale || empty($sale['cash_session_id']) || empty($sale['cash_register_id'])) {
             return;
         }
 
@@ -3097,7 +3172,7 @@ class SalesController extends BaseController
     private function confirmSaleTransaction(string $companyId, string $saleId, ?array $sale = null)
     {
         $sale ??= $this->ownedSale($companyId, $saleId);
-        if (! $sale) {
+        if (!$sale) {
             return 'Venta no disponible.';
         }
 
@@ -3107,12 +3182,12 @@ class SalesController extends BaseController
         }
 
         $warehouseId = $sale['warehouse_id'] ?: null;
-        if (! $warehouseId) {
+        if (!$warehouseId) {
             return 'La venta debe tener deposito origen.';
         }
 
-        $documentType = ! empty($sale['document_type_id']) ? (new SalesDocumentTypeModel())->find($sale['document_type_id']) : null;
-        if (! $documentType) {
+        $documentType = !empty($sale['document_type_id']) ? (new SalesDocumentTypeModel())->find($sale['document_type_id']) : null;
+        if (!$documentType) {
             return 'El comprobante seleccionado ya no esta disponible.';
         }
 
@@ -3166,13 +3241,13 @@ class SalesController extends BaseController
     private function reserveStockForSale(string $companyId, array $sale, array $items)
     {
         $warehouseId = $sale['warehouse_id'] ?: null;
-        if (! $warehouseId) {
+        if (!$warehouseId) {
             return 'La venta debe tener deposito origen.';
         }
 
         foreach ($items as $item) {
             $this->lockStockLevel($companyId, (string) $item['product_id'], $warehouseId);
-            if (! $this->canReserve($companyId, (string) $item['product_id'], $warehouseId, (float) $item['quantity'])) {
+            if (!$this->canReserve($companyId, (string) $item['product_id'], $warehouseId, (float) $item['quantity'])) {
                 return 'Stock insuficiente para reservar el pedido.';
             }
         }
@@ -3206,12 +3281,12 @@ class SalesController extends BaseController
     private function deliverSaleStock(string $companyId, array $sale, array $items, bool $allowNegative, string $reason)
     {
         $warehouseId = $sale['warehouse_id'] ?: null;
-        if (! $warehouseId) {
+        if (!$warehouseId) {
             return 'La venta debe tener deposito origen.';
         }
 
-        $sourceSale = ! empty($sale['source_sale_id']) ? $this->ownedSale($companyId, (string) $sale['source_sale_id']) : null;
-        $sourceDocumentType = (! empty($sourceSale['document_type_id'])) ? (new SalesDocumentTypeModel())->find($sourceSale['document_type_id']) : null;
+        $sourceSale = !empty($sale['source_sale_id']) ? $this->ownedSale($companyId, (string) $sale['source_sale_id']) : null;
+        $sourceDocumentType = (!empty($sourceSale['document_type_id'])) ? (new SalesDocumentTypeModel())->find($sourceSale['document_type_id']) : null;
         $sourceCategory = (string) ($sourceDocumentType['category'] ?? '');
 
         if ($sourceCategory === 'delivery_note' && ($sourceSale['status'] ?? '') === 'confirmed') {
@@ -3220,7 +3295,7 @@ class SalesController extends BaseController
 
         foreach ($items as $item) {
             $this->lockStockLevel($companyId, (string) $item['product_id'], $warehouseId);
-            if (! $this->canWithdraw($companyId, (string) $item['product_id'], $warehouseId, (float) $item['quantity'], $allowNegative, $sale['id'])) {
+            if (!$this->canWithdraw($companyId, (string) $item['product_id'], $warehouseId, (float) $item['quantity'], $allowNegative, $sale['id'])) {
                 return 'Stock insuficiente para confirmar el documento.';
             }
         }
@@ -3287,8 +3362,8 @@ class SalesController extends BaseController
 
     private function restockDeliveredSale(string $companyId, array $sale, array $items, string $reason): void
     {
-        $sourceSale = ! empty($sale['source_sale_id']) ? $this->ownedSale($companyId, (string) $sale['source_sale_id']) : null;
-        $sourceDocumentType = (! empty($sourceSale['document_type_id'])) ? (new SalesDocumentTypeModel())->find($sourceSale['document_type_id']) : null;
+        $sourceSale = !empty($sale['source_sale_id']) ? $this->ownedSale($companyId, (string) $sale['source_sale_id']) : null;
+        $sourceDocumentType = (!empty($sourceSale['document_type_id'])) ? (new SalesDocumentTypeModel())->find($sourceSale['document_type_id']) : null;
         $sourceCategory = (string) ($sourceDocumentType['category'] ?? '');
         if ($sourceCategory === 'delivery_note' && ($sourceSale['status'] ?? '') === 'confirmed') {
             return;
@@ -3319,7 +3394,7 @@ class SalesController extends BaseController
         $model = new VoucherSequenceModel();
         $sequence = $model->where('company_id', $companyId)->where('document_type', $documentType)->first();
 
-        if (! $sequence) {
+        if (!$sequence) {
             $branch = (new BranchModel())->where('company_id', $companyId)->where('code', 'MAIN')->first();
             $id = $model->insert([
                 'company_id' => $companyId,
@@ -3344,7 +3419,7 @@ class SalesController extends BaseController
         $model = new VoucherSequenceModel();
         $sequence = $model->where('company_id', $companyId)->where('document_type', $documentType)->first();
 
-        if (! $sequence) {
+        if (!$sequence) {
             $branch = (new BranchModel())->where('company_id', $companyId)->where('code', 'MAIN')->first();
             $id = $model->insert([
                 'company_id' => $companyId,
@@ -3437,7 +3512,7 @@ class SalesController extends BaseController
         }
 
         $sale = $this->ownedSale($companyId, $saleId);
-        if (! $sale) {
+        if (!$sale) {
             return;
         }
 
@@ -3446,8 +3521,8 @@ class SalesController extends BaseController
 
     private function authorizeSaleInArca(string $companyId, array $sale): array
     {
-        $documentType = ! empty($sale['document_type_id']) ? (new SalesDocumentTypeModel())->find($sale['document_type_id']) : null;
-        $pointOfSale = ! empty($sale['point_of_sale_id']) ? (new SalesPointOfSaleModel())->find($sale['point_of_sale_id']) : [];
+        $documentType = !empty($sale['document_type_id']) ? (new SalesDocumentTypeModel())->find($sale['document_type_id']) : null;
+        $pointOfSale = !empty($sale['point_of_sale_id']) ? (new SalesPointOfSaleModel())->find($sale['point_of_sale_id']) : [];
         $company = (new CompanyModel())->find($companyId) ?? [];
         $settings = $this->salesSettings($companyId);
         $items = $this->saleItems($sale['id']);
@@ -3473,7 +3548,7 @@ class SalesController extends BaseController
             'arca_request_id' => $requestId,
         ];
 
-        if (! empty($result['cae'])) {
+        if (!empty($result['cae'])) {
             $update['cae'] = $result['cae'];
             $update['cae_due_date'] = $result['cae_due_date'] ?? null;
             $update['arca_authorized_at'] = $result['authorized_at'] ?? date('Y-m-d H:i:s');

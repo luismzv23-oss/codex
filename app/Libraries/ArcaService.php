@@ -18,6 +18,24 @@ class ArcaService
         return $settings;
     }
 
+    /**
+     * Convert absolute paths to portable format using {writable} placeholder
+     * so they are machine-independent when stored in the database.
+     */
+    public function toPortableSettings(array $settings, ?string $companyId = null): array
+    {
+        $settings['certificate_path'] = $this->toPortablePath(trim((string) ($settings['certificate_path'] ?? '')));
+        $settings['private_key_path'] = $this->toPortablePath(trim((string) ($settings['private_key_path'] ?? '')));
+
+        $cachePath = trim((string) ($settings['token_cache_path'] ?? ''));
+        if ($cachePath === '' && $companyId) {
+            $cachePath = WRITEPATH . 'arca' . DIRECTORY_SEPARATOR . $companyId;
+        }
+        $settings['token_cache_path'] = $this->toPortablePath($cachePath);
+
+        return $settings;
+    }
+
     public function validateSettings(array $settings, ?string $companyId = null): array
     {
         $settings = $this->sanitizeSettings($settings, $companyId);
@@ -752,8 +770,40 @@ class ArcaService
             return '';
         }
 
-        $path = str_replace(['{writable}', '{WRITEPATH}'], rtrim(WRITEPATH, '\\/'), $path);
+        $path = str_replace(['{writable}', '{WRITEPATH}', '{ROOTPATH}'], [
+            rtrim(WRITEPATH, '\\/'),
+            rtrim(WRITEPATH, '\\/'),
+            rtrim(ROOTPATH, '\\/'),
+        ], $path);
         return str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
+    }
+
+    /**
+     * Convert an absolute path into a portable path using the {writable} placeholder.
+     * This is the inverse of normalizePath(): it replaces the machine-specific
+     * WRITEPATH prefix with {writable} so the stored value works on any server.
+     */
+    public function toPortablePath(string $path): string
+    {
+        if ($path === '') {
+            return '';
+        }
+
+        // Normalize separators first for consistent comparison
+        $path = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
+        $writePath = rtrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, WRITEPATH), DIRECTORY_SEPARATOR);
+
+        // If path already uses a placeholder, return as-is
+        if (str_starts_with($path, '{writable}') || str_starts_with($path, '{WRITEPATH}') || str_starts_with($path, '{ROOTPATH}')) {
+            return $path;
+        }
+
+        // Replace absolute WRITEPATH prefix with {writable}
+        if (stripos($path, $writePath) === 0) {
+            return '{writable}' . substr($path, strlen($writePath));
+        }
+
+        return $path;
     }
 
     private function validateTokenCachePath(string $path): array

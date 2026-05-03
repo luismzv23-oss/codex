@@ -609,15 +609,24 @@ class SalesController extends BaseController
             return $context;
         }
 
+        $settings = $this->salesSettings($context['company']['id']);
+        $arcaService = new ArcaService();
+
+        // Show paths in portable {writable} format in the form
+        $portablePaths = $arcaService->toPortableSettings($settings, $context['company']['id']);
+        $settings['certificate_path'] = $portablePaths['certificate_path'] ?? ($settings['certificate_path'] ?? '');
+        $settings['private_key_path'] = $portablePaths['private_key_path'] ?? ($settings['private_key_path'] ?? '');
+        $settings['token_cache_path'] = $portablePaths['token_cache_path'] ?? ($settings['token_cache_path'] ?? '');
+
         return view('sales/forms/settings', [
             'pageTitle' => 'Configuracion de Ventas',
-            'settings' => $this->salesSettings($context['company']['id']),
+            'settings' => $settings,
             'currencyOptions' => $this->companyCurrencyOptions($context['company']['id'], $context['company']['currency_code'] ?? null),
             'companyId' => $context['company']['id'],
             'formAction' => site_url('ventas/configuracion'),
             'isPopup' => $this->isPopupRequest(),
-            'arcaReadiness' => (new ArcaService())->readiness($this->salesSettings($context['company']['id'])),
-            'arcaDiagnostics' => (new ArcaService())->certificateDiagnostics($this->salesSettings($context['company']['id'])),
+            'arcaReadiness' => $arcaService->readiness($this->salesSettings($context['company']['id'])),
+            'arcaDiagnostics' => $arcaService->certificateDiagnostics($this->salesSettings($context['company']['id'])),
         ]);
     }
 
@@ -729,6 +738,9 @@ class SalesController extends BaseController
         }
         $normalized = $validation['settings'];
 
+        // Convert absolute paths to portable {writable} format for storage
+        $portable = $arcaService->toPortableSettings($normalized, $context['company']['id']);
+
         (new SalesSettingModel())->update($settings['id'], [
             'invoice_mode_standard_enabled' => $this->request->getPost('invoice_mode_standard_enabled') === '0' ? 0 : 1,
             'invoice_mode_kiosk_enabled' => $this->request->getPost('invoice_mode_kiosk_enabled') === '1' ? 1 : 0,
@@ -754,9 +766,9 @@ class SalesController extends BaseController
             'wsbfev1_enabled' => $this->request->getPost('wsbfev1_enabled') === '1' ? 1 : 0,
             'wsct_enabled' => $this->request->getPost('wsct_enabled') === '1' ? 1 : 0,
             'wsseg_enabled' => $this->request->getPost('wsseg_enabled') === '1' ? 1 : 0,
-            'certificate_path' => $normalized['certificate_path'] ?? '',
-            'private_key_path' => $normalized['private_key_path'] ?? '',
-            'token_cache_path' => $normalized['token_cache_path'] ?? '',
+            'certificate_path' => $portable['certificate_path'] ?? '',
+            'private_key_path' => $portable['private_key_path'] ?? '',
+            'token_cache_path' => $portable['token_cache_path'] ?? '',
         ]);
 
         return $this->popupOrRedirect($this->salesRoute('ventas/configuracion', $context['company']['id']), 'Configuracion de Ventas actualizada.');

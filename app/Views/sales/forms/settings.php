@@ -21,9 +21,10 @@
         <div class="col-md-3"><label class="form-label">PV estandar</label><input type="number" min="1" name="point_of_sale_standard" class="form-control" value="<?= esc((string) ($settings['point_of_sale_standard'] ?? 1)) ?>"></div>
         <div class="col-md-3"><label class="form-label">PV kiosco</label><input type="number" min="1" name="point_of_sale_kiosk" class="form-control" value="<?= esc((string) ($settings['point_of_sale_kiosk'] ?? 2)) ?>"></div>
         <div class="col-md-6"><label class="form-label">Documento kiosco</label><input type="text" name="kiosk_document_label" class="form-control" value="<?= esc($settings['kiosk_document_label'] ?? 'Ticket Consumidor Final') ?>"></div>
-        <div class="col-md-4"><label class="form-label">Certificado</label><input type="text" name="certificate_path" class="form-control" value="<?= esc($settings['certificate_path'] ?? '') ?>"></div>
-        <div class="col-md-4"><label class="form-label">Clave privada</label><input type="text" name="private_key_path" class="form-control" value="<?= esc($settings['private_key_path'] ?? '') ?>"></div>
-        <div class="col-md-4"><label class="form-label">Cache TA</label><input type="text" name="token_cache_path" class="form-control" value="<?= esc($settings['token_cache_path'] ?? '') ?>"></div>
+        <div class="col-md-4"><label class="form-label">Certificado</label><input type="text" name="certificate_path" class="form-control" value="<?= esc($settings['certificate_path'] ?? '') ?>" placeholder="{writable}/arca/.../archivo.crt"></div>
+        <div class="col-md-4"><label class="form-label">Clave privada</label><input type="text" name="private_key_path" class="form-control" value="<?= esc($settings['private_key_path'] ?? '') ?>" placeholder="{writable}/arca/.../archivo.key"></div>
+        <div class="col-md-4"><label class="form-label">Cache TA</label><input type="text" name="token_cache_path" class="form-control" value="<?= esc($settings['token_cache_path'] ?? '') ?>" placeholder="{writable}/arca/..."></div>
+        <div class="col-12"><small class="text-secondary"><code>{writable}</code> = carpeta <code>writable/</code> del proyecto. Usa rutas relativas para portabilidad.</small></div>
         <?php foreach (['wsaa','wsfev1','wsmtxca','wsfexv1','wsbfev1','wsct','wsseg'] as $service): ?>
             <div class="col-md-3"><label class="form-label text-uppercase"><?= esc($service) ?></label><select name="<?= esc($service) ?>_enabled" class="form-select"><option value="1" <?= (int) ($settings[$service . '_enabled'] ?? 0) === 1 ? 'selected' : '' ?>>Habilitado</option><option value="0" <?= (int) ($settings[$service . '_enabled'] ?? 0) === 0 ? 'selected' : '' ?>>No</option></select></div>
         <?php endforeach; ?>

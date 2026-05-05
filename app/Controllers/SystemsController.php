@@ -290,7 +290,7 @@ class SystemsController extends BaseController
         return view('systems/forms/user_assignment', [
             'pageTitle' => 'Asignar sistema a operador',
             'users' => $this->assignableUsersForCompany($companyId),
-            'userLabel' => $this->isSuperadmin() ? 'Usuario' : 'Operador',
+            'userLabel' => $this->isSuperadmin() ? 'Usuario' : 'Colaborador',
             'systems' => $this->activeCompanySystems($companyId),
             'selectedCompanyId' => $companyId,
             'selectedCompany' => $companyId ? (new CompanyModel())->find($companyId) : null,
@@ -310,7 +310,7 @@ class SystemsController extends BaseController
         $systemId = trim((string) $this->request->getPost('system_id'));
         $accessLevel = trim((string) $this->request->getPost('access_level'));
 
-        if (! in_array($accessLevel, ['view', 'manage'], true)) {
+        if (! in_array($accessLevel, ['view', 'manage', 'vendedor'], true)) {
             return redirect()->back()->withInput()->with('error', 'Nivel de acceso no valido.');
         }
 
@@ -429,7 +429,7 @@ class SystemsController extends BaseController
             ->join('user_systems', 'user_systems.user_id = users.id AND user_systems.company_id = users.company_id', 'left')
             ->join('systems', 'systems.id = user_systems.system_id', 'left')
             ->where('users.company_id', $companyId)
-            ->whereIn('roles.slug', ['admin', 'operador'])
+            ->whereIn('roles.slug', ['admin', 'operador', 'vendedor'])
             ->orderBy('users.name', 'ASC')
             ->orderBy('systems.name', 'ASC', false)
             ->findAll();
@@ -461,7 +461,9 @@ class SystemsController extends BaseController
                 }
                 if (($row['access_level'] ?? 'view') === 'manage') {
                     $grouped[$userId]['access_summary'] = 'Gestion';
-                } elseif ($grouped[$userId]['access_summary'] !== 'Gestion') {
+                } elseif (($row['access_level'] ?? 'view') === 'vendedor') {
+                    $grouped[$userId]['access_summary'] = 'Vendedor';
+                } elseif ($grouped[$userId]['access_summary'] !== 'Gestion' && $grouped[$userId]['access_summary'] !== 'Vendedor') {
                     $grouped[$userId]['access_summary'] = 'Consulta';
                 }
             }
@@ -508,14 +510,15 @@ class SystemsController extends BaseController
             return $query->findAll();
         }
 
-        $operatorRole = (new RoleModel())->findBySlug('operador');
+        $roles = (new RoleModel())->whereIn('slug', ['operador', 'vendedor'])->findAll();
+        $roleIds = array_column($roles, 'id');
 
-        if (! $operatorRole) {
+        if (empty($roleIds)) {
             return [];
         }
 
         return $query
-            ->where('role_id', $operatorRole['id'])
+            ->whereIn('role_id', $roleIds)
             ->findAll();
     }
 
@@ -585,14 +588,15 @@ class SystemsController extends BaseController
             return $query->first() !== null;
         }
 
-        $operatorRole = (new RoleModel())->findBySlug('operador');
+        $roles = (new RoleModel())->whereIn('slug', ['operador', 'vendedor'])->findAll();
+        $roleIds = array_column($roles, 'id');
 
-        if (! $operatorRole) {
+        if (empty($roleIds)) {
             return false;
         }
 
         return $query
-            ->where('role_id', $operatorRole['id'])
+            ->whereIn('role_id', $roleIds)
             ->first() !== null;
     }
 

@@ -20,12 +20,15 @@
                         class="bi bi-arrow-repeat"></i></button>
             </form>
         <?php endif; ?>
-        <a href="<?= site_url('ventas/diarios' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
-            class="btn btn-outline-dark">Diarios</a>
-        <a href="<?= site_url('ventas/reportes' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
-            class="btn btn-outline-dark">Reportes</a>
-        <a href="<?= site_url('ventas/cobranzas' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
-            class="btn btn-outline-dark">Cobranzas</a>
+        <?php $isVendedorAccess = ($user['role_slug'] ?? '') === 'vendedor' || ($context['access_level'] ?? '') === 'vendedor'; ?>
+        <?php if (!$isVendedorAccess): ?>
+            <a href="<?= site_url('ventas/diarios' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
+                class="btn btn-outline-dark">Diarios</a>
+            <a href="<?= site_url('ventas/reportes' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
+                class="btn btn-outline-dark">Reportes</a>
+            <a href="<?= site_url('ventas/cobranzas' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
+                class="btn btn-outline-dark">Cobranzas</a>
+        <?php endif; ?>
         <?php if ($context['canManage']): ?>
             <a href="<?= site_url('ventas/vendedores/nuevo' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
                 class="btn btn-outline-dark" data-popup="true" data-popup-title="Vendedor"
@@ -36,25 +39,51 @@
             <a href="<?= site_url('ventas/condiciones/nueva' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
                 class="btn btn-outline-dark" data-popup="true" data-popup-title="Condicion comercial"
                 data-popup-subtitle="Registrar condicion de venta.">Condiciones</a>
+        <?php endif; ?>
+        <?php if ($isVendedorAccess || $context['canManage']): ?>
             <a href="<?= site_url('ventas/pos' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
-                class="btn btn-outline-dark">POS</a>
+                class="btn <?= $isVendedorAccess ? 'btn-primary' : 'btn-outline-dark' ?>"><i class="bi bi-display me-1"></i> POS</a>
             <a href="<?= site_url('ventas/kiosco' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
-                class="btn btn-outline-dark">Kiosco</a>
+                class="btn <?= $isVendedorAccess ? 'btn-dark' : 'btn-outline-dark' ?>"><i class="bi bi-shop me-1"></i> Kiosco</a>
+        <?php endif; ?>
+        <?php if ($context['canManage']): ?>
             <a href="<?= site_url('ventas/listas-precio/nueva' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
                 class="btn btn-outline-dark" data-popup="true" data-popup-title="Lista de precios"
                 data-popup-subtitle="Configurar precios comerciales por producto.">Lista de precios</a>
             <a href="<?= site_url('ventas/promociones/nueva' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
                 class="btn btn-outline-dark" data-popup="true" data-popup-title="Promocion"
                 data-popup-subtitle="Crear promociones comerciales activas.">Promociones</a>
-        <?php endif; ?>
-        <?php if ($context['canManage']): ?>
+            <a href="<?= site_url('ventas/presupuestos/nuevo' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
+                class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Presupuesto"
+                data-popup-subtitle="Crear nuevo presupuesto comercial." title="Nuevo Presupuesto" aria-label="Nuevo Presupuesto"><i class="bi bi-file-earmark-text"></i></a>
+            <a href="<?= site_url('ventas/pedidos/nuevo' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
+                class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Pedido"
+                data-popup-subtitle="Crear nueva orden de pedido." title="Nuevo Pedido" aria-label="Nuevo Pedido"><i class="bi bi-cart-check"></i></a>
+            <a href="<?= site_url('ventas/remitos/nuevo' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
+                class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Remito"
+                data-popup-subtitle="Crear nuevo remito de entrega." title="Nuevo Remito" aria-label="Nuevo Remito"><i class="bi bi-truck"></i></a>
             <a href="<?= site_url('ventas/clientes/nuevo' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
                 class="btn btn-outline-dark" data-popup="true" data-popup-title="Cliente"
                 data-popup-subtitle="Alta rapida de cliente para ventas.">Nuevo cliente</a>
-            <!--   <a href="<?= site_url('ventas/nueva' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark" data-popup="true" data-popup-title="Venta" data-popup-subtitle="Crear venta integrada con inventario.">Nueva venta</a>-->
         <?php endif; ?>
     </div>
 </div>
+
+<?php if ($isVendedorAccess): ?>
+    <div class="card border-0 shadow-sm rounded-4 text-center py-5">
+        <div class="card-body">
+            <div class="display-1 text-secondary mb-3"><i class="bi bi-shop-window"></i></div>
+            <h2 class="h4">Bienvenido al Portal de Ventas</h2>
+            <p class="text-secondary mx-auto mb-4" style="max-width: 500px;">
+                Selecciona <strong>POS</strong> para registrar ventas tradicionales con facturación y métodos de pago complejos, o selecciona <strong>Kiosco</strong> para ventas de mostrador de alta velocidad.
+            </p>
+            <div class="d-flex justify-content-center gap-3">
+                <a href="<?= site_url('ventas/pos' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-primary btn-lg px-4"><i class="bi bi-display me-2"></i> Entrar a POS</a>
+                <a href="<?= site_url('ventas/kiosco' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-dark btn-lg px-4"><i class="bi bi-shop me-2"></i> Entrar a Kiosco</a>
+            </div>
+        </div>
+    </div>
+<?php else: ?>
 
 <div class="row g-3 mb-4">
     <div class="col-md-3">
@@ -332,4 +361,5 @@
         </div>
     </div>
 </div>
+<?php endif; ?>
 <?= $this->endSection() ?>

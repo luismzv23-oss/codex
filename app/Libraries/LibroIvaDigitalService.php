@@ -17,13 +17,13 @@ class LibroIvaDigitalService
         $db = db_connect();
 
         $sales = $db->table('sales s')
-            ->select('s.*, dt.name AS doc_type_name, dt.code AS doc_type_code, dt.afip_code AS cbte_tipo')
-            ->join('document_types dt', 'dt.id = s.document_type_id', 'left')
+            ->select('s.*, dt.name AS doc_type_name, dt.code AS doc_type_code')
+            ->join('sales_document_types dt', 'dt.id = s.document_type_id', 'left')
             ->where('s.company_id', $companyId)
             ->where('s.status', 'confirmed')
-            ->where('s.sale_date >=', $periodFrom)
-            ->where('s.sale_date <=', $periodTo)
-            ->orderBy('s.sale_date', 'ASC')
+            ->where('s.issue_date >=', $periodFrom)
+            ->where('s.issue_date <=', $periodTo)
+            ->orderBy('s.issue_date', 'ASC')
             ->orderBy('s.sale_number', 'ASC')
             ->get()
             ->getResultArray();
@@ -85,13 +85,13 @@ class LibroIvaDigitalService
         $db = db_connect();
 
         $invoices = $db->table('purchase_invoices pi')
-            ->select('pi.*, s.name AS supplier_name, s.cuit AS supplier_cuit, s.tax_id AS supplier_tax_id')
+            ->select('pi.*, s.name AS supplier_name, s.tax_id AS supplier_tax_id')
             ->join('suppliers s', 's.id = pi.supplier_id', 'left')
             ->where('pi.company_id', $companyId)
             ->where('pi.status !=', 'cancelled')
-            ->where('pi.invoice_date >=', $periodFrom)
-            ->where('pi.invoice_date <=', $periodTo)
-            ->orderBy('pi.invoice_date', 'ASC')
+            ->where('pi.issue_date >=', $periodFrom)
+            ->where('pi.issue_date <=', $periodTo)
+            ->orderBy('pi.issue_date', 'ASC')
             ->get()
             ->getResultArray();
 

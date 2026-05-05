@@ -91,12 +91,13 @@
                                         <div class="mt-auto d-flex flex-wrap gap-2">
                                             <?php
                                             $canEnter = $system['entry_url'] !== '#' && (int) ($system['active'] ?? 1) === 1;
-                                            $entryHref = $system['entry_url'];
-                                            if ($canEnter && ! empty($selectedCompanyId) && in_array($system['slug'], ['inventario', 'ventas', 'compras', 'caja'], true)) {
-                                                $entryHref .= '?company_id=' . $selectedCompanyId;
-                                            }
+                                            $baseHref = $system['entry_url'];
+                                            $companyQuery = (! empty($selectedCompanyId) && in_array($system['slug'], ['inventario', 'ventas', 'compras', 'caja', 'contabilidad', 'impuestos', 'comercial'], true)) 
+                                                ? '?company_id=' . $selectedCompanyId 
+                                                : '';
+                                            $entryHref = $canEnter ? ($baseHref . $companyQuery) : '#';
                                             ?>
-                                            <a href="<?= esc($canEnter ? $entryHref : '#') ?>" class="btn btn-outline-dark btn-sm <?= $canEnter ? '' : 'disabled' ?>" <?= $canEnter ? '' : 'aria-disabled="true"' ?>>Ingresar</a>
+                                            <a href="<?= esc($entryHref) ?>" class="btn btn-outline-dark btn-sm <?= $canEnter ? '' : 'disabled' ?>" <?= $canEnter ? '' : 'aria-disabled="true"' ?>>Ingresar</a>
                                         </div>
                                     </div>
                                 </div>

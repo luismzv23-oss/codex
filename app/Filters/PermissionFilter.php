@@ -21,6 +21,14 @@ class PermissionFilter implements FilterInterface
         if ($permission === null || ! $auth->can($permission)) {
             return redirect()->to('/dashboard')->with('error', 'No tienes permisos para acceder a este modulo.');
         }
+
+        $user = $auth->user();
+        if (($user['role_slug'] ?? '') === 'vendedor') {
+            $uri = trim((string)$request->getUri()->getPath(), '/');
+            if (strpos($uri, 'ventas') !== 0 && strpos($uri, 'logout') !== 0) {
+                 return redirect()->to('/ventas');
+            }
+        }
     }
 
     public function after(RequestInterface $request, ResponseInterface $response, $arguments = null)

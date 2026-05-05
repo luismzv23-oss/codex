@@ -467,5 +467,5 @@ class AccountingService
         }
         return $map;
     }
-}
 
+}

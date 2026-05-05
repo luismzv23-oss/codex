@@ -175,6 +175,45 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     $routes->post('configuracion/impuestos', 'SettingsController::storeTax', ['filter' => 'permission:taxes.manage']);
     $routes->post('configuracion/monedas', 'SettingsController::storeCurrency', ['filter' => 'permission:currencies.manage']);
     $routes->post('configuracion/numeraciones', 'SettingsController::storeVoucherSequence', ['filter' => 'permission:voucher_sequences.manage']);
+
+    // ── Contabilidad (Web) ──────────────────────────────
+    $routes->get('contabilidad', 'AccountingController::index', ['filter' => 'permission:systems.view']);
+    $routes->get('contabilidad/cuentas/nueva', 'AccountingController::createAccountForm', ['filter' => 'permission:systems.view']);
+    $routes->post('contabilidad/cuentas', 'AccountingController::storeAccount', ['filter' => 'permission:systems.view']);
+    $routes->get('contabilidad/diario', 'AccountingController::journal', ['filter' => 'permission:systems.view']);
+    $routes->get('contabilidad/asientos/nuevo', 'AccountingController::createEntryForm', ['filter' => 'permission:systems.view']);
+    $routes->post('contabilidad/asientos', 'AccountingController::storeEntry', ['filter' => 'permission:systems.view']);
+    $routes->post('contabilidad/asientos/(:segment)/contabilizar', 'AccountingController::postEntry/$1', ['filter' => 'permission:systems.view']);
+    $routes->get('contabilidad/mayor/(:segment)', 'AccountingController::ledger/$1', ['filter' => 'permission:systems.view']);
+    $routes->get('contabilidad/balance-comprobacion', 'AccountingController::trialBalance', ['filter' => 'permission:systems.view']);
+    $routes->get('contabilidad/balance-general', 'AccountingController::balanceSheet', ['filter' => 'permission:systems.view']);
+    $routes->get('contabilidad/resultados', 'AccountingController::incomeStatement', ['filter' => 'permission:systems.view']);
+
+    // ── Impuestos (Web) ─────────────────────────────────
+    $routes->get('impuestos', 'TaxController::index', ['filter' => 'permission:systems.view']);
+    $routes->get('impuestos/iva-ventas/txt', 'TaxController::exportIvaVentasTxt', ['filter' => 'permission:systems.view']);
+    $routes->get('impuestos/iva-compras/txt', 'TaxController::exportIvaComprasTxt', ['filter' => 'permission:systems.view']);
+    $routes->get('impuestos/sicore/retenciones/txt', 'TaxController::exportSicoreRetencionesTxt', ['filter' => 'permission:systems.view']);
+    $routes->get('impuestos/sicore/percepciones/txt', 'TaxController::exportSicorePercepcionesTxt', ['filter' => 'permission:systems.view']);
+
+    // ── Ciclo Comercial: Presupuestos ───────────────────
+    $routes->get('ventas/presupuestos/nuevo', 'SalesController::createQuoteForm', ['filter' => 'permission:systems.view']);
+    $routes->post('ventas/presupuestos', 'SalesController::storeQuote', ['filter' => 'permission:systems.view']);
+    $routes->post('ventas/presupuestos/(:segment)/aprobar', 'SalesController::approveQuote/$1', ['filter' => 'permission:systems.view']);
+    $routes->get('ventas/presupuestos/(:segment)/a-pedido', 'SalesController::quoteToOrder/$1', ['filter' => 'permission:systems.view']);
+
+    // ── Ciclo Comercial: Pedidos ────────────────────────
+    $routes->get('ventas/pedidos/nuevo', 'SalesController::createOrderForm', ['filter' => 'permission:systems.view']);
+    $routes->post('ventas/pedidos', 'SalesController::storeOrder', ['filter' => 'permission:systems.view']);
+    $routes->post('ventas/pedidos/(:segment)/aprobar', 'SalesController::approveOrder/$1', ['filter' => 'permission:systems.view']);
+    $routes->get('ventas/pedidos/(:segment)/remito', 'SalesController::orderToDeliveryNote/$1', ['filter' => 'permission:systems.view']);
+    $routes->get('ventas/pedidos/(:segment)/facturar', 'SalesController::orderToInvoice/$1', ['filter' => 'permission:systems.view']);
+
+    // ── Ciclo Comercial: Remitos ────────────────────────
+    $routes->get('ventas/remitos/nuevo', 'SalesController::createDeliveryNoteForm', ['filter' => 'permission:systems.view']);
+    $routes->post('ventas/remitos', 'SalesController::storeDeliveryNote', ['filter' => 'permission:systems.view']);
+    $routes->post('ventas/remitos/(:segment)/despachar', 'SalesController::dispatchDeliveryNote/$1', ['filter' => 'permission:systems.view']);
+    $routes->post('ventas/remitos/(:segment)/entregar', 'SalesController::deliverDeliveryNote/$1', ['filter' => 'permission:systems.view']);
 });
 
 $routes->group('api/v1', ['namespace' => 'App\Controllers\Api\V1'], static function (RouteCollection $routes): void {

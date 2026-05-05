@@ -1267,38 +1267,77 @@ class SalesController extends BaseController
             return $context;
         }
 
+        $companyId = $context['company']['id'];
+
         $sourceSale = null;
         $sourceSaleId = trim((string) $this->request->getGet('source_sale_id'));
         if ($sourceSaleId !== '') {
-            $sourceSale = $this->ownedSale($context['company']['id'], $sourceSaleId);
+            $sourceSale = $this->ownedSale($companyId, $sourceSaleId);
+        }
+
+        // Support pre-populating from a sales order (pedido → factura)
+        $fromOrderId = trim((string) $this->request->getGet('from_order'));
+        $fromOrder = null;
+        $fromOrderItems = [];
+        if ($fromOrderId !== '') {
+            $fromOrder = db_connect()->table('sales_orders')->where('id', $fromOrderId)->get()->getRowArray();
+            if ($fromOrder) {
+                $fromOrderItems = db_connect()->table('sales_order_items')
+                    ->where('sales_order_id', $fromOrderId)
+                    ->orderBy('sort_order')->get()->getResultArray();
+            }
+        }
+
+        $saleDefaults = null;
+        if ($fromOrder) {
+            $saleDefaults = [
+                'customer_id' => $fromOrder['customer_id'],
+                'sales_agent_id' => $fromOrder['sales_agent_id'],
+                'sales_condition_id' => $fromOrder['sales_condition_id'],
+                'currency_code' => $fromOrder['currency_code'],
+                'notes' => $fromOrder['notes'],
+            ];
+            $mappedItems = array_map(function($i) {
+                return [
+                    'product_id' => $i['product_id'],
+                    'quantity' => $i['quantity'],
+                    'unit_price' => $i['unit_price'],
+                    'discount_rate' => $i['discount_pct'],
+                    // Tax matching would require tax lookup, but form defaults to no-tax or lets user select if we leave empty.
+                    // We can try to match the rate to a tax_id later if needed, but for now we let it default.
+                    'tax_id' => null 
+                ];
+            }, $fromOrderItems);
         }
 
         return view('sales/forms/sale', [
             'pageTitle' => 'Nueva venta',
             'context' => $context,
             'companies' => $this->salesCompanies(),
-            'selectedCompanyId' => $context['company']['id'],
-            'sale' => null,
-            'saleItems' => [],
+            'selectedCompanyId' => $companyId,
+            'sale' => $saleDefaults,
+            'saleItems' => $fromOrder ? $mappedItems : [],
             'salePayments' => [],
-            'customers' => $this->customerOptions($context['company']['id']),
-            'warehouses' => $this->salesWarehouses($context['company']['id']),
-            'products' => $this->salesProductCatalog($context['company']['id']),
-            'taxes' => $this->taxOptions($context['company']['id']),
-            'priceLists' => $this->priceListOptions($context['company']['id']),
-            'promotions' => $this->activePromotions($context['company']['id']),
-            'agents' => $this->salesAgentOptions($context['company']['id']),
-            'zones' => $this->salesZoneOptions($context['company']['id']),
-            'conditions' => $this->salesConditionOptions($context['company']['id']),
-            'documentTypes' => $this->documentTypeOptions($context['company']['id'], 'standard'),
-            'pointsOfSale' => $this->pointOfSaleOptions($context['company']['id'], 'standard'),
-            'currencyOptions' => $this->companyCurrencyOptions($context['company']['id'], $this->salesSettings($context['company']['id'])['default_currency_code'] ?? ($context['company']['currency_code'] ?? null)),
-            'salesSettings' => $this->salesSettings($context['company']['id']),
+            'customers' => $this->customerOptions($companyId),
+            'warehouses' => $this->salesWarehouses($companyId),
+            'products' => $this->salesProductCatalog($companyId),
+            'taxes' => $this->taxOptions($companyId),
+            'priceLists' => $this->priceListOptions($companyId),
+            'promotions' => $this->activePromotions($companyId),
+            'agents' => $this->salesAgentOptions($companyId),
+            'zones' => $this->salesZoneOptions($companyId),
+            'conditions' => $this->salesConditionOptions($companyId),
+            'documentTypes' => $this->documentTypeOptions($companyId, 'standard'),
+            'pointsOfSale' => $this->pointOfSaleOptions($companyId, 'standard'),
+            'currencyOptions' => $this->companyCurrencyOptions($companyId, $this->salesSettings($companyId)['default_currency_code'] ?? ($context['company']['currency_code'] ?? null)),
+            'salesSettings' => $this->salesSettings($companyId),
             'currencyCode' => $context['company']['currency_code'] ?? 'ARS',
             'formAction' => site_url('ventas'),
-            'companyId' => $context['company']['id'],
+            'companyId' => $companyId,
             'isPopup' => $this->isPopupRequest(),
             'sourceSale' => $sourceSale,
+            'fromOrder' => $fromOrder,
+            'fromOrderItems' => $fromOrderItems,
         ]);
     }
 
@@ -1330,6 +1369,12 @@ class SalesController extends BaseController
         $this->persistSaleChildren($saleId, $payload['items'], $payload['payments']);
         $this->logAudit($companyId, 'sales', 'sale', $saleId, 'create_draft', null, (new SaleModel())->find($saleId));
         $this->logDocumentEvent($companyId, 'sales', 'sale', $saleId, 'draft_created', ['sale_number' => $saleNumber]);
+
+        $fromOrderId = trim((string) $this->request->getPost('from_order_id'));
+        if ($fromOrderId !== '') {
+            db_connect()->table('sales_orders')->where('id', $fromOrderId)
+                ->update(['converted_to_sale_id' => $saleId, 'updated_at' => date('Y-m-d H:i:s')]);
+        }
 
         return $this->popupOrRedirect($this->salesRoute('ventas', $companyId), 'Venta guardada como borrador.');
     }
@@ -1707,7 +1752,28 @@ class SalesController extends BaseController
             $accessLevel = $userAssignment['access_level'] ?? 'view';
         }
 
-        if ($requiredAccess === 'manage' && !$this->isSuperadmin() && $accessLevel !== 'manage') {
+        $isVendedorAccess = $this->roleSlug() === 'vendedor' || $accessLevel === 'vendedor';
+
+        if ($isVendedorAccess) {
+            $method = \Config\Services::router()->methodName();
+            $allowedForVendedor = [
+                'index', 'pos', 'storePos', 'kiosk', 'storeKiosk', 'posCatalog',
+                'arcaDiagnostics', 'diagnoseArca', 'testArcaConnection', 
+                'storeCustomer', 'pdf', 'convert', 'confirm', 'cancel', 
+                'authorizeArca', 'consultArca', 'createReturnForm', 'storeReturn'
+            ];
+            
+            if (!in_array($method, $allowedForVendedor, true)) {
+                if ($method === 'daily') {
+                    return redirect()->to($this->salesRoute('ventas', $companyId));
+                }
+                return redirect()->to('/dashboard')->with('error', 'Tu acceso a Ventas esta limitado a POS y Kiosco.');
+            }
+        }
+
+        // User assignment and access level resolution was moved up to correctly check Vendedor access level.
+
+        if ($requiredAccess === 'manage' && !$this->isSuperadmin() && $accessLevel !== 'manage' && !$isVendedorAccess) {
             return redirect()->to($this->salesRoute('ventas', $companyId))->with('error', 'Tu usuario solo tiene acceso de consulta en Ventas.');
         }
 
@@ -3244,6 +3310,23 @@ class SalesController extends BaseController
         $this->syncCashMovementsForSale($companyId, $saleId);
         $this->syncSaleCommission($companyId, $saleId);
         (new AccountingService())->syncSale($companyId, $saleId, $this->currentUser()['id']);
+        
+        // Link to converted order
+        $order = $db->table('sales_orders')->where('converted_to_sale_id', $saleId)->get()->getRowArray();
+        if ($order) {
+            foreach ($items as $item) {
+                if (!empty($item['product_id'])) {
+                    $db->query("UPDATE sales_order_items SET quantity_invoiced = quantity_invoiced + ? WHERE sales_order_id = ? AND product_id = ?", [$item['quantity'], $order['id'], $item['product_id']]);
+                }
+            }
+            $pending = $db->table('sales_order_items')
+                ->where('sales_order_id', $order['id'])
+                ->where('quantity > quantity_invoiced', null, false)
+                ->countAllResults();
+            $newStatus = $pending === 0 ? 'fulfilled' : 'partial';
+            $db->table('sales_orders')->where('id', $order['id'])->update(['status' => $newStatus, 'updated_at' => date('Y-m-d H:i:s')]);
+        }
+
         EventBus::emit('sale.confirmed', ['company_id' => $companyId, 'sale' => (new SaleModel())->find($saleId), 'items' => (new SaleItemModel())->where('sale_id', $saleId)->findAll()]);
         $db->transComplete();
 
@@ -3779,4 +3862,439 @@ class SalesController extends BaseController
             ->setHeader('Content-Disposition', 'inline; filename="' . $filename . '"')
             ->setBody($dompdf->output());
     }
+
+    // ══════════════════════════════════════════════════════
+    //  CICLO COMERCIAL: PRESUPUESTOS
+    // ══════════════════════════════════════════════════════
+
+    public function createQuoteForm()
+    {
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+        $companyId = $context['company']['id'];
+
+        return view('sales/forms/quote', [
+            'pageTitle'       => 'Nuevo Presupuesto',
+            'formAction'      => site_url('ventas/presupuestos'),
+            'companyId'       => $companyId,
+            'customers'       => (new CustomerModel())->where('company_id', $companyId)->where('active', 1)->orderBy('name')->findAll(),
+            'products'        => $this->salesProductCatalog($companyId),
+            'agents'          => (new SalesAgentModel())->where('company_id', $companyId)->where('active', 1)->findAll(),
+            'zones'           => (new SalesZoneModel())->where('company_id', $companyId)->findAll(),
+            'conditions'      => (new SalesConditionModel())->where('company_id', $companyId)->where('active', 1)->findAll(),
+            'priceLists'      => (new SalesPriceListModel())->where('company_id', $companyId)->where('active', 1)->findAll(),
+            'currencyOptions' => $this->companyCurrencyOptions($companyId, $context['company']['currency_code'] ?? null),
+        ]);
+    }
+
+    public function storeQuote()
+    {
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+        $companyId = $context['company']['id'];
+        $db = db_connect();
+
+        $lastNum = $db->table('sales_quotes')->where('company_id', $companyId)->selectMax('quote_number')->get()->getRowArray();
+        $nextNum = ((int)($lastNum['quote_number'] ?? 0)) + 1;
+        $quoteNumber = 'PR-' . str_pad((string)$nextNum, 8, '0', STR_PAD_LEFT);
+
+        $customer = null;
+        $customerId = trim((string)$this->request->getPost('customer_id')) ?: null;
+        if ($customerId) {
+            $customer = (new CustomerModel())->find($customerId);
+        }
+
+        $quoteId = app_uuid();
+        $items = (array)$this->request->getPost('items');
+        $subtotal = 0; $taxTotal = 0; $discountTotal = 0;
+
+        foreach ($items as &$item) {
+            $qty  = (float)($item['quantity'] ?? 1);
+            $price = (float)($item['unit_price'] ?? 0);
+            $disc = (float)($item['discount_pct'] ?? 0);
+            $taxRate = (float)($item['tax_rate'] ?? 21);
+            $base = $qty * $price * (1 - $disc / 100);
+            $tax  = $base * ($taxRate / 100);
+            $item['line_subtotal'] = round($base, 2);
+            $item['line_tax'] = round($tax, 2);
+            $item['line_total'] = round($base + $tax, 2);
+            $subtotal += $item['line_subtotal'];
+            $taxTotal += $item['line_tax'];
+            $discountTotal += $qty * $price * ($disc / 100);
+        }
+        unset($item);
+
+        $db->table('sales_quotes')->insert([
+            'id' => $quoteId, 'company_id' => $companyId, 'customer_id' => $customerId,
+            'quote_number' => $quoteNumber, 'quote_date' => $this->request->getPost('quote_date') ?: date('Y-m-d'),
+            'valid_until' => $this->request->getPost('valid_until') ?: null,
+            'status' => 'draft', 'currency_code' => $this->request->getPost('currency_code') ?: 'ARS',
+            'subtotal' => round($subtotal, 2), 'tax_total' => round($taxTotal, 2),
+            'discount_total' => round($discountTotal, 2), 'total' => round($subtotal + $taxTotal, 2),
+            'customer_name_snapshot' => $customer['name'] ?? 'Consumidor Final',
+            'customer_document_snapshot' => $customer['document_number'] ?? null,
+            'customer_tax_profile' => $customer['tax_profile'] ?? null,
+            'sales_agent_id' => $this->request->getPost('sales_agent_id') ?: null,
+            'sales_zone_id' => $this->request->getPost('sales_zone_id') ?: null,
+            'sales_condition_id' => $this->request->getPost('sales_condition_id') ?: null,
+            'price_list_id' => $this->request->getPost('price_list_id') ?: null,
+            'notes' => $this->request->getPost('notes') ?: null,
+            'internal_notes' => $this->request->getPost('internal_notes') ?: null,
+            'created_by' => $context['user']['id'], 'created_at' => date('Y-m-d H:i:s'),
+        ]);
+
+        $sortOrder = 0;
+        foreach ($items as $item) {
+            $productId = trim((string)($item['product_id'] ?? ''));
+            $product = $productId ? db_connect()->table('inventory_products')->where('id', $productId)->get()->getRowArray() : null;
+            $db->table('sales_quote_items')->insert([
+                'id' => app_uuid(), 'sales_quote_id' => $quoteId,
+                'product_id' => $productId ?: null,
+                'sku' => $product['sku'] ?? null, 'product_name' => $product['name'] ?? ($item['product_name'] ?? 'Producto'),
+                'quantity' => (float)($item['quantity'] ?? 1), 'unit_price' => (float)($item['unit_price'] ?? 0),
+                'discount_pct' => (float)($item['discount_pct'] ?? 0), 'tax_rate' => (float)($item['tax_rate'] ?? 21),
+                'line_subtotal' => $item['line_subtotal'], 'line_tax' => $item['line_tax'], 'line_total' => $item['line_total'],
+                'sort_order' => $sortOrder++, 'created_at' => date('Y-m-d H:i:s'),
+            ]);
+        }
+
+        return redirect()->to(site_url('ventas'))->with('message', 'Presupuesto ' . $quoteNumber . ' creado.');
+    }
+
+    public function approveQuote(string $quoteId)
+    {
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+
+        db_connect()->table('sales_quotes')->where('id', $quoteId)->where('status', 'draft')
+            ->update(['status' => 'approved', 'approved_by' => $context['user']['id'], 'approved_at' => date('Y-m-d H:i:s')]);
+
+        return redirect()->to(site_url('ventas'))->with('message', 'Presupuesto aprobado.');
+    }
+
+    public function quoteToOrder(string $quoteId)
+    {
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+        $companyId = $context['company']['id'];
+
+        $quote = db_connect()->table('sales_quotes')->where('id', $quoteId)->get()->getRowArray();
+        if (!$quote) return redirect()->to(site_url('ventas'))->with('error', 'Presupuesto no encontrado.');
+
+        $quoteItems = db_connect()->table('sales_quote_items')->where('sales_quote_id', $quoteId)->orderBy('sort_order')->get()->getResultArray();
+
+        return view('sales/forms/order', [
+            'pageTitle'       => 'Pedido desde Presupuesto',
+            'formAction'      => site_url('ventas/pedidos'),
+            'companyId'       => $companyId,
+            'fromQuote'       => $quote,
+            'fromQuoteItems'  => $quoteItems,
+            'customers'       => (new CustomerModel())->where('company_id', $companyId)->where('active', 1)->orderBy('name')->findAll(),
+            'products'        => $this->salesProductCatalog($companyId),
+            'agents'          => (new SalesAgentModel())->where('company_id', $companyId)->where('active', 1)->findAll(),
+            'conditions'      => (new SalesConditionModel())->where('company_id', $companyId)->where('active', 1)->findAll(),
+            'currencyOptions' => $this->companyCurrencyOptions($companyId, $context['company']['currency_code'] ?? null),
+        ]);
+    }
+
+    // ══════════════════════════════════════════════════════
+    //  CICLO COMERCIAL: PEDIDOS
+    // ══════════════════════════════════════════════════════
+
+    public function createOrderForm()
+    {
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+        $companyId = $context['company']['id'];
+
+        return view('sales/forms/order', [
+            'pageTitle'       => 'Nuevo Pedido',
+            'formAction'      => site_url('ventas/pedidos'),
+            'companyId'       => $companyId,
+            'fromQuote'       => [],
+            'fromQuoteItems'  => [],
+            'customers'       => (new CustomerModel())->where('company_id', $companyId)->where('active', 1)->orderBy('name')->findAll(),
+            'products'        => $this->salesProductCatalog($companyId),
+            'agents'          => (new SalesAgentModel())->where('company_id', $companyId)->where('active', 1)->findAll(),
+            'conditions'      => (new SalesConditionModel())->where('company_id', $companyId)->where('active', 1)->findAll(),
+            'currencyOptions' => $this->companyCurrencyOptions($companyId, $context['company']['currency_code'] ?? null),
+        ]);
+    }
+
+    public function storeOrder()
+    {
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+        $companyId = $context['company']['id'];
+        $db = db_connect();
+
+        $lastNum = $db->table('sales_orders')->where('company_id', $companyId)->selectMax('order_number')->get()->getRowArray();
+        $nextNum = ((int)($lastNum['order_number'] ?? 0)) + 1;
+        $orderNumber = 'PD-' . str_pad((string)$nextNum, 8, '0', STR_PAD_LEFT);
+
+        $customer = null;
+        $customerId = trim((string)$this->request->getPost('customer_id')) ?: null;
+        if ($customerId) $customer = (new CustomerModel())->find($customerId);
+
+        $quoteId = trim((string)$this->request->getPost('sales_quote_id')) ?: null;
+        $orderId = app_uuid();
+        $items = (array)$this->request->getPost('items');
+        $subtotal = 0; $taxTotal = 0; $discountTotal = 0;
+
+        foreach ($items as &$item) {
+            $qty = (float)($item['quantity'] ?? 1);
+            $price = (float)($item['unit_price'] ?? 0);
+            $disc = (float)($item['discount_pct'] ?? 0);
+            $taxRate = (float)($item['tax_rate'] ?? 21);
+            $base = $qty * $price * (1 - $disc / 100);
+            $tax = $base * ($taxRate / 100);
+            $item['line_subtotal'] = round($base, 2);
+            $item['line_tax'] = round($tax, 2);
+            $item['line_total'] = round($base + $tax, 2);
+            $subtotal += $item['line_subtotal'];
+            $taxTotal += $item['line_tax'];
+            $discountTotal += $qty * $price * ($disc / 100);
+        }
+        unset($item);
+
+        $db->table('sales_orders')->insert([
+            'id' => $orderId, 'company_id' => $companyId, 'customer_id' => $customerId,
+            'sales_quote_id' => $quoteId, 'order_number' => $orderNumber,
+            'order_date' => $this->request->getPost('order_date') ?: date('Y-m-d'),
+            'expected_delivery_date' => $this->request->getPost('expected_delivery_date') ?: null,
+            'status' => 'pending', 'currency_code' => $this->request->getPost('currency_code') ?: 'ARS',
+            'subtotal' => round($subtotal, 2), 'tax_total' => round($taxTotal, 2),
+            'discount_total' => round($discountTotal, 2), 'total' => round($subtotal + $taxTotal, 2),
+            'customer_name_snapshot' => $customer['name'] ?? 'Consumidor Final',
+            'customer_document_snapshot' => $customer['document_number'] ?? null,
+            'sales_agent_id' => $this->request->getPost('sales_agent_id') ?: null,
+            'sales_condition_id' => $this->request->getPost('sales_condition_id') ?: null,
+            'notes' => $this->request->getPost('notes') ?: null,
+            'internal_notes' => $this->request->getPost('internal_notes') ?: null,
+            'created_by' => $context['user']['id'], 'created_at' => date('Y-m-d H:i:s'),
+        ]);
+
+        $sortOrder = 0;
+        foreach ($items as $item) {
+            $productId = trim((string)($item['product_id'] ?? ''));
+            $product = $productId ? $db->table('inventory_products')->where('id', $productId)->get()->getRowArray() : null;
+            $db->table('sales_order_items')->insert([
+                'id' => app_uuid(), 'sales_order_id' => $orderId,
+                'product_id' => $productId ?: null,
+                'sku' => $product['sku'] ?? null, 'product_name' => $product['name'] ?? 'Producto',
+                'quantity' => (float)($item['quantity'] ?? 1), 'quantity_delivered' => 0, 'quantity_invoiced' => 0,
+                'unit_price' => (float)($item['unit_price'] ?? 0),
+                'discount_pct' => (float)($item['discount_pct'] ?? 0), 'tax_rate' => (float)($item['tax_rate'] ?? 21),
+                'line_subtotal' => $item['line_subtotal'], 'line_tax' => $item['line_tax'], 'line_total' => $item['line_total'],
+                'sort_order' => $sortOrder++, 'created_at' => date('Y-m-d H:i:s'),
+            ]);
+        }
+
+        // Mark quote as converted
+        if ($quoteId) {
+            $db->table('sales_quotes')->where('id', $quoteId)
+                ->update(['status' => 'converted', 'converted_to_order_id' => $orderId, 'updated_at' => date('Y-m-d H:i:s')]);
+        }
+
+        return redirect()->to(site_url('ventas'))->with('message', 'Pedido ' . $orderNumber . ' creado.');
+    }
+
+    public function approveOrder(string $orderId)
+    {
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+
+        db_connect()->table('sales_orders')->where('id', $orderId)->where('status', 'pending')
+            ->update(['status' => 'approved', 'approved_by' => $context['user']['id'], 'approved_at' => date('Y-m-d H:i:s')]);
+
+        return redirect()->to(site_url('ventas'))->with('message', 'Pedido aprobado.');
+    }
+
+    public function orderToDeliveryNote(string $orderId)
+    {
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+        $companyId = $context['company']['id'];
+
+        $order = db_connect()->table('sales_orders')->where('id', $orderId)->get()->getRowArray();
+        if (!$order) return redirect()->to(site_url('ventas'))->with('error', 'Pedido no encontrado.');
+
+        $orderItems = db_connect()->table('sales_order_items')->where('sales_order_id', $orderId)->orderBy('sort_order')->get()->getResultArray();
+
+        return view('sales/forms/delivery_note', [
+            'pageTitle'       => 'Remito desde Pedido',
+            'formAction'      => site_url('ventas/remitos'),
+            'companyId'       => $companyId,
+            'fromOrder'       => $order,
+            'fromOrderItems'  => $orderItems,
+            'customers'       => (new CustomerModel())->where('company_id', $companyId)->where('active', 1)->orderBy('name')->findAll(),
+            'products'        => $this->salesProductCatalog($companyId),
+            'warehouses'      => (new InventoryWarehouseModel())->where('company_id', $companyId)->where('active', 1)->findAll(),
+        ]);
+    }
+
+    public function orderToInvoice(string $orderId)
+    {
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+        $companyId = $context['company']['id'];
+
+        $order = db_connect()->table('sales_orders')->where('id', $orderId)->get()->getRowArray();
+        if (!$order) return redirect()->to(site_url('ventas'))->with('error', 'Pedido no encontrado.');
+
+        // Redirect to sale creation form with from_order param
+        return redirect()->to(site_url('ventas/nueva?from_order=' . $orderId));
+    }
+
+    // ══════════════════════════════════════════════════════
+    //  CICLO COMERCIAL: REMITOS
+    // ══════════════════════════════════════════════════════
+
+    public function createDeliveryNoteForm()
+    {
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+        $companyId = $context['company']['id'];
+
+        return view('sales/forms/delivery_note', [
+            'pageTitle'       => 'Nuevo Remito',
+            'formAction'      => site_url('ventas/remitos'),
+            'companyId'       => $companyId,
+            'fromOrder'       => [],
+            'fromOrderItems'  => [],
+            'customers'       => (new CustomerModel())->where('company_id', $companyId)->where('active', 1)->orderBy('name')->findAll(),
+            'products'        => $this->salesProductCatalog($companyId),
+            'warehouses'      => (new InventoryWarehouseModel())->where('company_id', $companyId)->where('active', 1)->findAll(),
+        ]);
+    }
+
+    public function storeDeliveryNote()
+    {
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+        $companyId = $context['company']['id'];
+        $db = db_connect();
+
+        $lastNum = $db->table('sales_delivery_notes')->where('company_id', $companyId)->selectMax('delivery_number')->get()->getRowArray();
+        $nextNum = ((int)($lastNum['delivery_number'] ?? 0)) + 1;
+        $deliveryNumber = 'RM-' . str_pad((string)$nextNum, 8, '0', STR_PAD_LEFT);
+
+        $customer = null;
+        $customerId = trim((string)$this->request->getPost('customer_id')) ?: null;
+        if ($customerId) $customer = (new CustomerModel())->find($customerId);
+
+        $salesOrderId = trim((string)$this->request->getPost('sales_order_id')) ?: null;
+        $noteId = app_uuid();
+
+        $db->table('sales_delivery_notes')->insert([
+            'id' => $noteId, 'company_id' => $companyId, 'customer_id' => $customerId,
+            'sales_order_id' => $salesOrderId,
+            'delivery_number' => $deliveryNumber,
+            'delivery_date' => $this->request->getPost('delivery_date') ?: date('Y-m-d'),
+            'status' => 'pending',
+            'warehouse_id' => $this->request->getPost('warehouse_id') ?: null,
+            'shipping_address' => $this->request->getPost('shipping_address') ?: null,
+            'carrier' => $this->request->getPost('carrier') ?: null,
+            'tracking_number' => $this->request->getPost('tracking_number') ?: null,
+            'customer_name_snapshot' => $customer['name'] ?? 'Consumidor Final',
+            'customer_document_snapshot' => $customer['document_number'] ?? null,
+            'notes' => $this->request->getPost('notes') ?: null,
+            'created_by' => $context['user']['id'], 'created_at' => date('Y-m-d H:i:s'),
+        ]);
+
+        $items = (array)$this->request->getPost('items');
+        $sortOrder = 0;
+        foreach ($items as $item) {
+            $productId = trim((string)($item['product_id'] ?? ''));
+            $product = $productId ? $db->table('inventory_products')->where('id', $productId)->get()->getRowArray() : null;
+            $quantity = (float)($item['quantity'] ?? 1);
+
+            $db->table('sales_delivery_note_items')->insert([
+                'id' => app_uuid(), 'sales_delivery_note_id' => $noteId,
+                'sales_order_item_id' => $item['sales_order_item_id'] ?? null,
+                'product_id' => $productId ?: null,
+                'sku' => $product['sku'] ?? null, 'product_name' => $product['name'] ?? 'Producto',
+                'quantity' => $quantity,
+                'warehouse_id' => $this->request->getPost('warehouse_id') ?: null,
+                'lot_number' => $item['lot_number'] ?? null, 'serial_number' => $item['serial_number'] ?? null,
+                'sort_order' => $sortOrder++, 'created_at' => date('Y-m-d H:i:s'),
+            ]);
+
+            // Update order item delivered qty
+            if (!empty($item['sales_order_item_id'])) {
+                $db->query("UPDATE sales_order_items SET quantity_delivered = quantity_delivered + ? WHERE id = ?", [$quantity, $item['sales_order_item_id']]);
+            }
+        }
+
+        // Check if order is fully delivered
+        if ($salesOrderId) {
+            $pending = $db->table('sales_order_items')
+                ->where('sales_order_id', $salesOrderId)
+                ->where('quantity > quantity_delivered', null, false)
+                ->countAllResults();
+            if ($pending === 0) {
+                $db->table('sales_orders')->where('id', $salesOrderId)->update(['status' => 'fulfilled', 'updated_at' => date('Y-m-d H:i:s')]);
+            } else {
+                $db->table('sales_orders')->where('id', $salesOrderId)->whereNotIn('status', ['fulfilled', 'cancelled'])
+                    ->update(['status' => 'partial', 'updated_at' => date('Y-m-d H:i:s')]);
+            }
+        }
+
+        return redirect()->to(site_url('ventas'))->with('message', 'Remito ' . $deliveryNumber . ' creado.');
+    }
+
+    public function dispatchDeliveryNote(string $noteId)
+    {
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+        $companyId = $context['company']['id'];
+        $db = db_connect();
+
+        $note = $db->table('sales_delivery_notes')->where('id', $noteId)->where('status', 'pending')->get()->getRowArray();
+        if (!$note) {
+            return redirect()->to(site_url('ventas'))->with('error', 'Remito no encontrado o ya despachado.');
+        }
+
+        // Deduct inventory stock for each delivery note item
+        $warehouseId = $note['warehouse_id'] ?? null;
+        $items = $db->table('sales_delivery_note_items')->where('sales_delivery_note_id', $noteId)->get()->getResultArray();
+
+        foreach ($items as $item) {
+            $productId = $item['product_id'] ?? null;
+            $quantity = (float)($item['quantity'] ?? 0);
+            $itemWarehouse = $item['warehouse_id'] ?? $warehouseId;
+
+            if ($productId && $quantity > 0 && $itemWarehouse) {
+                $this->applyStockDelta($companyId, $productId, $itemWarehouse, -$quantity);
+                $this->registerInventoryMovement([
+                    'company_id'   => $companyId,
+                    'product_id'   => $productId,
+                    'warehouse_id' => $itemWarehouse,
+                    'movement_type' => 'delivery_note_dispatch',
+                    'quantity'     => -$quantity,
+                    'reference_type' => 'sales_delivery_note',
+                    'reference_id'   => $noteId,
+                    'notes'        => 'Despacho remito ' . ($note['delivery_number'] ?? $noteId),
+                    'created_by'   => $context['user']['id'],
+                ]);
+            }
+        }
+
+        $db->table('sales_delivery_notes')->where('id', $noteId)
+            ->update(['status' => 'dispatched', 'dispatched_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]);
+
+        return redirect()->to(site_url('ventas'))->with('message', 'Remito despachado y stock actualizado.');
+    }
+
+    public function deliverDeliveryNote(string $noteId)
+    {
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+
+        db_connect()->table('sales_delivery_notes')->where('id', $noteId)->whereIn('status', ['pending', 'dispatched'])
+            ->update(['status' => 'delivered', 'delivered_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]);
+
+        return redirect()->to(site_url('ventas'))->with('message', 'Remito entregado.');
+    }
 }
+

@@ -17,6 +17,17 @@
                 <button class="btn btn-outline-dark icon-btn" title="Cambiar empresa" aria-label="Cambiar empresa"><i class="bi bi-arrow-repeat"></i></button>
             </form>
         <?php endif; ?>
+        <?php if ($context['canManage']): ?>
+            <a href="<?= site_url('ventas/presupuestos/nuevo' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
+                class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Presupuesto"
+                data-popup-subtitle="Crear nuevo presupuesto comercial." title="Nuevo Presupuesto" aria-label="Nuevo Presupuesto"><i class="bi bi-file-earmark-text"></i></a>
+            <a href="<?= site_url('ventas/pedidos/nuevo' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
+                class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Pedido"
+                data-popup-subtitle="Crear nueva orden de pedido." title="Nuevo Pedido" aria-label="Nuevo Pedido"><i class="bi bi-cart-check"></i></a>
+            <a href="<?= site_url('ventas/remitos/nuevo' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
+                class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Remito"
+                data-popup-subtitle="Crear nuevo remito de entrega." title="Nuevo Remito" aria-label="Nuevo Remito"><i class="bi bi-truck"></i></a>
+        <?php endif; ?>
         <a href="<?= site_url('ventas' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark">← Ventas</a>
     </div>
 </div>

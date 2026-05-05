@@ -31,7 +31,7 @@
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-6"><label class="form-label">Nivel de acceso</label><select class="form-select" name="access_level"><option value="view" <?= old('access_level', 'view') === 'view' ? 'selected' : '' ?>>Consulta</option><option value="manage" <?= old('access_level') === 'manage' ? 'selected' : '' ?>>Gestion</option></select></div>
+            <div class="col-md-6"><label class="form-label">Nivel de acceso</label><select class="form-select" name="access_level"><option value="view" <?= old('access_level', 'view') === 'view' ? 'selected' : '' ?>>Consulta</option><option value="manage" <?= old('access_level') === 'manage' ? 'selected' : '' ?>>Gestion</option><option value="vendedor" <?= old('access_level') === 'vendedor' ? 'selected' : '' ?>>Vendedor (Solo POS/Kiosco)</option></select></div>
             <div class="col-md-6"><label class="form-label">Estado</label><select class="form-select" name="active"><option value="1" <?= old('active', '1') === '1' ? 'selected' : '' ?>>Activo</option><option value="0" <?= old('active') === '0' ? 'selected' : '' ?>>Inactivo</option></select></div>
             <div class="col-12 d-flex gap-2 pt-2">
                 <button class="btn btn-dark icon-btn" title="Guardar" aria-label="Guardar"><i class="bi bi-check-lg"></i></button>

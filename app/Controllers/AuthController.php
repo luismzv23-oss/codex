@@ -30,6 +30,10 @@ class AuthController extends BaseController
         $user = auth()->user();
         service('audit')->logLogin($user['id'] ?? '', true);
 
+        if (($user['role_slug'] ?? '') === 'vendedor') {
+            return redirect()->to('/ventas');
+        }
+
         return redirect()->to('/dashboard');
     }
 

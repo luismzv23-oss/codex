@@ -15,7 +15,7 @@
                 <?php foreach ($assignments as $assignment): ?>
                     <tr>
                         <td><?= esc($assignment['system_name']) ?></td>
-                        <td><?= ($assignment['access_level'] ?? 'view') === 'manage' ? 'Gestion' : 'Consulta' ?></td>
+                        <td><?= ($assignment['access_level'] ?? 'view') === 'manage' ? 'Gestion' : (($assignment['access_level'] ?? 'view') === 'vendedor' ? 'Vendedor' : 'Consulta') ?></td>
                         <td><?= (int) ($assignment['active'] ?? 0) === 1 ? 'Activo' : 'Inactivo' ?></td>
                         <td class="text-secondary small"><?= esc($assignment['description'] ?: 'Sin descripcion') ?></td>
                     </tr>

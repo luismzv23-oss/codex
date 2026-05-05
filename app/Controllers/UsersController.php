@@ -215,10 +215,10 @@ class UsersController extends BaseController
             $branchModel->ensureMainBranch($company['id']);
         }
 
-        $roleSlugs = $this->isSuperadmin() ? ['superadmin', 'admin', 'operador'] : ['operador'];
+        $roleSlugs = $this->isSuperadmin() ? ['superadmin', 'admin', 'operador', 'vendedor'] : ['operador', 'vendedor'];
 
         if (! $this->isSuperadmin() && ($userRow['role_slug'] ?? null) === 'admin') {
-            $roleSlugs = ['admin', 'operador'];
+            $roleSlugs = ['admin', 'operador', 'vendedor'];
         }
 
         return array_merge([
@@ -245,7 +245,7 @@ class UsersController extends BaseController
             'email' => $emailUnique,
             'company_id' => 'required|max_length[36]',
             'branch_id' => 'required|max_length[36]',
-            'role_slug' => 'required|in_list[superadmin,admin,operador]',
+            'role_slug' => 'required|in_list[superadmin,admin,operador,vendedor]',
             'active' => 'permit_empty|in_list[0,1]',
             'must_change_password' => 'permit_empty|in_list[0,1]',
         ];
@@ -258,7 +258,7 @@ class UsersController extends BaseController
 
     private function resolveRoleId(string $roleSlug): string
     {
-        $allowed = $this->isSuperadmin() ? ['superadmin', 'admin', 'operador'] : ['admin', 'operador'];
+        $allowed = $this->isSuperadmin() ? ['superadmin', 'admin', 'operador', 'vendedor'] : ['admin', 'operador', 'vendedor'];
         $slug = in_array($roleSlug, $allowed, true) ? $roleSlug : end($allowed);
         $role = (new RoleModel())->findBySlug($slug);
 

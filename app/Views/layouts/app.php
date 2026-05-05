@@ -137,13 +137,13 @@ $isPopup = $request->getGet('popup') === '1';
                 </button>
                 <div class="collapse navbar-collapse" id="mainNav">
                     <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                        <?php if (auth_can('dashboard.view')): ?>
+                        <?php if (auth_can('dashboard.view') && (auth_user()['role_slug'] ?? '') !== 'vendedor'): ?>
                             <li class="nav-item"><a class="nav-link" href="<?= site_url('dashboard') ?>">Dashboard</a></li>
                         <?php endif; ?>
                         <?php if (auth_can('users.view')): ?>
                             <li class="nav-item"><a class="nav-link" href="<?= site_url('usuarios') ?>">Usuarios</a></li>
                         <?php endif; ?>
-                        <?php if (auth_can('systems.view')): ?>
+                        <?php if (auth_can('systems.view') && (auth_user()['role_slug'] ?? '') !== 'vendedor'): ?>
                             <li class="nav-item"><a class="nav-link" href="<?= site_url('sistemas') ?>">Sistemas</a></li>
                         <?php endif; ?>
                         <?php if (auth_can('companies.view')): ?>

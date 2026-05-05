@@ -108,6 +108,15 @@ class CoreSeeder extends Seeder
             ],
         ];
 
+        $roles['vendedor'] = [
+            'name' => 'Vendedor',
+            'description' => 'Solo opera POS y Kiosco en la empresa asignada.',
+            'permissions' => [
+                'dashboard.view',
+                'systems.view',
+            ],
+        ];
+
         $roleIds = [];
 
         foreach ($roles as $slug => $role) {
@@ -311,6 +320,30 @@ class CoreSeeder extends Seeder
                 'icon' => 'bi-cash-stack',
                 'active' => 1,
             ],
+            [
+                'name' => 'Contabilidad',
+                'slug' => 'contabilidad',
+                'description' => 'Libro diario, mayor y balances.',
+                'entry_url' => 'contabilidad/diario',
+                'icon' => 'bi-journal-bookmark',
+                'active' => 1,
+            ],
+            [
+                'name' => 'Impuestos',
+                'slug' => 'impuestos',
+                'description' => 'Retenciones, percepciones e IVA.',
+                'entry_url' => 'impuestos',
+                'icon' => 'bi-percent',
+                'active' => 1,
+            ],
+            [
+                'name' => 'Comercial',
+                'slug' => 'comercial',
+                'description' => 'Ciclo comercial integrado.',
+                'entry_url' => 'ventas/diarios',
+                'icon' => 'bi-briefcase',
+                'active' => 1,
+            ],
         ];
         
         $systemIds = [];
@@ -323,7 +356,7 @@ class CoreSeeder extends Seeder
                 $systemModel->update($existingSystem['id'], [
                     'name' => $system['name'],
                     'description' => $system['description'],
-                    'entry_url' => in_array($system['slug'], ['inventario', 'ventas'], true) ? $system['entry_url'] : $system['entry_url'],
+                    'entry_url' => $system['entry_url'],
                     'icon' => $system['icon'],
                     'active' => $system['active'],
                 ]);
@@ -333,7 +366,7 @@ class CoreSeeder extends Seeder
             $systemIds[$system['slug']] = $systemModel->insert($system, true);
         }
 
-        foreach (['ventas', 'inventario', 'compras', 'caja'] as $systemSlug) {
+        foreach (['ventas', 'inventario', 'compras', 'caja', 'contabilidad', 'impuestos', 'comercial'] as $systemSlug) {
             if (! $companySystemModel->where('company_id', $companyId)->where('system_id', $systemIds[$systemSlug])->first()) {
                 $companySystemModel->insert([
                     'company_id' => $companyId,
@@ -406,7 +439,7 @@ class CoreSeeder extends Seeder
 
         $admin = $userModel->where('username', 'admin')->first();
         if ($admin) {
-            foreach (['ventas', 'inventario', 'compras', 'caja'] as $systemSlug) {
+            foreach (['ventas', 'inventario', 'compras', 'caja', 'contabilidad', 'impuestos', 'comercial'] as $systemSlug) {
                 if (! $userSystemModel->where('user_id', $admin['id'])->where('system_id', $systemIds[$systemSlug])->first()) {
                     $userSystemModel->insert([
                         'company_id' => $companyId,

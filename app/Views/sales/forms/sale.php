@@ -65,12 +65,22 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
             <?php if ($isPopup): ?><input type="hidden" name="popup" value="1"><?php endif; ?>
             <?php if (! empty($companyId)): ?><input type="hidden" name="company_id" value="<?= esc($companyId) ?>"><?php endif; ?>
             <?php if (! empty($sourceSale['id'])): ?><input type="hidden" name="source_sale_id" value="<?= esc($sourceSale['id']) ?>"><?php endif; ?>
+            <?php if (! empty($fromOrder['id'])): ?><input type="hidden" name="from_order_id" value="<?= esc($fromOrder['id']) ?>"><?php endif; ?>
 
             <?php if (! empty($sourceSale['id'])): ?>
                 <div class="col-12">
                     <div class="alert alert-light border rounded-4 mb-0">
                         <strong>Documento origen:</strong>
                         <?= esc(($sourceSale['document_code'] ?? 'DOC') . ' ' . ($sourceSale['sale_number'] ?? '')) ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+            
+            <?php if (! empty($fromOrder['id'])): ?>
+                <div class="col-12">
+                    <div class="alert alert-light border rounded-4 mb-0">
+                        <strong>Facturando pedido:</strong>
+                        <?= esc($fromOrder['order_number'] ?? '') ?>
                     </div>
                 </div>
             <?php endif; ?>

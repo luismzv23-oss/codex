@@ -13,6 +13,7 @@ $isPopup = $request->getGet('popup') === '1';
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
     <link href="<?= base_url('assets/css/app.css') ?>" rel="stylesheet">
     <link href="<?= base_url('assets/css/codex-assist.css') ?>" rel="stylesheet">
     <meta name="codex-api-base" content="<?= site_url('api/v1') ?>">
@@ -198,6 +199,14 @@ $isPopup = $request->getGet('popup') === '1';
     <?php endif; ?>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.select-search').forEach((el) => {
+                new TomSelect(el, { create: false, sortField: { field: "text", direction: "asc" } });
+            });
+        });
+    </script>
     <?php if ($isPopup): ?>
         <script>
             (() => {

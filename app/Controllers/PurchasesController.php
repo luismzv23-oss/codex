@@ -106,6 +106,90 @@ class PurchasesController extends BaseController
         return $this->popupOrRedirect($this->purchaseRoute('compras', $companyId), 'Proveedor registrado correctamente.');
     }
 
+    public function editSupplierForm(string $id)
+    {
+        $context = $this->purchaseContext('manage');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+
+        $supplier = (new SupplierModel())->where('company_id', $context['company']['id'])->find($id);
+        if (!$supplier) {
+            return redirect()->to($this->purchaseRoute('compras', $context['company']['id']))->with('error', 'El proveedor no existe.');
+        }
+
+        return view('purchases/forms/supplier', [
+            'pageTitle' => 'Editar Proveedor',
+            'companyId' => $context['company']['id'],
+            'supplier' => $supplier,
+            'formAction' => site_url('compras/proveedores/' . $id . '/actualizar'),
+            'isPopup' => $this->isPopupRequest(),
+        ]);
+    }
+
+    public function updateSupplier(string $id)
+    {
+        $context = $this->purchaseContext('manage');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+
+        $companyId = $context['company']['id'];
+        $supplierModel = new SupplierModel();
+        
+        $supplier = $supplierModel->where('company_id', $companyId)->find($id);
+        if (!$supplier) {
+            return redirect()->to($this->purchaseRoute('compras', $companyId))->with('error', 'El proveedor no existe.');
+        }
+
+        $name = trim((string) $this->request->getPost('name'));
+
+        if ($name === '') {
+            return redirect()->back()->withInput()->with('error', 'Debes indicar el nombre del proveedor.');
+        }
+
+        $supplierModel->update($id, [
+            'name' => $name,
+            'legal_name' => trim((string) $this->request->getPost('legal_name')),
+            'tax_id' => trim((string) $this->request->getPost('tax_id')),
+            'email' => trim((string) $this->request->getPost('email')),
+            'phone' => trim((string) $this->request->getPost('phone')),
+            'address' => trim((string) $this->request->getPost('address')),
+            'vat_condition' => trim((string) $this->request->getPost('vat_condition')),
+            'payment_terms_days' => max(0, (int) $this->request->getPost('payment_terms_days')),
+            'active' => $this->request->getPost('active') === '0' ? 0 : 1,
+        ]);
+
+        return $this->popupOrRedirect($this->purchaseRoute('compras', $companyId), 'Proveedor actualizado correctamente.');
+    }
+
+    public function deleteSupplier(string $id)
+    {
+        $context = $this->purchaseContext('manage');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+
+        $companyId = $context['company']['id'];
+        $supplierModel = new SupplierModel();
+        
+        $supplier = $supplierModel->where('company_id', $companyId)->find($id);
+        if (!$supplier) {
+            return redirect()->to($this->purchaseRoute('compras', $companyId))->with('error', 'El proveedor no existe.');
+        }
+
+        $orderCount = db_connect()->table('purchase_orders')->where('supplier_id', $id)->countAllResults();
+        $receiptCount = db_connect()->table('purchase_receipts')->where('supplier_id', $id)->countAllResults();
+        
+        if ($orderCount > 0 || $receiptCount > 0) {
+            return redirect()->back()->with('error', 'No se puede eliminar el proveedor porque tiene operaciones comerciales asociadas.');
+        }
+
+        $supplierModel->delete($id);
+
+        return redirect()->to($this->purchaseRoute('compras', $companyId))->with('message', 'Proveedor eliminado correctamente.');
+    }
+
     public function createOrderForm()
     {
         $context = $this->purchaseContext('manage');
@@ -468,6 +552,19 @@ class PurchasesController extends BaseController
             return $context;
         }
 
+        $fromReceiptId = trim((string) $this->request->getGet('from_receipt'));
+        $fromReceipt = null;
+        $fromReceiptItems = [];
+
+        if ($fromReceiptId !== '') {
+            $fromReceipt = db_connect()->table('purchase_receipts')->where('id', $fromReceiptId)->get()->getRowArray();
+            if ($fromReceipt) {
+                $fromReceiptItems = db_connect()->table('purchase_receipt_items')
+                    ->where('purchase_receipt_id', $fromReceiptId)
+                    ->get()->getResultArray();
+            }
+        }
+
         return view('purchases/forms/invoice', [
             'pageTitle' => 'Factura proveedor',
             'companyId' => $context['company']['id'],
@@ -477,6 +574,8 @@ class PurchasesController extends BaseController
             'currencyOptions' => $this->companyCurrencyOptions($context['company']['id'], 'ARS'),
             'formAction' => site_url('compras/facturas'),
             'isPopup' => $this->isPopupRequest(),
+            'fromReceipt' => $fromReceipt,
+            'fromReceiptItems' => $fromReceiptItems,
         ]);
     }
 
@@ -499,13 +598,39 @@ class PurchasesController extends BaseController
             return redirect()->back()->withInput()->with('error', 'Debes agregar al menos una linea en la factura.');
         }
 
+        $purchaseReceiptId = trim((string) $this->request->getPost('purchase_receipt_id')) ?: null;
+
+        if ($purchaseReceiptId) {
+            $receiptItems = db_connect()->table('purchase_receipt_items')->where('purchase_receipt_id', $purchaseReceiptId)->get()->getResultArray();
+            foreach ($rows as $row) {
+                if (empty($row['product_id'])) continue;
+                $receivedQty = 0;
+                foreach ($receiptItems as $ri) {
+                    if ($ri['product_id'] === $row['product_id']) {
+                        $receivedQty += (float)$ri['quantity'];
+                    }
+                }
+                
+                $alreadyInvoiced = db_connect()->table('purchase_invoice_items')
+                    ->join('purchase_invoices', 'purchase_invoices.id = purchase_invoice_items.purchase_invoice_id')
+                    ->where('purchase_invoices.purchase_receipt_id', $purchaseReceiptId)
+                    ->where('purchase_invoice_items.product_id', $row['product_id'])
+                    ->selectSum('purchase_invoice_items.quantity', 'total_invoiced')
+                    ->get()->getRowArray()['total_invoiced'] ?? 0;
+
+                if (($alreadyInvoiced + $row['quantity']) > $receivedQty) {
+                    return redirect()->back()->withInput()->with('error', "La cantidad facturada excede la cantidad recepcionada. Verifique las cantidades (3-Way Matching).");
+                }
+            }
+        }
+
         $currencyCode = trim((string) $this->request->getPost('currency_code')) ?: 'ARS';
         $exchangeRate = max(0.000001, (float) $this->request->getPost('exchange_rate'));
         $totals = $this->purchaseTotals($rows);
         $invoiceId = (new PurchaseInvoiceModel())->insert([
             'company_id' => $companyId,
             'supplier_id' => $supplierId,
-            'purchase_receipt_id' => trim((string) $this->request->getPost('purchase_receipt_id')) ?: null,
+            'purchase_receipt_id' => $purchaseReceiptId,
             'invoice_number' => $invoiceNumber,
             'currency_code' => $currencyCode,
             'exchange_rate' => $exchangeRate,
@@ -534,6 +659,20 @@ class PurchasesController extends BaseController
                     'observed_at' => trim((string) $this->request->getPost('issue_date')) ?: date('Y-m-d H:i:s'),
                 ]);
             }
+        }
+
+        if ($purchaseReceiptId) {
+            $receiptItems = db_connect()->table('purchase_receipt_items')->where('purchase_receipt_id', $purchaseReceiptId)->get()->getResultArray();
+            $totalReceived = array_sum(array_column($receiptItems, 'quantity'));
+            
+            $totalInvoiced = db_connect()->table('purchase_invoice_items')
+                ->join('purchase_invoices', 'purchase_invoices.id = purchase_invoice_items.purchase_invoice_id')
+                ->where('purchase_invoices.purchase_receipt_id', $purchaseReceiptId)
+                ->selectSum('purchase_invoice_items.quantity', 'total_invoiced')
+                ->get()->getRowArray()['total_invoiced'] ?? 0;
+
+            $newStatus = ($totalInvoiced >= $totalReceived && $totalReceived > 0) ? 'invoiced_total' : 'invoiced_partial';
+            db_connect()->table('purchase_receipts')->where('id', $purchaseReceiptId)->update(['status' => $newStatus, 'updated_at' => date('Y-m-d H:i:s')]);
         }
 
         return $this->popupOrRedirect($this->purchaseRoute('compras', $companyId), 'Factura proveedor registrada correctamente.');

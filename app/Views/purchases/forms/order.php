@@ -63,8 +63,15 @@ $productCatalog = array_values(array_map(static function (array $product): array
 
     const addRow = () => {
         const row = document.createElement('tr');
-        row.innerHTML = `<td><select name="items_product_id[]" class="form-select purchase-product">${options()}</select><input type="hidden" name="items_description[]" value=""></td><td><input type="number" step="0.01" min="0.01" name="items_quantity[]" class="form-control purchase-quantity" value="1.00"></td><td><input type="number" step="0.01" min="0" name="items_unit_cost[]" class="form-control purchase-cost" value="0.00"></td><td><input type="number" step="0.01" min="0" name="items_tax_rate[]" class="form-control purchase-rate" value="21.00"></td><td class="purchase-total">0.00</td><td class="text-end"><button type="button" class="btn btn-outline-dark icon-btn purchase-remove"><i class="bi bi-x-lg"></i></button></td>`;
+        row.innerHTML = `<td><select name="items_product_id[]" class="form-select purchase-product select-search">${options()}</select><input type="hidden" name="items_description[]" value=""></td><td><input type="number" step="0.01" min="0.01" name="items_quantity[]" class="form-control purchase-quantity" value="1.00"></td><td><input type="number" step="0.01" min="0" name="items_unit_cost[]" class="form-control purchase-cost" value="0.00"></td><td><input type="number" step="0.01" min="0" name="items_tax_rate[]" class="form-control purchase-rate" value="21.00"></td><td class="purchase-total">0.00</td><td class="text-end"><button type="button" class="btn btn-outline-dark icon-btn purchase-remove"><i class="bi bi-x-lg"></i></button></td>`;
         body.appendChild(row);
+        
+        // Initialize TomSelect for the newly created select
+        const newSelect = row.querySelector('.select-search');
+        if (newSelect) {
+            new TomSelect(newSelect, { create: false, sortField: { field: "text", direction: "asc" } });
+        }
+
         row.querySelectorAll('select,input').forEach((field) => field.addEventListener('input', () => syncRow(row)));
         row.querySelector('.purchase-remove').addEventListener('click', () => row.remove());
         syncRow(row);

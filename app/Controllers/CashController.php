@@ -91,9 +91,10 @@ class CashController extends BaseController
             return $context;
         }
 
-        $session = $this->cashService()->ownedSession($context['company']['id'], $id);
+        $userId = $this->isSuperadmin() ? null : $this->currentUser()['id'];
+        $session = $this->cashService()->ownedSession($context['company']['id'], $id, $userId);
         if (! $session) {
-            return redirect()->to($this->cashRoute('caja', $context['company']['id']))->with('error', 'La sesion de caja no existe.');
+            return redirect()->to($this->cashRoute('caja', $context['company']['id']))->with('error', 'La sesion de caja no existe o no tienes permiso para cerrarla.');
         }
 
         return view('cash/forms/close_session', [
@@ -118,7 +119,8 @@ class CashController extends BaseController
             $id,
             $this->currentUser()['id'],
             (float) $this->request->getPost('actual_closing_amount'),
-            trim((string) $this->request->getPost('notes'))
+            trim((string) $this->request->getPost('notes')),
+            $this->isSuperadmin()
         );
 
         if (! $closed) {
@@ -245,9 +247,10 @@ class CashController extends BaseController
         }
 
         $sessionId = trim((string) $this->request->getPost('cash_session_id'));
-        $session = $this->cashService()->ownedSession($context['company']['id'], $sessionId);
+        $userId = $this->isSuperadmin() ? null : $this->currentUser()['id'];
+        $session = $this->cashService()->ownedSession($context['company']['id'], $sessionId, $userId);
         if (! $session) {
-            return redirect()->back()->withInput()->with('error', 'Debes seleccionar una sesion abierta valida.');
+            return redirect()->back()->withInput()->with('error', 'Debes seleccionar una sesion abierta valida o que te pertenezca.');
         }
 
         $movementType = trim((string) $this->request->getPost('movement_type')) ?: 'manual_income';

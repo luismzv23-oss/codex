@@ -96,7 +96,8 @@ class CashController extends BaseApiController
             $id,
             $this->apiUser()['id'],
             (float) ($payload['actual_closing_amount'] ?? 0),
-            trim((string) ($payload['notes'] ?? ''))
+            trim((string) ($payload['notes'] ?? '')),
+            $this->apiIsSuperadmin()
         );
 
         return $closed
@@ -113,9 +114,10 @@ class CashController extends BaseApiController
 
         $payload = (array) ($this->request->getJSON(true) ?: $this->request->getPost());
         $sessionId = trim((string) ($payload['cash_session_id'] ?? ''));
-        $session = $this->cashService()->ownedSession($context['company']['id'], $sessionId);
+        $userId = $this->apiIsSuperadmin() ? null : $this->apiUser()['id'];
+        $session = $this->cashService()->ownedSession($context['company']['id'], $sessionId, $userId);
         if (! $session) {
-            return $this->fail('Debes seleccionar una sesion abierta valida.', 422);
+            return $this->fail('Debes seleccionar una sesion abierta valida o que te pertenezca.', 422);
         }
 
         $movementType = trim((string) ($payload['movement_type'] ?? 'manual_income')) ?: 'manual_income';

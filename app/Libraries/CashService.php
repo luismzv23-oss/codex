@@ -230,9 +230,9 @@ class CashService
         ], true);
     }
 
-    public function closeSession(string $companyId, string $sessionId, string $userId, float $actualAmount, ?string $notes = null): bool
+    public function closeSession(string $companyId, string $sessionId, string $userId, float $actualAmount, ?string $notes = null, bool $isAdmin = false): bool
     {
-        $session = $this->ownedSession($companyId, $sessionId);
+        $session = $this->ownedSession($companyId, $sessionId, $isAdmin ? null : $userId);
         if (! $session || ($session['status'] ?? '') !== 'open') {
             return false;
         }
@@ -327,9 +327,13 @@ class CashService
         return round($openingAmount + $sum, 2);
     }
 
-    public function ownedSession(string $companyId, string $sessionId): ?array
+    public function ownedSession(string $companyId, string $sessionId, ?string $userId = null): ?array
     {
-        return (new CashSessionModel())->where('company_id', $companyId)->where('id', $sessionId)->first();
+        $query = clone (new CashSessionModel())->where('company_id', $companyId)->where('id', $sessionId);
+        if ($userId !== null) {
+            $query->where('opened_by', $userId);
+        }
+        return $query->first();
     }
 
     /**

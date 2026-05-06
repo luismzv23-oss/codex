@@ -56,7 +56,7 @@
                     </div>
                 </div>
                 <div class="table-responsive">
-                    <table class="table align-middle mb-0" id="receivables-table">
+                    <table class="table align-middle mb-0" id="receivables-table" data-codex-pagination="10">
                         <thead><tr><th>Comprobante</th><th>Cliente</th><th>Vencimiento</th><th>Total</th><th>Cobrado</th><th>Saldo</th></tr></thead>
                         <tbody>
                         <?php foreach ($receivables as $receivable): ?>
@@ -98,7 +98,7 @@
             <div class="card-body p-4">
                 <h2 class="h4 mb-3">Recibos recientes</h2>
                 <div class="table-responsive">
-                    <table class="table align-middle mb-0">
+                    <table class="table align-middle mb-0" data-codex-pagination="10">
                         <thead><tr><th>Recibo</th><th>Cliente</th><th>Metodo</th><th>Total</th><th>Estado</th><th></th></tr></thead>
                         <tbody>
                         <?php foreach ($receipts as $receipt): ?>

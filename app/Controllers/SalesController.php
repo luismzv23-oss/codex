@@ -170,7 +170,7 @@ class SalesController extends BaseController
         if (!$cashSession) {
             return redirect()->back()->withInput()->with('error', 'No se puede registrar la venta. Debes abrir primero la caja CAJA-POS desde el modulo de Caja.');
         }
-        $payload = $this->salePayload($companyId);
+        $payload = $this->salePayload($companyId, [], $context['access_level'] ?? 'manage');
 
         if ($payload instanceof RedirectResponse) {
             return $payload;
@@ -204,6 +204,7 @@ class SalesController extends BaseController
 
         return redirect()->to($this->salesRoute('ventas', $companyId))->with('message', 'Venta POS confirmada correctamente.');
     }
+
 
     public function reports()
     {
@@ -1022,6 +1023,10 @@ class SalesController extends BaseController
         ]);
 
         if ($payload instanceof RedirectResponse) {
+            if ($this->request->isAJAX()) {
+                $errors = session()->getFlashdata('error') ?? 'Error de validación en la factura.';
+                return $this->response->setJSON(['status' => 'error', 'message' => $errors, 'csrf_token' => csrf_hash()])->setStatusCode(422);
+            }
             return $payload;
         }
 
@@ -1350,7 +1355,7 @@ class SalesController extends BaseController
         }
 
         $companyId = $context['company']['id'];
-        $payload = $this->salePayload($companyId);
+        $payload = $this->salePayload($companyId, [], $context['access_level'] ?? 'manage');
 
         if ($payload instanceof RedirectResponse) {
             return $payload;
@@ -1474,7 +1479,7 @@ class SalesController extends BaseController
             return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('error', 'Solo los borradores pueden editarse.');
         }
 
-        $payload = $this->salePayload($context['company']['id']);
+        $payload = $this->salePayload($context['company']['id'], [], $context['access_level'] ?? 'manage');
         if ($payload instanceof RedirectResponse) {
             return $payload;
         }
@@ -2630,7 +2635,7 @@ class SalesController extends BaseController
         }, $products);
     }
 
-    private function salePayload(string $companyId, array $overrides = [])
+    private function salePayload(string $companyId, array $overrides = [], string $accessLevel = 'manage')
     {
         $input = array_replace_recursive((array) $this->request->getPost(), $overrides);
         $customerId = trim((string) ($input['customer_id'] ?? '')) ?: null;
@@ -2687,6 +2692,22 @@ class SalesController extends BaseController
         $totals = $this->calculateSaleTotals($items, (float) ($input['global_discount_total'] ?? 0) + $paymentMethodDiscount, $payments);
         $marginTotal = round(array_sum(array_map(static fn(array $row): float => ((float) ($row['line_total'] ?? 0)) - (((float) ($row['unit_cost'] ?? 0)) * ((float) ($row['quantity'] ?? 0))), $items)), 2);
         $creditSnapshot = $this->customerCreditSnapshot($companyId, $customerId, $totals['total']);
+
+        $isVendedorAccess = $this->roleSlug() === 'vendedor' || $accessLevel === 'vendedor';
+        if ($isVendedorAccess) {
+            $maxDiscount = (float) ($salesSettings['max_discount_vendedor'] ?? 10.0);
+            
+            // Calculate effective discount percentage
+            $grossTotal = $totals['subtotal'] + $totals['item_discount_total'] + $totals['global_discount_total'];
+            $effectiveDiscountPercent = 0;
+            if ($grossTotal > 0) {
+                $effectiveDiscountPercent = (($totals['item_discount_total'] + $totals['global_discount_total']) / $grossTotal) * 100;
+            }
+            
+            if ($effectiveDiscountPercent > $maxDiscount) {
+                return redirect()->back()->withInput()->with('error', 'El descuento aplicado supera el maximo permitido para su rol (' . number_format($maxDiscount, 2) . '%). Solicite autorizacion gerencial.');
+            }
+        }
 
         return [
             'sale' => [
@@ -3267,6 +3288,32 @@ class SalesController extends BaseController
         $documentType = !empty($sale['document_type_id']) ? (new SalesDocumentTypeModel())->find($sale['document_type_id']) : null;
         if (!$documentType) {
             return 'El comprobante seleccionado ya no esta disponible.';
+        }
+
+        // 1. Credit Limit Check (Strict TANGO-like Control)
+        $customerId = $sale['customer_id'] ?? null;
+        if ($customerId) {
+            $customer = (new CustomerModel())->find($customerId);
+            $creditLimit = (float) ($customer['credit_limit'] ?? 0);
+            
+            if ($creditLimit > 0) {
+                $saleTotal = (float)($sale['total'] ?? 0);
+                $salePaid = (float)($sale['paid_total'] ?? 0);
+                $saleUnpaid = $saleTotal - $salePaid;
+                
+                if ($saleUnpaid > 0) {
+                    $currentDebt = (float) db_connect()->table('sales_receivables')
+                        ->where('customer_id', $customerId)
+                        ->where('company_id', $companyId)
+                        ->whereIn('status', ['pending', 'partial'])
+                        ->selectSum('balance_amount', 'amount')
+                        ->get()->getRowArray()['amount'] ?? 0;
+                    
+                    if (($currentDebt + $saleUnpaid) > $creditLimit) {
+                        return 'Límite de crédito excedido. El cliente tiene una deuda actual de $' . number_format($currentDebt, 2, ',', '.') . ' y su límite es $' . number_format($creditLimit, 2, ',', '.') . '. Solicite autorizacion gerencial.';
+                    }
+                }
+            }
         }
 
         $authorizationCheck = $this->evaluateAuthorizationRequirement($companyId, $sale, $items);

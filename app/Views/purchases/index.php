@@ -41,14 +41,37 @@
             <div class="card-body p-4">
                 <h2 class="h4 mb-1">Proveedores</h2>
                 <p class="text-secondary mb-3">Base comercial activa por empresa.</p>
-                <?php foreach ($suppliers as $supplier): ?>
-                    <div class="border rounded-4 p-3 mb-2">
-                        <div class="fw-semibold"><?= esc($supplier['name']) ?></div>
-                        <div class="small text-secondary"><?= esc($supplier['tax_id'] ?: 'Sin identificacion fiscal') ?></div>
-                        <div class="small text-secondary"><?= esc($supplier['email'] ?: $supplier['phone'] ?: '-') ?></div>
-                    </div>
-                <?php endforeach; ?>
-                <?php if ($suppliers === []): ?><div class="text-secondary">No hay proveedores registrados.</div><?php endif; ?>
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0" data-codex-pagination="6">
+                        <thead><tr><th>Proveedor</th><th>Contacto</th><th></th></tr></thead>
+                        <tbody>
+                        <?php foreach ($suppliers as $supplier): ?>
+                            <tr>
+                                <td>
+                                    <div class="fw-semibold"><?= esc($supplier['name']) ?></div>
+                                    <div class="small text-secondary"><?= esc($supplier['tax_id'] ?: 'Sin identificacion fiscal') ?></div>
+                                </td>
+                                <td>
+                                    <div class="small text-secondary"><?= esc($supplier['email'] ?: '-') ?></div>
+                                    <div class="small text-secondary"><?= esc($supplier['phone'] ?: '-') ?></div>
+                                </td>
+                                <td class="text-end">
+                                    <?php if ($context['canManage']): ?>
+                                        <div class="d-flex gap-2 justify-content-end">
+                                            <a href="<?= site_url('compras/proveedores/' . $supplier['id'] . '/editar' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-sm btn-outline-secondary icon-btn" data-popup="true" data-popup-title="Editar proveedor" data-popup-subtitle="Modificar datos del proveedor." title="Editar"><i class="bi bi-pencil"></i></a>
+                                            <form method="post" action="<?= site_url('compras/proveedores/' . $supplier['id'] . '/eliminar' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="d-inline" onsubmit="return confirm('¿Confirma eliminar este proveedor?');">
+                                                <?= csrf_field() ?>
+                                                <button class="btn btn-sm btn-outline-danger icon-btn" title="Eliminar"><i class="bi bi-trash"></i></button>
+                                            </form>
+                                        </div>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        <?php if ($suppliers === []): ?><tr><td colspan="3" class="text-secondary">No hay proveedores registrados.</td></tr><?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>

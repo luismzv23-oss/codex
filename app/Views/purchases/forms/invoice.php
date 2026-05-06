@@ -9,34 +9,93 @@
         <form method="post" action="<?= esc($formAction) . ($isPopup ? '?popup=1' : '') ?>" class="row g-3">
             <?= csrf_field() ?>
             <?php if ($isPopup): ?><input type="hidden" name="popup" value="1"><?php endif; ?>
-            <?php if (! empty($companyId)): ?><input type="hidden" name="company_id" value="<?= esc($companyId) ?>"><?php endif; ?>
-            <div class="col-md-4"><label class="form-label">Proveedor</label><select name="supplier_id" class="form-select" required><?php foreach ($suppliers as $supplier): ?><option value="<?= esc($supplier['id']) ?>"><?= esc($supplier['name']) ?></option><?php endforeach; ?></select></div>
-            <div class="col-md-4"><label class="form-label">Recepcion</label><select name="purchase_receipt_id" class="form-select"><option value="">Sin recepcion</option><?php foreach ($receipts as $receipt): ?><option value="<?= esc($receipt['id']) ?>"><?= esc($receipt['receipt_number'] . ' / ' . $receipt['supplier_name']) ?></option><?php endforeach; ?></select></div>
-            <div class="col-md-4"><label class="form-label">Factura</label><input type="text" name="invoice_number" class="form-control" required></div>
-            <div class="col-md-3"><label class="form-label">Moneda</label><select name="currency_code" class="form-select"><?php foreach ($currencyOptions as $code => $label): ?><option value="<?= esc((string) $code) ?>"><?= esc((string) $label) ?></option><?php endforeach; ?></select></div>
-            <div class="col-md-3"><label class="form-label">Cotizacion</label><input type="number" step="0.000001" min="0.000001" name="exchange_rate" class="form-control" value="1"></div>
-            <div class="col-md-3"><label class="form-label">Fecha</label><input type="datetime-local" name="issue_date" class="form-control" value="<?= esc(date('Y-m-d\TH:i')) ?>"></div>
-            <div class="col-md-3"><label class="form-label">Vencimiento</label><input type="datetime-local" name="due_date" class="form-control"></div>
+            <?php if (!empty($companyId)): ?><input type="hidden" name="company_id"
+                    value="<?= esc($companyId) ?>"><?php endif; ?>
+            <div class="col-md-4"><label class="form-label">Proveedor</label><select name="supplier_id"
+                    class="form-select" required><?php foreach ($suppliers as $supplier): ?>
+                        <option value="<?= esc($supplier['id']) ?>" <?= (($fromReceipt['supplier_id'] ?? '') === $supplier['id']) ? 'selected' : '' ?>><?= esc($supplier['name']) ?></option>
+                    <?php endforeach; ?>
+                </select></div>
+            <div class="col-md-4"><label class="form-label">Recepcion</label><select name="purchase_receipt_id"
+                    class="form-select">
+                    <option value="">Sin recepcion</option><?php foreach ($receipts as $receipt): ?>
+                        <option value="<?= esc($receipt['id']) ?>" <?= (($fromReceipt['id'] ?? '') === $receipt['id']) ? 'selected' : '' ?>><?= esc($receipt['receipt_number'] . ' / ' . $receipt['supplier_name']) ?>
+                        </option><?php endforeach; ?>
+                </select></div>
+            <div class="col-md-4"><label class="form-label">Factura</label><input type="text" name="invoice_number"
+                    class="form-control" required></div>
+            <div class="col-md-3"><label class="form-label">Moneda</label><select name="currency_code"
+                    class="form-select"><?php foreach ($currencyOptions as $code => $label): ?>
+                        <option value="<?= esc((string) $code) ?>"><?= esc((string) $label) ?></option><?php endforeach; ?>
+                </select></div>
+            <div class="col-md-3"><label class="form-label">Cotizacion</label><input type="number" step="0.000001"
+                    min="0.000001" name="exchange_rate" class="form-control" value="1"></div>
+            <div class="col-md-3"><label class="form-label">Fecha</label><input type="datetime-local" name="issue_date"
+                    class="form-control" value="<?= esc(date('Y-m-d\TH:i')) ?>"></div>
+            <div class="col-md-3"><label class="form-label">Vencimiento</label><input type="datetime-local"
+                    name="due_date" class="form-control"></div>
             <div class="col-12">
                 <div class="table-responsive">
                     <table class="table align-middle mb-0">
-                        <thead><tr><th>Producto</th><th>Descripcion</th><th>Cant.</th><th>Costo</th><th>IVA %</th></tr></thead>
-                        <tbody>
-                        <?php for ($i = 0; $i < 4; $i++): ?>
+                        <thead>
                             <tr>
-                                <td><select name="items_product_id[]" class="form-select"><option value="">Sin producto</option><?php foreach ($products as $product): ?><option value="<?= esc($product['id']) ?>"><?= esc($product['sku'] . ' - ' . $product['name']) ?></option><?php endforeach; ?></select></td>
-                                <td><input type="text" name="items_description[]" class="form-control"></td>
-                                <td><input type="number" step="0.01" min="0" name="items_quantity[]" class="form-control" value="0"></td>
-                                <td><input type="number" step="0.0001" min="0" name="items_unit_cost[]" class="form-control" value="0"></td>
-                                <td><input type="number" step="0.01" min="0" name="items_tax_rate[]" class="form-control" value="0"></td>
+                                <th>Producto</th>
+                                <th>Descripcion</th>
+                                <th>Cant.</th>
+                                <th>Costo</th>
+                                <th>IVA %</th>
                             </tr>
-                        <?php endfor; ?>
+                        </thead>
+                        <tbody>
+                            <?php if (!empty($fromReceiptItems)): ?>
+                                <?php foreach ($fromReceiptItems as $i => $item): ?>
+                                    <tr>
+                                        <td><select name="items_product_id[]" class="form-select select-search">
+                                                <option value="">Sin producto</option><?php foreach ($products as $product): ?>
+                                                    <option value="<?= esc($product['id']) ?>"
+                                                        <?= ($item['product_id'] === $product['id']) ? 'selected' : '' ?>>
+                                                        <?= esc($product['sku'] . ' - ' . $product['name']) ?></option>
+                                                <?php endforeach; ?>
+                                            </select></td>
+                                        <td><input type="text" name="items_description[]" class="form-control"
+                                                value="<?= esc($item['description'] ?? '') ?>"></td>
+                                        <td><input type="number" step="0.01" min="0" name="items_quantity[]"
+                                                class="form-control" value="<?= esc($item['quantity']) ?>"></td>
+                                        <td><input type="number" step="0.0001" min="0" name="items_unit_cost[]"
+                                                class="form-control" value="<?= esc($item['unit_cost']) ?>"></td>
+                                        <td><input type="number" step="0.01" min="0" name="items_tax_rate[]"
+                                                class="form-control" value="0"></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <?php for ($i = 0; $i < 4; $i++): ?>
+                                    <tr>
+                                        <td><select name="items_product_id[]" class="form-select select-search">
+                                                <option value="">Sin producto</option><?php foreach ($products as $product): ?>
+                                                    <option value="<?= esc($product['id']) ?>">
+                                                        <?= esc($product['sku'] . ' - ' . $product['name']) ?></option>
+                                                <?php endforeach; ?>
+                                            </select></td>
+                                        <td><input type="text" name="items_description[]" class="form-control"></td>
+                                        <td><input type="number" step="0.01" min="0" name="items_quantity[]"
+                                                class="form-control" value="0"></td>
+                                        <td><input type="number" step="0.0001" min="0" name="items_unit_cost[]"
+                                                class="form-control" value="0"></td>
+                                        <td><input type="number" step="0.01" min="0" name="items_tax_rate[]"
+                                                class="form-control" value="0"></td>
+                                    </tr>
+                                <?php endfor; ?>
+                            <?php endif; ?>
                         </tbody>
                     </table>
                 </div>
             </div>
-            <div class="col-12"><label class="form-label">Notas</label><textarea name="notes" class="form-control" rows="2"></textarea></div>
-            <div class="col-12 d-flex gap-2 pt-2"><button class="btn btn-dark icon-btn"><i class="bi bi-check-lg"></i></button><button type="button" class="btn btn-outline-dark icon-btn" onclick="window.parent.postMessage({ type: 'codex-popup-close' }, window.location.origin)"><i class="bi bi-x-lg"></i></button></div>
+            <div class="col-12"><label class="form-label">Notas</label><textarea name="notes" class="form-control"
+                    rows="2"></textarea></div>
+            <div class="col-12 d-flex gap-2 pt-2"><button class="btn btn-dark icon-btn"><i
+                        class="bi bi-check-lg"></i></button><button type="button" class="btn btn-outline-dark icon-btn"
+                    onclick="window.parent.postMessage({ type: 'codex-popup-close' }, window.location.origin)"><i
+                        class="bi bi-x-lg"></i></button></div>
         </form>
     </div>
 </div>

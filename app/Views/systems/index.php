@@ -67,27 +67,15 @@
                                                 <span class="badge text-bg-<?= ($system['access_level'] ?? 'view') === 'manage' ? 'dark' : 'secondary' ?>">
                                                     <?= ($system['access_level'] ?? 'view') === 'manage' ? 'Gestion' : 'Consulta' ?>
                                                 </span>
-                                                <?php if ($isSuperadmin && ! empty($system['id'])): ?>
-                                                    <a href="<?= site_url('sistemas/' . $system['id'] . '/editar') ?>" class="btn btn-sm btn-outline-dark icon-btn" data-popup="true" data-popup-title="Editar sistema" data-popup-subtitle="Actualizar catalogo y punto de entrada del sistema." title="Editar sistema" aria-label="Editar sistema"><i class="bi bi-pencil-square"></i></a>
-                                                    <form method="post" action="<?= site_url('sistemas/' . $system['id'] . '/toggle') ?>" class="d-inline">
-                                                        <?= csrf_field() ?>
-                                                        <button class="btn btn-sm <?= (int) ($system['active'] ?? 1) === 1 ? 'btn-outline-warning' : 'btn-outline-success' ?> icon-btn" title="<?= (int) ($system['active'] ?? 1) === 1 ? 'Deshabilitar sistema' : 'Habilitar sistema' ?>" aria-label="<?= (int) ($system['active'] ?? 1) === 1 ? 'Deshabilitar sistema' : 'Habilitar sistema' ?>">
-                                                            <i class="bi <?= (int) ($system['active'] ?? 1) === 1 ? 'bi-pause-circle' : 'bi-play-circle' ?>"></i>
-                                                        </button>
-                                                    </form>
-                                                    <form method="post" action="<?= site_url('sistemas/' . $system['id'] . '/eliminar') ?>" class="d-inline" onsubmit="return confirm('Se eliminara el sistema y sus asignaciones. Deseas continuar?');">
-                                                        <?= csrf_field() ?>
-                                                        <button class="btn btn-sm btn-outline-danger icon-btn" title="Eliminar sistema" aria-label="Eliminar sistema"><i class="bi bi-trash3"></i></button>
-                                                    </form>
+                                                <?php if ($isSuperadmin): ?>
+                                                    <div class="small <?= (int) ($system['active'] ?? 1) === 1 ? 'text-success' : 'text-danger' ?>">
+                                                        <?= (int) ($system['active'] ?? 1) === 1 ? 'Sistema activo' : 'Sistema inactivo' ?>
+                                                    </div>
                                                 <?php endif; ?>
                                             </div>
                                         </div>
                                         <p class="text-secondary small mb-0"><?= esc($system['description'] ?: 'Sistema disponible sin descripcion adicional.') ?></p>
-                                        <?php if ($isSuperadmin): ?>
-                                            <div class="small <?= (int) ($system['active'] ?? 1) === 1 ? 'text-success' : 'text-danger' ?>">
-                                                <?= (int) ($system['active'] ?? 1) === 1 ? 'Sistema activo' : 'Sistema inactivo' ?>
-                                            </div>
-                                        <?php endif; ?>
+                                        
                                         <div class="mt-auto d-flex flex-wrap gap-2">
                                             <?php
                                             $canEnter = $system['entry_url'] !== '#' && (int) ($system['active'] ?? 1) === 1;
@@ -184,6 +172,57 @@
                                         <?php else: ?>
                                             <span class="text-secondary">-</span>
                                         <?php endif; ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($isSuperadmin): ?>
+        <div class="col-12 mt-2">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h2 class="h4 mb-1">Catalogo global de sistemas</h2>
+                            <p class="text-secondary mb-0">Gestion centralizada de todos los sistemas del ecosistema.</p>
+                        </div>
+                        <a href="<?= site_url('sistemas/nuevo') ?>" class="btn btn-dark icon-btn" data-popup="true" data-popup-title="Nuevo sistema" data-popup-subtitle="Registrar un nuevo sistema del ecosistema." title="Nuevo sistema" aria-label="Nuevo sistema"><i class="bi bi-window-plus"></i></a>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table align-middle mb-0" data-codex-pagination="10">
+                            <thead><tr><th>Sistema</th><th>Entrada URL</th><th>Estado</th><th></th></tr></thead>
+                            <tbody>
+                            <?php foreach ($catalogSystems as $system): ?>
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <i class="bi <?= esc($system['icon'] ?: 'bi-grid') ?> text-secondary"></i>
+                                            <div>
+                                                <div class="fw-semibold"><?= esc($system['name']) ?></div>
+                                                <div class="small text-secondary"><?= esc($system['slug']) ?></div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td><?= esc($system['entry_url'] ?: '-') ?></td>
+                                    <td><?= (int) ($system['active'] ?? 1) === 1 ? 'Activo' : 'Inactivo' ?></td>
+                                    <td class="text-end">
+                                        <a href="<?= site_url('sistemas/' . $system['id'] . '/editar') ?>" class="btn btn-sm btn-outline-dark icon-btn" data-popup="true" data-popup-title="Editar sistema" data-popup-subtitle="Actualizar catalogo y punto de entrada del sistema." title="Editar sistema" aria-label="Editar sistema"><i class="bi bi-pencil-square"></i></a>
+                                        <form method="post" action="<?= site_url('sistemas/' . $system['id'] . '/toggle') ?>" class="d-inline">
+                                            <?= csrf_field() ?>
+                                            <button class="btn btn-sm <?= (int) ($system['active'] ?? 1) === 1 ? 'btn-outline-warning' : 'btn-outline-success' ?> icon-btn" title="<?= (int) ($system['active'] ?? 1) === 1 ? 'Deshabilitar sistema' : 'Habilitar sistema' ?>" aria-label="<?= (int) ($system['active'] ?? 1) === 1 ? 'Deshabilitar sistema' : 'Habilitar sistema' ?>">
+                                                <i class="bi <?= (int) ($system['active'] ?? 1) === 1 ? 'bi-pause-circle' : 'bi-play-circle' ?>"></i>
+                                            </button>
+                                        </form>
+                                        <form method="post" action="<?= site_url('sistemas/' . $system['id'] . '/eliminar') ?>" class="d-inline" onsubmit="return confirm('Se eliminara el sistema y sus asignaciones. Deseas continuar?');">
+                                            <?= csrf_field() ?>
+                                            <button class="btn btn-sm btn-outline-danger icon-btn" title="Eliminar sistema" aria-label="Eliminar sistema"><i class="bi bi-trash3"></i></button>
+                                        </form>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>

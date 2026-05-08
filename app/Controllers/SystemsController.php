@@ -373,7 +373,18 @@ class SystemsController extends BaseController
     private function accessibleSystems(?string $companyId): array
     {
         if ($this->isSuperadmin()) {
-            $rows = (new SystemModel())->orderBy('name', 'ASC')->findAll();
+            if (! $companyId) {
+                return [];
+            }
+            
+            $rows = (new SystemModel())
+                ->select('systems.*')
+                ->join('company_systems', 'company_systems.system_id = systems.id')
+                ->where('company_systems.company_id', $companyId)
+                ->where('company_systems.active', 1)
+                ->where('systems.active', 1)
+                ->orderBy('systems.name', 'ASC')
+                ->findAll();
 
             return array_map(fn(array $system): array => [
                 'id' => $system['id'],
@@ -383,7 +394,7 @@ class SystemsController extends BaseController
                 'entry_url' => $this->systemEntryUrl($system['entry_url']),
                 'icon' => $system['icon'] ?: 'bi-grid',
                 'access_level' => 'manage',
-                'active' => (int) ($system['active'] ?? 1),
+                'active' => 1,
             ], $rows);
         }
 

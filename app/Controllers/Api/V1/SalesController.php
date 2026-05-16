@@ -1009,22 +1009,28 @@ class SalesController extends BaseApiController
             'created_by' => $this->apiUser()['id'],
         ], true);
 
-        $total = 0.0;
-        foreach ($items as $item) {
-            $line = (float) $item['unit_price'] * (float) $item['quantity'];
-            $total += $line;
-            (new SaleReturnItemModel())->insert([
-                'sale_return_id' => $returnId,
-                'sale_item_id' => $item['sale_item_id'],
-                'product_id' => $item['product_id'],
-                'quantity' => $item['quantity'],
-                'unit_price' => $item['unit_price'],
-                'line_total' => $line,
-                'reason' => $item['reason'],
-            ]);
-            (new SaleItemModel())->update($item['sale_item_id'], ['returned_quantity' => (float) $item['already_returned'] + (float) $item['quantity']]);
-            $this->applyStockDelta($context['company']['id'], $item['product_id'], $warehouseId, (float) $item['quantity']);
-        }
+          $total = 0.0;
+          foreach ($items as $item) {
+              $line = (float) $item['unit_price'] * (float) $item['quantity'];
+              $total += $line;
+              (new SaleReturnItemModel())->insert([
+                  'sale_return_id' => $returnId,
+                  'sale_item_id' => $item['sale_item_id'],
+                  'product_id' => $item['product_id'],
+                  'quantity' => $item['quantity'],
+                  'unit_price' => $item['unit_price'],
+                  'line_total' => $line,
+                  'reason' => $item['reason'],
+              ]);
+              (new SaleItemModel())->update($item['sale_item_id'], ['returned_quantity' => (float) $item['already_returned'] + (float) $item['quantity']]);
+          }
+
+          foreach ($this->aggregateStockRows($this->expandSaleItemsToStockRows($items)) as $row) {
+              $notes = 'Devolucion asociada a venta';
+              if (($row['source_product_type'] ?? 'simple') === 'kit') { $notes .= ': componente de kit ' . ($row['source_product_name'] ?? ''); }
+              $this->applyStockDelta($context['company']['id'], (string) $row['product_id'], $warehouseId, (float) $row['quantity']);
+              $this->registerInventoryMovement(['company_id' => $context['company']['id'], 'product_id' => (string) $row['product_id'], 'movement_type' => 'ingreso', 'quantity' => (float) $row['quantity'], 'unit_cost' => (float) ($row['unit_cost'] ?? 0), 'total_cost' => ((float) ($row['unit_cost'] ?? 0)) * ((float) $row['quantity']), 'destination_warehouse_id' => $warehouseId, 'performed_by' => $this->apiUser()['id'], 'reason' => 'DEVOLUCION VENTA', 'source_document' => $sale['sale_number'], 'notes' => $notes]);
+          }
 
         (new SaleReturnModel())->update($returnId, ['total' => $total]);
         $this->syncSaleReturnStatus($id);
@@ -1597,6 +1603,9 @@ class SalesController extends BaseApiController
     }
 
     private function saleItems(string $saleId): array { return (new SaleItemModel())->where('sale_id', $saleId)->orderBy('line_number', 'ASC')->findAll(); }
+    private function kitComponentRows(string $productId): array { return db_connect()->table('inventory_kit_items k')->select('k.component_product_id, k.quantity, p.name AS component_name, p.cost_price AS component_cost_price')->join('inventory_products p', 'p.id = k.component_product_id', 'left')->where('k.product_id', $productId)->get()->getResultArray(); }
+    private function expandSaleItemsToStockRows(array $items): array { $rows = []; foreach ($items as $item) { $productId = (string) ($item['product_id'] ?? ''); $quantity = (float) ($item['quantity'] ?? 0); if ($productId === '' || $quantity <= 0) { continue; } $productType = (string) ($item['product_type'] ?? 'simple'); if ($productType !== 'kit') { $rows[] = ['product_id' => $productId, 'quantity' => $quantity, 'unit_cost' => (float) ($item['unit_cost'] ?? 0), 'source_product_name' => (string) ($item['product_name'] ?? ''), 'source_product_type' => $productType]; continue; } $components = $this->kitComponentRows($productId); if ($components === []) { $rows[] = ['product_id' => $productId, 'quantity' => $quantity, 'unit_cost' => (float) ($item['unit_cost'] ?? 0), 'source_product_name' => (string) ($item['product_name'] ?? ''), 'source_product_type' => $productType]; continue; } foreach ($components as $component) { $componentQty = (float) ($component['quantity'] ?? 0) * $quantity; if ($componentQty <= 0) { continue; } $rows[] = ['product_id' => (string) ($component['component_product_id'] ?? ''), 'quantity' => $componentQty, 'unit_cost' => (float) ($component['component_cost_price'] ?? 0), 'source_product_name' => (string) ($item['product_name'] ?? ''), 'source_product_type' => $productType, 'component_name' => (string) ($component['component_name'] ?? '')]; } } return $rows; }
+    private function aggregateStockRows(array $rows): array { $grouped = []; foreach ($rows as $row) { $productId = (string) ($row['product_id'] ?? ''); $quantity = (float) ($row['quantity'] ?? 0); if ($productId === '' || $quantity <= 0) { continue; } if (! isset($grouped[$productId])) { $grouped[$productId] = $row; $grouped[$productId]['quantity'] = 0.0; } $grouped[$productId]['quantity'] += $quantity; } return array_values($grouped); }
     private function salePayments(string $saleId): array { return (new SalePaymentModel())->where('sale_id', $saleId)->findAll(); }
     private function saleReturns(string $saleId): array { return (new SaleReturnModel())->where('sale_id', $saleId)->findAll(); }
     private function ownedSale(string $companyId, string $saleId): ?array { return (new SaleModel())->where('company_id', $companyId)->where('id', $saleId)->first() ?: null; }
@@ -1661,14 +1670,15 @@ class SalesController extends BaseApiController
     {
         $warehouseId = $sale['warehouse_id'] ?: null;
         if (! $warehouseId) { return 'La venta debe tener deposito origen.'; }
-        foreach ($items as $item) {
-            $this->lockStockLevel($companyId, (string) $item['product_id'], $warehouseId);
-            if (! $this->canReserve($companyId, (string) $item['product_id'], $warehouseId, (float) $item['quantity'])) { return 'Stock insuficiente para reservar el pedido.'; }
+        $stockRows = $this->aggregateStockRows($this->expandSaleItemsToStockRows($items));
+        foreach ($stockRows as $row) {
+            $this->lockStockLevel($companyId, (string) $row['product_id'], $warehouseId);
+            if (! $this->canReserve($companyId, (string) $row['product_id'], $warehouseId, (float) $row['quantity'])) { return 'Stock insuficiente para reservar el pedido.'; }
         }
         $reservationModel = new InventoryReservationModel();
-        foreach ($items as $item) {
-            $reservationModel->insert(['company_id' => $companyId, 'product_id' => (string) $item['product_id'], 'warehouse_id' => $warehouseId, 'sale_id' => $sale['id'], 'quantity' => (float) $item['quantity'], 'reference' => $sale['sale_number'], 'notes' => 'Reserva generada desde pedido', 'status' => 'active', 'reserved_by' => $this->apiUser()['id'], 'reserved_at' => date('Y-m-d H:i:s')]);
-            $this->applyReservedDelta($companyId, (string) $item['product_id'], $warehouseId, (float) $item['quantity']);
+        foreach ($stockRows as $row) {
+            $reservationModel->insert(['company_id' => $companyId, 'product_id' => (string) $row['product_id'], 'warehouse_id' => $warehouseId, 'sale_id' => $sale['id'], 'quantity' => (float) $row['quantity'], 'reference' => $sale['sale_number'], 'notes' => 'Reserva generada desde pedido', 'status' => 'active', 'reserved_by' => $this->apiUser()['id'], 'reserved_at' => date('Y-m-d H:i:s')]);
+            $this->applyReservedDelta($companyId, (string) $row['product_id'], $warehouseId, (float) $row['quantity']);
         }
         (new SaleModel())->update($sale['id'], ['reservation_status' => 'active', 'reserved_at' => date('Y-m-d H:i:s'), 'reservation_released_at' => null]);
         return true;
@@ -1678,46 +1688,51 @@ class SalesController extends BaseApiController
     {
         $reservationModel = new InventoryReservationModel();
         $warehouseId = $sale['warehouse_id'] ?: null;
-        foreach ($items as $item) {
-            $reservations = $reservationModel->where('company_id', $companyId)->where('sale_id', $sale['id'])->where('product_id', (string) $item['product_id'])->where('status', 'active')->findAll();
+        foreach ($this->aggregateStockRows($this->expandSaleItemsToStockRows($items)) as $row) {
+            $reservations = $reservationModel->where('company_id', $companyId)->where('sale_id', $sale['id'])->where('product_id', (string) $row['product_id'])->where('status', 'active')->findAll();
             foreach ($reservations as $reservation) {
                 $reservationModel->update($reservation['id'], ['status' => $finalStatus, 'released_by' => $this->apiUser()['id'], 'released_at' => date('Y-m-d H:i:s')]);
-                $this->applyReservedDelta($companyId, (string) $item['product_id'], $warehouseId, ((float) $reservation['quantity']) * -1);
+                $this->applyReservedDelta($companyId, (string) $row['product_id'], $warehouseId, ((float) $reservation['quantity']) * -1);
             }
         }
         (new SaleModel())->update($sale['id'], ['reservation_status' => $finalStatus === 'cancelled' ? 'cancelled' : 'released', 'reservation_released_at' => date('Y-m-d H:i:s')]);
     }
 
-    private function deliverSaleStock(string $companyId, array $sale, array $items, bool $allowNegative, string $reason)
-    {
-        $warehouseId = $sale['warehouse_id'] ?: null;
-        if (! $warehouseId) { return 'La venta debe tener deposito origen.'; }
-        $sourceSale = ! empty($sale['source_sale_id']) ? $this->ownedSale($companyId, (string) $sale['source_sale_id']) : null;
-        $sourceDocumentType = (! empty($sourceSale['document_type_id'])) ? (new SalesDocumentTypeModel())->find($sourceSale['document_type_id']) : null;
-        $sourceCategory = (string) ($sourceDocumentType['category'] ?? '');
-        if ($sourceCategory === 'delivery_note' && ($sourceSale['status'] ?? '') === 'confirmed') { return true; }
-        foreach ($items as $item) {
-            $this->lockStockLevel($companyId, (string) $item['product_id'], $warehouseId);
-            if (! $this->canWithdraw($companyId, (string) $item['product_id'], $warehouseId, (float) $item['quantity'], $allowNegative, $sale['id'])) { return 'Stock insuficiente para confirmar el documento.'; }
-        }
-        if ($sourceCategory === 'order' && ($sourceSale['reservation_status'] ?? 'none') === 'active') {
-            $this->releaseReservationsForSale($companyId, $sourceSale, $this->saleItems($sourceSale['id']), 'consumed');
-        }
-        foreach ($items as $item) {
-            $this->applyStockDelta($companyId, (string) $item['product_id'], $warehouseId, ((float) $item['quantity']) * -1);
-            $this->registerInventoryMovement(['company_id' => $companyId, 'product_id' => (string) $item['product_id'], 'movement_type' => 'egreso', 'quantity' => (float) $item['quantity'], 'unit_cost' => (float) ($item['unit_cost'] ?? 0), 'total_cost' => ((float) ($item['unit_cost'] ?? 0)) * ((float) $item['quantity']), 'source_warehouse_id' => $warehouseId, 'performed_by' => $this->apiUser()['id'], 'reason' => $reason, 'source_document' => $sale['sale_number'], 'notes' => $reason === 'REMITO' ? 'Salida por remito' : 'Confirmacion de venta']);
-        }
-        return true;
-    }
+      private function deliverSaleStock(string $companyId, array $sale, array $items, bool $allowNegative, string $reason)
+      {
+          $warehouseId = $sale['warehouse_id'] ?: null;
+          if (! $warehouseId) { return 'La venta debe tener deposito origen.'; }
+          $sourceSale = ! empty($sale['source_sale_id']) ? $this->ownedSale($companyId, (string) $sale['source_sale_id']) : null;
+          $sourceDocumentType = (! empty($sourceSale['document_type_id'])) ? (new SalesDocumentTypeModel())->find($sourceSale['document_type_id']) : null;
+          $sourceCategory = (string) ($sourceDocumentType['category'] ?? '');
+          if ($sourceCategory === 'delivery_note' && ($sourceSale['status'] ?? '') === 'confirmed') { return true; }
+          $stockRows = $this->aggregateStockRows($this->expandSaleItemsToStockRows($items));
+          foreach ($stockRows as $row) {
+              $this->lockStockLevel($companyId, (string) $row['product_id'], $warehouseId);
+              if (! $this->canWithdraw($companyId, (string) $row['product_id'], $warehouseId, (float) $row['quantity'], $allowNegative, $sale['id'])) { return 'Stock insuficiente para confirmar el documento.'; }
+          }
+          if ($sourceCategory === 'order' && ($sourceSale['reservation_status'] ?? 'none') === 'active') {
+              $this->releaseReservationsForSale($companyId, $sourceSale, $this->saleItems($sourceSale['id']), 'consumed');
+          }
+          foreach ($stockRows as $row) {
+              $notes = $reason === 'REMITO' ? 'Salida por remito' : 'Confirmacion de venta';
+              if (($row['source_product_type'] ?? 'simple') === 'kit') { $notes .= ': componente de kit ' . ($row['source_product_name'] ?? ''); }
+              $this->applyStockDelta($companyId, (string) $row['product_id'], $warehouseId, ((float) $row['quantity']) * -1);
+              $this->registerInventoryMovement(['company_id' => $companyId, 'product_id' => (string) $row['product_id'], 'movement_type' => 'egreso', 'quantity' => (float) $row['quantity'], 'unit_cost' => (float) ($row['unit_cost'] ?? 0), 'total_cost' => ((float) ($row['unit_cost'] ?? 0)) * ((float) $row['quantity']), 'source_warehouse_id' => $warehouseId, 'performed_by' => $this->apiUser()['id'], 'reason' => $reason, 'source_document' => $sale['sale_number'], 'notes' => $notes]);
+          }
+          return true;
+      }
 
     private function restockDeliveredSale(string $companyId, array $sale, array $items, string $reason): void
     {
         $sourceSale = ! empty($sale['source_sale_id']) ? $this->ownedSale($companyId, (string) $sale['source_sale_id']) : null;
         $sourceDocumentType = (! empty($sourceSale['document_type_id'])) ? (new SalesDocumentTypeModel())->find($sourceSale['document_type_id']) : null;
         if ((string) ($sourceDocumentType['category'] ?? '') === 'delivery_note' && ($sourceSale['status'] ?? '') === 'confirmed') { return; }
-        foreach ($items as $item) {
-            $this->applyStockDelta($companyId, (string) $item['product_id'], $sale['warehouse_id'], (float) $item['quantity']);
-            $this->registerInventoryMovement(['company_id' => $companyId, 'product_id' => (string) $item['product_id'], 'movement_type' => 'ingreso', 'quantity' => (float) $item['quantity'], 'unit_cost' => (float) ($item['unit_cost'] ?? 0), 'total_cost' => ((float) ($item['unit_cost'] ?? 0)) * ((float) $item['quantity']), 'destination_warehouse_id' => $sale['warehouse_id'], 'performed_by' => $this->apiUser()['id'], 'reason' => $reason, 'source_document' => $sale['sale_number'], 'notes' => 'Reversion por cancelacion de documento']);
+        foreach ($this->aggregateStockRows($this->expandSaleItemsToStockRows($items)) as $row) {
+            $notes = 'Reversion por cancelacion de documento';
+            if (($row['source_product_type'] ?? 'simple') === 'kit') { $notes .= ': componente de kit ' . ($row['source_product_name'] ?? ''); }
+            $this->applyStockDelta($companyId, (string) $row['product_id'], $sale['warehouse_id'], (float) $row['quantity']);
+            $this->registerInventoryMovement(['company_id' => $companyId, 'product_id' => (string) $row['product_id'], 'movement_type' => 'ingreso', 'quantity' => (float) $row['quantity'], 'unit_cost' => (float) ($row['unit_cost'] ?? 0), 'total_cost' => ((float) ($row['unit_cost'] ?? 0)) * ((float) $row['quantity']), 'destination_warehouse_id' => $sale['warehouse_id'], 'performed_by' => $this->apiUser()['id'], 'reason' => $reason, 'source_document' => $sale['sale_number'], 'notes' => $notes]);
         }
     }
 
@@ -1733,7 +1748,7 @@ class SalesController extends BaseApiController
             $item = $saleItems[$saleItemId];
             $available = (float) $item['quantity'] - (float) ($item['returned_quantity'] ?? 0);
             if ($quantity > $available) { continue; }
-            $rows[] = ['sale_item_id' => $saleItemId, 'product_id' => $item['product_id'], 'quantity' => $quantity, 'unit_price' => (float) $item['unit_price'], 'already_returned' => (float) ($item['returned_quantity'] ?? 0), 'reason' => trim((string) ($data['reason'] ?? ''))];
+              $rows[] = ['sale_item_id' => $saleItemId, 'product_id' => $item['product_id'], 'product_type' => $item['product_type'] ?? 'simple', 'product_name' => $item['product_name'] ?? '', 'quantity' => $quantity, 'unit_price' => (float) $item['unit_price'], 'unit_cost' => (float) ($item['unit_cost'] ?? 0), 'already_returned' => (float) ($item['returned_quantity'] ?? 0), 'reason' => trim((string) ($data['reason'] ?? ''))];
         }
         return $rows;
     }

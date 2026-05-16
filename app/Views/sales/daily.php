@@ -118,6 +118,8 @@
                                     'quote'         => ['PEDIDO' => 'Generar pedido', 'FACTURA_B' => 'Generar factura'],
                                     'order'         => ['REMITO' => 'Generar remito', 'FACTURA_B' => 'Generar factura'],
                                     'delivery_note' => ['FACTURA_B' => 'Generar factura'],
+                                    'invoice'       => ['NC_B' => 'Nota de Credito', 'ND_B' => 'Nota de Debito'],
+                                    'ticket'        => ['NC_B' => 'Nota de Credito', 'ND_B' => 'Nota de Debito'],
                                     default         => [],
                                 };
                                 ?>

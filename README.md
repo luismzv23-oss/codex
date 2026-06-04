@@ -1,4 +1,5 @@
 # Codex
+Hola
 
 Proyecto base del sistema `codex` con Core inicial funcional:
 

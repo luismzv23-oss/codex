@@ -1,5 +1,4 @@
 # Codex
-Hola
 
 Proyecto base del sistema `codex` con Core inicial funcional:
 
@@ -37,3 +36,5 @@ php spark serve
 
 - `php spark migrate`
 - `php spark db:seed CoreSeeder`
+
+modificacion

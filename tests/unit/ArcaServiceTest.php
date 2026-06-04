@@ -48,6 +48,23 @@ final class ArcaServiceTest extends CIUnitTestCase
         $this->assertNotEmpty($validation['errors']);
     }
 
+    public function testPortablePathsUseForwardSlashes(): void
+    {
+        $service = new ArcaService();
+
+        $this->assertSame(
+            '{writable}/arca/empresa/cert.crt',
+            $service->toPortablePath('{writable}\\arca\\empresa\\cert.crt')
+        );
+
+        $absolutePath = rtrim(WRITEPATH, '\\/') . DIRECTORY_SEPARATOR . 'arca' . DIRECTORY_SEPARATOR . 'empresa' . DIRECTORY_SEPARATOR . 'cert.crt';
+
+        $this->assertSame(
+            '{writable}/arca/empresa/cert.crt',
+            $service->toPortablePath($absolutePath)
+        );
+    }
+
     public function testTestAuthenticationWritesTokenCacheWhenReadinessIsComplete(): void
     {
         $service = new ArcaService();
@@ -62,7 +79,8 @@ final class ArcaServiceTest extends CIUnitTestCase
         $dn = [
             'countryName' => 'AR',
             'organizationName' => 'Codex',
-            'commonName' => 'Codex Test',
+            'commonName' => 'Computadores Test',
+            'serialNumber' => 'CUIT 20123456789',
         ];
         $csr = openssl_csr_new($dn, $key, ['digest_alg' => 'sha256']);
         if ($csr === false) {

@@ -44,14 +44,12 @@ Definir y ejecutar el plan de desarrollo necesario para llevar `Codex` a un nive
 8. `Fase H`: QA integral y hardening productivo
 
 ## Orden recomendado de ejecucion
-1. Fase A
-2. Fase B
-3. Fase C
-4. Fase D
-5. Fase E
-6. Fase F
-7. Fase G
-8. Fase H
+1. ARCA + IVA/Contabilidad: Fase A y Fase B.
+2. Tesoreria avanzada: Fase C.
+3. QA integral y concurrencia: Fase H aplicada sobre todos los circuitos.
+4. Hardware y refinamiento comercial: Fase G, Fase D, Fase E y Fase F.
+
+La prioridad ya no es expandir pantallas, sino certificar operacion completa como pyme real: facturar, cobrar, cerrar caja y liquidar IVA sin inconsistencias.
 
 ## Criterio de paridad operativa con Tango
 Consideraremos `Codex` a la altura operativa de `Tango` cuando cumpla, como minimo:
@@ -64,6 +62,15 @@ Consideraremos `Codex` a la altura operativa de `Tango` cuando cumpla, como mini
 - promociones y politica comercial avanzadas
 - inventario con costeo maduro y operaciones logisticas completas
 - QA funcional integral y control de concurrencia real
+
+## Certificacion operativa
+
+El plan de salida operativa esta documentado en:
+
+- [Certificacion operativa pyme](../qa/certificacion-operativa-pyme.md)
+- [Checklist QA integral final](../qa/checklist-integral-final.md)
+
+La certificacion debe producir evidencias por empresa, usuario, comprobantes involucrados, asientos, movimientos de caja, stock, Libro IVA, eventos ARCA y logs de hardware cuando aplique.
 
 ## Archivos de esta carpeta
 - [00-matriz-brechas-codex-vs-tango.md](./00-matriz-brechas-codex-vs-tango.md)

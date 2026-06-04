@@ -103,6 +103,8 @@ class ArcaService
         $metadata = [
             'subject' => null,
             'issuer' => null,
+            'subject_cuit' => null,
+            'issuer_cn' => null,
             'serial' => null,
             'valid_from' => null,
             'valid_to' => null,
@@ -127,6 +129,8 @@ class ArcaService
                 $metadata = [
                     'subject' => $this->flattenDn($parsed['subject'] ?? []),
                     'issuer' => $this->flattenDn($parsed['issuer'] ?? []),
+                    'subject_cuit' => $this->extractCertificateCuit($parsed['subject'] ?? []),
+                    'issuer_cn' => (string) (($parsed['issuer']['CN'] ?? '') ?: ''),
                     'serial' => $parsed['serialNumberHex'] ?? ($parsed['serialNumber'] ?? null),
                     'valid_from' => $validFrom,
                     'valid_to' => $validTo,
@@ -137,13 +141,26 @@ class ArcaService
 
             $keyMatches = ($certificate !== false && $privateKey !== false) ? (bool) @openssl_x509_check_private_key($certificate, $privateKey) : false;
             $checks[] = ['label' => 'Certificado y clave coinciden', 'ok' => $keyMatches];
-            $bundleValid = $certificate !== false && $privateKey !== false && $keyMatches && (($metadata['days_remaining'] ?? -1) >= 0);
+            $certificateIdentityMatches = $this->certificateIdentityMatchesSettings($metadata, $settings);
+            $environmentMatches = $this->certificateIssuerMatchesEnvironment($metadata, (string) ($settings['arca_environment'] ?? 'homologacion'));
+            $checks[] = ['label' => 'CUIT del certificado coincide con ARCA', 'ok' => $certificateIdentityMatches];
+            $checks[] = ['label' => 'Certificado emitido para el ambiente seleccionado', 'ok' => $environmentMatches];
+            $bundleValid = $certificate !== false
+                && $privateKey !== false
+                && $keyMatches
+                && (($metadata['days_remaining'] ?? -1) >= 0)
+                && $certificateIdentityMatches
+                && $environmentMatches;
         }
 
         $cacheValidation = $this->validateTokenCachePath($tokenCachePath);
         $checks[] = ['label' => 'Cache TA utilizable', 'ok' => $cacheValidation['ok']];
 
         $okCount = count(array_filter($checks, static fn(array $check): bool => (bool) $check['ok']));
+        $failedChecks = array_values(array_map(
+            static fn(array $check): string => (string) $check['label'],
+            array_filter($checks, static fn(array $check): bool => ! (bool) $check['ok'])
+        ));
 
         return [
             'checks' => $checks,
@@ -153,7 +170,7 @@ class ArcaService
                 ? 'Bundle fiscal valido para pruebas operativas.'
                 : ($certificateExists && $certificateSize <= 0
                     ? 'El archivo del certificado esta vacio o no contiene un certificado PEM valido.'
-                    : 'Bundle fiscal incompleto o invalido.'),
+                    : 'Bundle fiscal incompleto o invalido: ' . implode('; ', $failedChecks)),
             'metadata' => $metadata,
             'paths' => [
                 'certificate_path' => $certificatePath,
@@ -764,6 +781,49 @@ class ArcaService
         return $parts === [] ? null : implode(', ', $parts);
     }
 
+    private function extractCertificateCuit(array $subject): ?string
+    {
+        $serial = (string) ($subject['serialNumber'] ?? '');
+        if (preg_match('/\bCUIT\s*(\d{11})\b/i', $serial, $matches)) {
+            return $matches[1];
+        }
+
+        foreach ($subject as $value) {
+            if (is_string($value) && preg_match('/\b(\d{11})\b/', $value, $matches)) {
+                return $matches[1];
+            }
+        }
+
+        return null;
+    }
+
+    private function certificateIdentityMatchesSettings(array $metadata, array $settings): bool
+    {
+        $settingsCuit = preg_replace('/\D+/', '', (string) ($settings['arca_cuit'] ?? ''));
+        $certificateCuit = preg_replace('/\D+/', '', (string) ($metadata['subject_cuit'] ?? ''));
+
+        if ($settingsCuit === '' || $certificateCuit === '') {
+            return false;
+        }
+
+        return $settingsCuit === $certificateCuit;
+    }
+
+    private function certificateIssuerMatchesEnvironment(array $metadata, string $environment): bool
+    {
+        $issuerCn = strtolower((string) ($metadata['issuer_cn'] ?? ''));
+
+        if ($issuerCn === '') {
+            return false;
+        }
+
+        $isTestIssuer = str_contains($issuerCn, 'test');
+
+        return $environment === 'produccion'
+            ? ! $isTestIssuer
+            : $isTestIssuer;
+    }
+
     private function normalizePath(string $path): string
     {
         if ($path === '') {
@@ -789,21 +849,21 @@ class ArcaService
             return '';
         }
 
-        // Normalize separators first for consistent comparison
+        // Normalize separators for filesystem comparison, then return portable paths with "/".
         $path = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
         $writePath = rtrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, WRITEPATH), DIRECTORY_SEPARATOR);
 
-        // If path already uses a placeholder, return as-is
+        // If path already uses a placeholder, keep the placeholder but standardize separators.
         if (str_starts_with($path, '{writable}') || str_starts_with($path, '{WRITEPATH}') || str_starts_with($path, '{ROOTPATH}')) {
-            return $path;
+            return str_replace('\\', '/', $path);
         }
 
         // Replace absolute WRITEPATH prefix with {writable}
         if (stripos($path, $writePath) === 0) {
-            return '{writable}' . substr($path, strlen($writePath));
+            return str_replace('\\', '/', '{writable}' . substr($path, strlen($writePath)));
         }
 
-        return $path;
+        return str_replace('\\', '/', $path);
     }
 
     private function validateTokenCachePath(string $path): array

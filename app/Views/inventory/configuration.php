@@ -186,10 +186,11 @@
                 </div>
                 <div class="table-responsive">
                     <table class="table align-middle mb-0">
-                        <thead><tr><th>SKU</th><th>Producto</th><th>Clasificacion</th><th>Unidad</th><th>Min/Max</th><th>Stock</th><th>Estado</th><th></th></tr></thead>
+                        <thead><tr><th></th><th>SKU</th><th>Producto</th><th>Clasificacion</th><th>Unidad</th><th>Min/Max</th><th>Stock</th><th>Estado</th><th></th></tr></thead>
                         <tbody>
                             <?php foreach ($products as $product): ?>
                                 <tr>
+                                    <td><?php if (! empty($product['image'])): ?><img src="<?= esc(base_url('uploads/products/' . $product['image'])) ?>" alt="" style="width:40px;height:40px;object-fit:cover;" class="rounded"><?php else: ?><span class="d-flex align-items-center justify-content-center rounded bg-light text-secondary" style="width:40px;height:40px;"><i class="bi bi-box"></i></span><?php endif; ?></td>
                                     <td><?= esc($product['sku']) ?></td>
                                     <td><?= esc($product['name']) ?></td>
                                     <td><?= esc(trim(($product['category'] ?? '-') . ' / ' . ($product['brand'] ?? '-'))) ?><div class="small text-secondary"><?= esc($product['product_type'] ?? 'simple') ?><?= ! empty($product['barcode']) ? ' / ' . esc($product['barcode']) : '' ?><?= (int) ($product['lot_control'] ?? 0) === 1 ? ' / Lote' : '' ?><?= (int) ($product['serial_control'] ?? 0) === 1 ? ' / Serie' : '' ?><?= (int) ($product['expiration_control'] ?? 0) === 1 ? ' / Vence' : '' ?></div></td>
@@ -211,7 +212,7 @@
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
-                            <?php if ($products === []): ?><tr><td colspan="8" class="text-secondary">No hay productos registrados.</td></tr><?php endif; ?>
+                            <?php if ($products === []): ?><tr><td colspan="9" class="text-secondary">No hay productos registrados.</td></tr><?php endif; ?>
                         </tbody>
                     </table>
                 </div>

@@ -7,7 +7,7 @@
             <h2 class="h5 mb-1"><?= empty($product) ? 'Producto nuevo' : 'Editar producto' ?></h2>
             <p class="text-secondary mb-0">Completa los datos base del producto para control de stock y trazabilidad.</p>
         </div>
-        <form method="post" action="<?= esc($formAction) . ($isPopup ? '?popup=1' : '') ?>" class="row g-3">
+        <form method="post" action="<?= esc($formAction) . ($isPopup ? '?popup=1' : '') ?>" class="row g-3" enctype="multipart/form-data">
             <?= csrf_field() ?>
             <?php if ($isPopup): ?><input type="hidden" name="popup" value="1"><?php endif; ?>
             <?php if (! empty($companyId)): ?><input type="hidden" name="company_id" value="<?= esc($companyId) ?>"><?php endif; ?>
@@ -116,6 +116,16 @@
                         <?php endforeach; ?>
                     </div>
                 </div>
+            </div>
+            <div class="col-12">
+                <label class="form-label">Imagen del producto</label>
+                <?php if (! empty($product['image'])): ?>
+                    <div class="mb-2">
+                        <img src="<?= esc(base_url('uploads/products/' . $product['image'])) ?>" alt="Imagen del producto" style="max-height:100px;max-width:200px;object-fit:contain;" class="rounded border">
+                    </div>
+                <?php endif; ?>
+                <input type="file" name="image" class="form-control" accept="image/*">
+                <div class="form-text">JPG, PNG, WEBP o GIF. Maximo 2 MB. Si seleccionas una nueva imagen reemplazara la actual.</div>
             </div>
             <div class="col-12 d-flex gap-2 pt-2">
                 <button class="btn btn-dark icon-btn" title="Guardar" aria-label="Guardar"><i class="bi bi-check-lg"></i></button>

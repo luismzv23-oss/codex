@@ -15,6 +15,7 @@ class InventoryProductModel extends BaseUuidModel
         'barcode',
         'product_type',
         'description',
+        'image',
         'unit',
         'min_stock',
         'max_stock',

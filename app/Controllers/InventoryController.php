@@ -776,6 +776,20 @@ class InventoryController extends BaseController
             return redirect()->back()->withInput()->with('error', 'Ya existe un producto con ese SKU en la empresa.');
         }
 
+        $imageName = null;
+        $imageFile = $this->request->getFile('image');
+
+        if ($imageFile !== null && $imageFile->isValid() && ! $imageFile->hasMoved()) {
+            $allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
+            if (! in_array($imageFile->getMimeType(), $allowed, true) || $imageFile->getSize() > 2 * 1024 * 1024) {
+                return redirect()->back()->withInput()->with('error', 'La imagen debe ser JPG, PNG, WEBP o GIF y no superar 2 MB.');
+            }
+
+            $imageName = uniqid('prod_', true) . '.' . $imageFile->getExtension();
+            $imageFile->move(FCPATH . 'uploads/products/', $imageName);
+        }
+
         $productId = $productModel->insert([
             'company_id' => $context['company']['id'],
             'sku' => $sku,
@@ -785,6 +799,7 @@ class InventoryController extends BaseController
             'barcode' => trim((string) $this->request->getPost('barcode')),
             'product_type' => trim((string) $this->request->getPost('product_type')) ?: 'simple',
             'description' => trim((string) $this->request->getPost('description')),
+            'image' => $imageName,
             'unit' => trim((string) $this->request->getPost('unit')) ?: 'unidad',
             'min_stock' => (float) $this->request->getPost('min_stock'),
             'max_stock' => (float) $this->request->getPost('max_stock'),
@@ -865,6 +880,24 @@ class InventoryController extends BaseController
             return redirect()->back()->withInput()->with('error', 'Ya existe un producto con ese SKU en la empresa.');
         }
 
+        $imageName = $product['image'] ?? null;
+        $imageFile = $this->request->getFile('image');
+
+        if ($imageFile !== null && $imageFile->isValid() && ! $imageFile->hasMoved()) {
+            $allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
+            if (! in_array($imageFile->getMimeType(), $allowed, true) || $imageFile->getSize() > 2 * 1024 * 1024) {
+                return redirect()->back()->withInput()->with('error', 'La imagen debe ser JPG, PNG, WEBP o GIF y no superar 2 MB.');
+            }
+
+            if (! empty($imageName)) {
+                @unlink(FCPATH . 'uploads/products/' . $imageName);
+            }
+
+            $imageName = uniqid('prod_', true) . '.' . $imageFile->getExtension();
+            $imageFile->move(FCPATH . 'uploads/products/', $imageName);
+        }
+
         $payload = [
             'sku' => $sku,
             'name' => trim((string) $this->request->getPost('name')),
@@ -873,6 +906,7 @@ class InventoryController extends BaseController
             'barcode' => trim((string) $this->request->getPost('barcode')),
             'product_type' => trim((string) $this->request->getPost('product_type')) ?: 'simple',
             'description' => trim((string) $this->request->getPost('description')),
+            'image' => $imageName,
             'unit' => trim((string) $this->request->getPost('unit')) ?: 'unidad',
             'min_stock' => (float) $this->request->getPost('min_stock'),
             'max_stock' => (float) $this->request->getPost('max_stock'),
@@ -952,6 +986,10 @@ class InventoryController extends BaseController
 
         if ($hasStock || $hasMovements || $hasReservations) {
             return redirect()->to($this->inventoryRoute('inventario/configuracion', $context['company']['id']))->with('error', 'No puedes eliminar un producto con stock o trazabilidad registrada.');
+        }
+
+        if (! empty($product['image'])) {
+            @unlink(FCPATH . 'uploads/products/' . $product['image']);
         }
 
         $productModel->delete($id);
@@ -1814,10 +1852,10 @@ class InventoryController extends BaseController
     {
         $builder = db_connect()->table('inventory_products p');
         $builder
-            ->select('p.id, p.sku, p.name, p.category, p.brand, p.barcode, p.product_type, p.unit, p.min_stock, p.max_stock, p.lot_control, p.serial_control, p.expiration_control, p.active, COALESCE(SUM(s.quantity), 0) AS total_stock, COALESCE(SUM(s.reserved_quantity), 0) AS reserved_stock, COUNT(s.id) AS warehouse_count', false)
+            ->select('p.id, p.sku, p.name, p.category, p.brand, p.barcode, p.product_type, p.unit, p.min_stock, p.max_stock, p.lot_control, p.serial_control, p.expiration_control, p.active, p.image, COALESCE(SUM(s.quantity), 0) AS total_stock, COALESCE(SUM(s.reserved_quantity), 0) AS reserved_stock, COUNT(s.id) AS warehouse_count', false)
             ->join('inventory_stock_levels s', 's.product_id = p.id', 'left')
             ->where('p.company_id', $companyId)
-            ->groupBy('p.id, p.sku, p.name, p.category, p.brand, p.barcode, p.product_type, p.unit, p.min_stock, p.max_stock, p.lot_control, p.serial_control, p.expiration_control, p.active')
+            ->groupBy('p.id, p.sku, p.name, p.category, p.brand, p.barcode, p.product_type, p.unit, p.min_stock, p.max_stock, p.lot_control, p.serial_control, p.expiration_control, p.active, p.image')
             ->orderBy('p.name', 'ASC');
 
         $rows = $builder->get()->getResultArray();

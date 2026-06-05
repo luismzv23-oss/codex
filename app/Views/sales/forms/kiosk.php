@@ -10,6 +10,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
         'unit' => $product['unit'] ?? 'unidad',
         'price' => (float) ($product['sale_price'] ?? 0),
         'stocks' => $product['stocks'] ?? [],
+        'image' => $product['image'] ?? null,
     ];
 }, $products ?? []));
 ?>
@@ -471,9 +472,15 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 option.className = 'list-group-item list-group-item-action';
                 option.innerHTML = `
                 <div class="d-flex justify-content-between align-items-start gap-3">
-                    <div class="text-start">
-                        <div class="fw-semibold">${product.sku} - ${product.name}</div>
-                        <div class="small text-secondary">${product.brand || 'Sin marca'}</div>
+                    <div class="d-flex gap-3 align-items-start text-start">
+                        ${product.image
+                            ? `<img src="/uploads/products/${product.image}" style="width:40px;height:40px;object-fit:cover;" class="rounded flex-shrink-0">`
+                            : `<span class="d-flex align-items-center justify-content-center rounded bg-light text-secondary flex-shrink-0" style="width:40px;height:40px;"><i class="bi bi-box"></i></span>`
+                        }
+                        <div>
+                            <div class="fw-semibold">${product.sku} - ${product.name}</div>
+                            <div class="small text-secondary">${product.brand || 'Sin marca'}</div>
+                        </div>
                     </div>
                     <div class="text-end">
                         <div class="fw-semibold">${formatMoney(product.price)}</div>

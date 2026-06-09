@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /c/laragon/www/CodexCore/codex/app/Libraries/Arca/wsdl)",
+      "Bash(curl -sk \"https://wsaahomo.afip.gov.ar/ws/services/LoginCms?WSDL\" -o wsaa-homologacion.wsdl)",
+      "Bash(curl -sk \"https://wsaa.afip.gov.ar/ws/services/LoginCms?WSDL\" -o wsaa-produccion.wsdl)",
+      "Bash(curl -sk \"https://wswhomo.afip.gov.ar/wsfev1/service.asmx?WSDL\" -o wsfev1-homologacion.wsdl)",
+      "Bash(curl -sk \"https://servicios1.afip.gov.ar/wsfev1/service.asmx?WSDL\" -o wsfev1-produccion.wsdl)"
+    ]
+  }
+}

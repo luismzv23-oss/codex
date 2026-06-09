@@ -211,7 +211,9 @@ class WsmtxcaClient
     private function getClient(): \SoapClient
     {
         if (! $this->client) {
-            $wsdl = $this->environment === 'produccion' ? self::WSDL_PROD : self::WSDL_HOMO;
+            $wsdl = $this->environment === 'produccion'
+                ? $this->resolveWsdl(self::WSDL_PROD, 'wsmtxca-produccion.wsdl')
+                : $this->resolveWsdl(self::WSDL_HOMO, 'wsmtxca-homologacion.wsdl');
             $this->client = new \SoapClient($wsdl, [
                 'soap_version'   => \SOAP_1_1,
                 'trace'          => true,
@@ -223,5 +225,11 @@ class WsmtxcaClient
             ]);
         }
         return $this->client;
+    }
+
+    private function resolveWsdl(string $url, string $localName): string
+    {
+        $local = __DIR__ . '/wsdl/' . $localName;
+        return file_exists($local) ? $local : $url;
     }
 }

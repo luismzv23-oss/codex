@@ -42,7 +42,7 @@ class AccountingService
                 'status'         => $data['status'] ?? 'draft',
                 'total_debit'    => round($totalDebit, 2),
                 'total_credit'   => round($totalCredit, 2),
-                'user_id'        => $data['user_id'] ?? (auth_user()['id'] ?? null),
+                'user_id'        => $data['user_id'] ?? (auth_user() ? (auth_user()['id'] ?? null) : null),
                 'posted_at'      => ($data['status'] ?? 'draft') === 'posted' ? date('Y-m-d H:i:s') : null,
                 'created_at'     => date('Y-m-d H:i:s'),
             ];

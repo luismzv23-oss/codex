@@ -80,7 +80,9 @@ class WsaaClient
         $tra = $this->buildTra($service);
         $cms = $this->signTra($tra);
 
-        $wsdl = $this->environment === 'produccion' ? self::WSDL_PRODUCCION : self::WSDL_HOMOLOGACION;
+        $wsdl = $this->environment === 'produccion'
+            ? $this->resolveWsdl(self::WSDL_PRODUCCION, 'wsaa-produccion.wsdl')
+            : $this->resolveWsdl(self::WSDL_HOMOLOGACION, 'wsaa-homologacion.wsdl');
 
         try {
             $client = new \SoapClient($wsdl, [
@@ -254,5 +256,11 @@ XML;
     {
         $dir = rtrim($this->cachePath, \DIRECTORY_SEPARATOR);
         return $dir . \DIRECTORY_SEPARATOR . "ta-{$service}-{$this->environment}.json";
+    }
+
+    private function resolveWsdl(string $url, string $localName): string
+    {
+        $local = __DIR__ . '/wsdl/' . $localName;
+        return file_exists($local) ? $local : $url;
     }
 }

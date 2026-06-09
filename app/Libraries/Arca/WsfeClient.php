@@ -271,7 +271,9 @@ class WsfeClient
     private function getClient(): \SoapClient
     {
         if (! $this->client) {
-            $wsdl = $this->environment === 'produccion' ? self::WSDL_PROD : self::WSDL_HOMO;
+            $wsdl = $this->environment === 'produccion'
+                ? $this->resolveWsdl(self::WSDL_PROD, 'wsfev1-produccion.wsdl')
+                : $this->resolveWsdl(self::WSDL_HOMO, 'wsfev1-homologacion.wsdl');
 
             $this->client = new \SoapClient($wsdl, [
                 'soap_version'   => \SOAP_1_2,
@@ -295,5 +297,11 @@ class WsfeClient
 
         $items = is_array($items) ? $items : [$items];
         return array_map(static fn($item) => json_decode(json_encode($item), true) ?: [], $items);
+    }
+
+    private function resolveWsdl(string $url, string $localName): string
+    {
+        $local = __DIR__ . '/wsdl/' . $localName;
+        return file_exists($local) ? $local : $url;
     }
 }

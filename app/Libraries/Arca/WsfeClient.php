@@ -281,7 +281,11 @@ class WsfeClient
                 'exceptions'     => true,
                 'cache_wsdl'     => \WSDL_CACHE_BOTH,
                 'stream_context' => stream_context_create([
-                    'ssl' => ['verify_peer' => false, 'verify_peer_name' => false],
+                    'ssl' => [
+                        'verify_peer'      => false,
+                        'verify_peer_name' => false,
+                        'ciphers'          => 'DEFAULT@SECLEVEL=1',
+                    ],
                 ]),
             ]);
         }

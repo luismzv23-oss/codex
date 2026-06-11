@@ -289,7 +289,7 @@ class CodexAssistService
     {
         try {
             db_connect()->table('codex_assist_log')->insert([
-                'id' => app_uuid(), 'user_id' => auth_user()['id'] ?? null,
+                'id' => app_uuid(), 'user_id' => auth_user() ? (auth_user()['id'] ?? null) : null,
                 'company_id' => $context['company_id'] ?? null,
                 'question' => $question, 'answer' => $answer,
                 'provider' => $this->provider, 'model' => $this->model,

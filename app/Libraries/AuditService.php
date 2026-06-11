@@ -37,14 +37,14 @@ class AuditService
         $user = auth_user();
 
         $data = [
-            'company_id'     => $companyId ?? $user['company_id'] ?? null,
+            'company_id'     => $companyId ?? ($user ? ($user['company_id'] ?? null) : null),
             'module'         => $module,
             'action'         => $action,
             'entity_type'    => $entityType,
             'entity_id'      => $entityId,
             'before_payload' => $before ? json_encode($before) : null,
             'after_payload'  => $after ? json_encode($after) : null,
-            'user_id'        => $user['id'] ?? null,
+            'user_id'        => $user ? ($user['id'] ?? null) : null,
             'ip_address'     => service('request')->getIPAddress(),
             'user_agent'     => substr((string) service('request')->getUserAgent(), 0, 255),
             'notes'          => $notes,

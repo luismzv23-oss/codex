@@ -31,12 +31,13 @@ class AuditService
         ?string $entityId = null,
         ?array  $before = null,
         ?array  $after = null,
-        ?string $notes = null
+        ?string $notes = null,
+        ?string $companyId = null
     ): void {
         $user = auth_user();
 
         $data = [
-            'company_id'     => $user['company_id'] ?? null,
+            'company_id'     => $companyId ?? $user['company_id'] ?? null,
             'module'         => $module,
             'action'         => $action,
             'entity_type'    => $entityType,
@@ -121,7 +122,14 @@ class AuditService
     public function logLogin(string $userId, bool $success, ?string $reason = null): void
     {
         $action = $success ? 'login' : 'login_failed';
-        $this->log('auth', $action, 'user', $userId, null, null, $reason);
+
+        $companyId = null;
+        if ($userId !== '') {
+            $user      = model('UserModel')->findForAuthById($userId);
+            $companyId = $user['company_id'] ?? null;
+        }
+
+        $this->log('auth', $action, 'user', $userId ?: null, null, null, $reason, $companyId);
     }
 
     /**

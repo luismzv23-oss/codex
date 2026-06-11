@@ -772,6 +772,13 @@ class SalesController extends BaseController
             'token_cache_path' => $portable['token_cache_path'] ?? '',
         ]);
 
+        $posModel       = new \App\Models\SalesPointOfSaleModel();
+        $stdPosNumber   = max(1, (int) $this->request->getPost('point_of_sale_standard'));
+        $kioskPosNumber = max(1, (int) $this->request->getPost('point_of_sale_kiosk'));
+
+        $posModel->where('company_id', $context['company']['id'])->where('channel', 'standard')->set('afip_pos_number', $stdPosNumber)->update();
+        $posModel->where('company_id', $context['company']['id'])->where('channel', 'kiosk')->set('afip_pos_number', $kioskPosNumber)->update();
+
         return $this->popupOrRedirect($this->salesRoute('ventas/configuracion', $context['company']['id']), 'Configuracion de Ventas actualizada.');
     }
 

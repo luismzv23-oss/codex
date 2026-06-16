@@ -17,8 +17,8 @@
                         <span class="fw-semibold"><?= esc((string) ($readiness['score'] ?? 0)) ?>%</span>
                     </div>
                     <div class="d-flex gap-2 justify-content-end mt-2">
-                        <a href="<?= site_url('dashboard/readiness') ?>" class="btn btn-outline-dark btn-sm">Diagnostico ERP</a>
-                        <a href="<?= site_url('dashboard/qa') ?>" class="btn btn-outline-dark btn-sm">QA integral</a>
+                        <a href="<?= site_url('dashboard/readiness') ?>" class="btn btn-outline-dark icon-btn" title="Diagnostico ERP" aria-label="Diagnostico ERP"><i class="bi bi-clipboard2-pulse"></i></a>
+                        <a href="<?= site_url('dashboard/qa') ?>" class="btn btn-outline-dark icon-btn" title="QA integral" aria-label="QA integral"><i class="bi bi-shield-check"></i></a>
                     </div>
                 </div>
             </div>

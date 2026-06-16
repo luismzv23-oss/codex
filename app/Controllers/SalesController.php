@@ -772,7 +772,7 @@ class SalesController extends BaseController
             'token_cache_path' => $portable['token_cache_path'] ?? '',
         ]);
 
-        $posModel       = new \App\Models\SalesPointOfSaleModel();
+        $posModel       = new SalesPointOfSaleModel();
         $stdPosNumber   = max(1, (int) $this->request->getPost('point_of_sale_standard'));
         $kioskPosNumber = max(1, (int) $this->request->getPost('point_of_sale_kiosk'));
 
@@ -983,6 +983,7 @@ class SalesController extends BaseController
         return view('sales/forms/kiosk', [
             'pageTitle' => 'Ticket Kiosco',
             'products' => $this->salesProductCatalog($companyId),
+            'customers' => $this->customerOptions($companyId),
             'warehouses' => $this->salesWarehouses($companyId),
             'currencyOptions' => $this->companyCurrencyOptions($companyId, $this->salesSettings($companyId)['default_currency_code'] ?? ($context['company']['currency_code'] ?? null)),
             'companyId' => $companyId,
@@ -1013,11 +1014,15 @@ class SalesController extends BaseController
             return redirect()->back()->withInput()->with('error', $msg);
         }
         $consumer = $this->ensureConsumerFinalCustomer($companyId);
+        $customerId = trim((string) ($this->request->getPost('customer_id') ?? ''));
+        if ($customerId === '') {
+            $customerId = $consumer['id'] ?? null;
+        }
         $kioskDocumentType = $this->defaultDocumentType($companyId, 'kiosk');
         $documentReference = $this->nextSequenceNumber($companyId, $kioskDocumentType['sequence_key'], $kioskDocumentType['default_prefix'] ?: 'TCK');
 
         $payload = $this->salePayload($companyId, [
-            'customer_id' => $consumer['id'] ?? null,
+            'customer_id' => $customerId,
             'pos_mode' => '1',
             'price_list_name' => 'KIOSCO',
             'document_type_id' => $kioskDocumentType['id'] ?? null,
@@ -1266,9 +1271,17 @@ class SalesController extends BaseController
             'active' => $this->request->getPost('active') === '0' ? 0 : 1,
         ], true);
 
-        $this->logAudit($context['company']['id'], 'sales', 'customer', $customerId, 'create', null, (new CustomerModel())->find($customerId));
+        $newCustomer = (new CustomerModel())->find($customerId);
+        $this->logAudit($context['company']['id'], 'sales', 'customer', $customerId, 'create', null, $newCustomer);
 
-        return $this->popupOrRedirect($this->salesRoute('ventas', $context['company']['id']), 'Cliente registrado correctamente.');
+        if ($this->isPopupRequest()) {
+            return view('sales/forms/customer_popup_close', [
+                'customer' => $newCustomer,
+                'message' => 'Cliente registrado correctamente.',
+            ]);
+        }
+
+        return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('message', 'Cliente registrado correctamente.');
     }
 
     public function create()
@@ -1779,7 +1792,7 @@ class SalesController extends BaseController
             $allowedForVendedor = [
                 'index', 'pos', 'storePos', 'kiosk', 'storeKiosk', 'posCatalog',
                 'arcaDiagnostics', 'diagnoseArca', 'testArcaConnection', 
-                'storeCustomer', 'pdf', 'convert', 'confirm', 'cancel', 
+                'createCustomerForm', 'storeCustomer', 'pdf', 'convert', 'confirm', 'cancel', 
                 'authorizeArca', 'consultArca', 'createReturnForm', 'storeReturn'
             ];
             

@@ -21,7 +21,7 @@
 <div class="card border-0 shadow-sm rounded-4 mb-4">
     <div class="card-header bg-light rounded-top-4 d-flex justify-content-between align-items-center">
         <span class="fw-semibold"><i class="bi bi-journal-text text-primary"></i> Libro IVA Ventas</span>
-        <a href="<?= site_url('impuestos/iva-ventas/txt') ?>?from=<?= esc($filters['from']) ?>&to=<?= esc($filters['to']) ?>" class="btn btn-outline-primary btn-sm"><i class="bi bi-download"></i> TXT AFIP (RG 4597)</a>
+        <a href="<?= site_url('impuestos/iva-ventas/txt') ?>?from=<?= esc($filters['from']) ?>&to=<?= esc($filters['to']) ?>" class="btn btn-outline-primary icon-btn" title="TXT AFIP Ventas (RG 4597)" aria-label="TXT AFIP Ventas (RG 4597)"><i class="bi bi-download"></i></a>
     </div>
     <div class="card-body p-0">
         <table class="table table-hover table-sm align-middle mb-0">
@@ -54,7 +54,7 @@
 <div class="card border-0 shadow-sm rounded-4 mb-4">
     <div class="card-header bg-light rounded-top-4 d-flex justify-content-between align-items-center">
         <span class="fw-semibold"><i class="bi bi-journal-text text-danger"></i> Libro IVA Compras</span>
-        <a href="<?= site_url('impuestos/iva-compras/txt') ?>?from=<?= esc($filters['from']) ?>&to=<?= esc($filters['to']) ?>" class="btn btn-outline-danger btn-sm"><i class="bi bi-download"></i> TXT AFIP (RG 4597)</a>
+        <a href="<?= site_url('impuestos/iva-compras/txt') ?>?from=<?= esc($filters['from']) ?>&to=<?= esc($filters['to']) ?>" class="btn btn-outline-danger icon-btn" title="TXT AFIP Compras (RG 4597)" aria-label="TXT AFIP Compras (RG 4597)"><i class="bi bi-download"></i></a>
     </div>
     <div class="card-body p-0">
         <table class="table table-hover table-sm align-middle mb-0">
@@ -87,8 +87,8 @@
     <div class="card-header bg-light rounded-top-4 d-flex justify-content-between align-items-center">
         <span class="fw-semibold"><i class="bi bi-file-earmark-text text-warning"></i> SICORE — Retenciones y Percepciones</span>
         <div>
-            <a href="<?= site_url('impuestos/sicore/retenciones/txt') ?>?from=<?= esc($filters['from']) ?>&to=<?= esc($filters['to']) ?>" class="btn btn-outline-warning btn-sm"><i class="bi bi-download"></i> Retenciones TXT</a>
-            <a href="<?= site_url('impuestos/sicore/percepciones/txt') ?>?from=<?= esc($filters['from']) ?>&to=<?= esc($filters['to']) ?>" class="btn btn-outline-warning btn-sm"><i class="bi bi-download"></i> Percepciones TXT</a>
+            <a href="<?= site_url('impuestos/sicore/retenciones/txt') ?>?from=<?= esc($filters['from']) ?>&to=<?= esc($filters['to']) ?>" class="btn btn-outline-warning icon-btn" title="Retenciones TXT" aria-label="Retenciones TXT"><i class="bi bi-download"></i></a>
+            <a href="<?= site_url('impuestos/sicore/percepciones/txt') ?>?from=<?= esc($filters['from']) ?>&to=<?= esc($filters['to']) ?>" class="btn btn-outline-warning icon-btn" title="Percepciones TXT" aria-label="Percepciones TXT"><i class="bi bi-download"></i></a>
         </div>
     </div>
     <div class="card-body p-0">

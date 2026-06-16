@@ -18,10 +18,10 @@
             </form>
         <?php endif; ?>
         <?php if ($context['canManage']): ?>
-            <a href="<?= site_url('compras/proveedores/nuevo' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark" data-popup="true" data-popup-title="Proveedor" data-popup-subtitle="Alta operativa de proveedor.">Proveedor</a>
-            <a href="<?= site_url('compras/ordenes/nueva' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-dark" data-popup="true" data-popup-title="Orden de compra" data-popup-subtitle="Registrar una nueva orden de compra.">Nueva orden</a>
-            <a href="<?= site_url('compras/facturas/nueva' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark" data-popup="true" data-popup-title="Factura proveedor" data-popup-subtitle="Registrar una factura del proveedor.">Factura</a>
-            <a href="<?= site_url('compras/notas-credito/nueva' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark" data-popup="true" data-popup-title="Nota de credito proveedor" data-popup-subtitle="Registrar una nota de credito del proveedor.">NC</a>
+            <a href="<?= site_url('compras/proveedores/nuevo' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Proveedor" data-popup-subtitle="Alta operativa de proveedor." title="Nuevo proveedor" aria-label="Nuevo proveedor"><i class="bi bi-person-badge"></i></a>
+            <a href="<?= site_url('compras/ordenes/nueva' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-dark icon-btn" data-popup="true" data-popup-title="Orden de compra" data-popup-subtitle="Registrar una nueva orden de compra." title="Nueva orden de compra" aria-label="Nueva orden de compra"><i class="bi bi-cart-plus"></i></a>
+            <a href="<?= site_url('compras/facturas/nueva' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Factura proveedor" data-popup-subtitle="Registrar una factura del proveedor." title="Nueva factura" aria-label="Nueva factura"><i class="bi bi-receipt"></i></a>
+            <a href="<?= site_url('compras/notas-credito/nueva' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Nota de credito proveedor" data-popup-subtitle="Registrar una nota de credito del proveedor." title="Nueva nota de credito" aria-label="Nueva nota de credito"><i class="bi bi-file-earmark-minus"></i></a>
         <?php endif; ?>
     </div>
 </div>

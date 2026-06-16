@@ -17,10 +17,10 @@
                 <button class="btn btn-outline-dark icon-btn" title="Cambiar empresa" aria-label="Cambiar empresa"><i class="bi bi-arrow-repeat"></i></button>
             </form>
         <?php endif; ?>
-        <a href="<?= site_url('inventario/kardex' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark">Kardex</a>
+        <a href="<?= site_url('inventario/kardex' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" title="Kardex" aria-label="Kardex"><i class="bi bi-journal-list"></i></a>
         <?php if ($context['canManage']): ?>
-            <a href="<?= site_url('inventario/reservas/nueva' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark" data-popup="true" data-popup-title="Reserva de stock" data-popup-subtitle="Comprometer existencias operativas por deposito.">Reservar stock</a>
-            <a href="<?= site_url('inventario/movimientos/nuevo' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark" data-popup="true" data-popup-title="Movimiento de stock" data-popup-subtitle="Registrar ingreso, egreso, transferencia o ajuste.">Nuevo movimiento</a>
+            <a href="<?= site_url('inventario/reservas/nueva' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Reserva de stock" data-popup-subtitle="Comprometer existencias operativas por deposito." title="Reservar stock" aria-label="Reservar stock"><i class="bi bi-shield-lock"></i></a>
+            <a href="<?= site_url('inventario/movimientos/nuevo' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Movimiento de stock" data-popup-subtitle="Registrar ingreso, egreso, transferencia o ajuste." title="Nuevo movimiento" aria-label="Nuevo movimiento"><i class="bi bi-arrow-left-right"></i></a>
         <?php endif; ?>
     </div>
 </div>

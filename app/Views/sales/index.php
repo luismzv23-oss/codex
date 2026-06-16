@@ -23,36 +23,36 @@
         <?php $isVendedorAccess = ($user['role_slug'] ?? '') === 'vendedor' || ($context['access_level'] ?? '') === 'vendedor'; ?>
         <?php if (!$isVendedorAccess): ?>
             <a href="<?= site_url('ventas/diarios' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
-                class="btn btn-outline-dark">Diarios</a>
+                class="btn btn-outline-dark icon-btn" title="Diarios" aria-label="Diarios"><i class="bi bi-journal-text"></i></a>
             <a href="<?= site_url('ventas/reportes' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
-                class="btn btn-outline-dark">Reportes</a>
+                class="btn btn-outline-dark icon-btn" title="Reportes" aria-label="Reportes"><i class="bi bi-graph-up-arrow"></i></a>
             <a href="<?= site_url('ventas/cobranzas' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
-                class="btn btn-outline-dark">Cobranzas</a>
+                class="btn btn-outline-dark icon-btn" title="Cobranzas" aria-label="Cobranzas"><i class="bi bi-cash-coin"></i></a>
         <?php endif; ?>
         <?php if ($context['canManage']): ?>
             <a href="<?= site_url('ventas/vendedores/nuevo' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
-                class="btn btn-outline-dark" data-popup="true" data-popup-title="Vendedor"
-                data-popup-subtitle="Registrar responsable comercial.">Vendedores</a>
+                class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Vendedor"
+                data-popup-subtitle="Registrar responsable comercial." title="Vendedores" aria-label="Vendedores"><i class="bi bi-people"></i></a>
             <a href="<?= site_url('ventas/zonas/nueva' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
-                class="btn btn-outline-dark" data-popup="true" data-popup-title="Zona comercial"
-                data-popup-subtitle="Registrar zona comercial.">Zonas</a>
+                class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Zona comercial"
+                data-popup-subtitle="Registrar zona comercial." title="Zonas" aria-label="Zonas"><i class="bi bi-geo-alt"></i></a>
             <a href="<?= site_url('ventas/condiciones/nueva' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
-                class="btn btn-outline-dark" data-popup="true" data-popup-title="Condicion comercial"
-                data-popup-subtitle="Registrar condicion de venta.">Condiciones</a>
+                class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Condicion comercial"
+                data-popup-subtitle="Registrar condicion de venta." title="Condiciones" aria-label="Condiciones"><i class="bi bi-file-earmark-check"></i></a>
         <?php endif; ?>
         <?php if ($isVendedorAccess || $context['canManage']): ?>
             <a href="<?= site_url('ventas/pos' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
-                class="btn <?= $isVendedorAccess ? 'btn-primary' : 'btn-outline-dark' ?>"><i class="bi bi-display me-1"></i> POS</a>
+                class="btn <?= $isVendedorAccess ? 'btn-primary' : 'btn-outline-dark' ?> icon-btn" title="POS" aria-label="POS"><i class="bi bi-display"></i></a>
             <a href="<?= site_url('ventas/kiosco' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
-                class="btn <?= $isVendedorAccess ? 'btn-dark' : 'btn-outline-dark' ?>"><i class="bi bi-shop me-1"></i> Kiosco</a>
+                class="btn <?= $isVendedorAccess ? 'btn-dark' : 'btn-outline-dark' ?> icon-btn" title="Kiosco" aria-label="Kiosco"><i class="bi bi-shop"></i></a>
         <?php endif; ?>
         <?php if ($context['canManage']): ?>
             <a href="<?= site_url('ventas/listas-precio/nueva' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
-                class="btn btn-outline-dark" data-popup="true" data-popup-title="Lista de precios"
-                data-popup-subtitle="Configurar precios comerciales por producto.">Lista de precios</a>
+                class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Lista de precios"
+                data-popup-subtitle="Configurar precios comerciales por producto." title="Lista de precios" aria-label="Lista de precios"><i class="bi bi-tags"></i></a>
             <a href="<?= site_url('ventas/promociones/nueva' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
-                class="btn btn-outline-dark" data-popup="true" data-popup-title="Promocion"
-                data-popup-subtitle="Crear promociones comerciales activas.">Promociones</a>
+                class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Promocion"
+                data-popup-subtitle="Crear promociones comerciales activas." title="Promociones" aria-label="Promociones"><i class="bi bi-percent"></i></a>
             <a href="<?= site_url('ventas/presupuestos/nuevo' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
                 class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Presupuesto"
                 data-popup-subtitle="Crear nuevo presupuesto comercial." title="Nuevo Presupuesto" aria-label="Nuevo Presupuesto"><i class="bi bi-file-earmark-text"></i></a>
@@ -62,10 +62,10 @@
             <a href="<?= site_url('ventas/remitos/nuevo' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
                 class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Remito"
                 data-popup-subtitle="Crear nuevo remito de entrega." title="Nuevo Remito" aria-label="Nuevo Remito"><i class="bi bi-truck"></i></a>
-            <a href="<?= site_url('ventas/clientes/nuevo' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
-                class="btn btn-outline-dark" data-popup="true" data-popup-title="Cliente"
-                data-popup-subtitle="Alta rapida de cliente para ventas.">Nuevo cliente</a>
         <?php endif; ?>
+        <a href="<?= site_url('ventas/clientes/nuevo' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
+            class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Cliente"
+            data-popup-subtitle="Alta rapida de cliente para ventas." title="Nuevo cliente" aria-label="Nuevo cliente"><i class="bi bi-person-plus"></i></a>
     </div>
 </div>
 

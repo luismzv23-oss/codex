@@ -1,6 +1,13 @@
 <?= $this->extend('layouts/app') ?>
 <?= $this->section('content') ?>
 <?php
+$consumerFinalId = '';
+foreach (($customers ?? []) as $c) {
+    if ($c['name'] === 'Consumidor Final') {
+        $consumerFinalId = $c['id'];
+        break;
+    }
+}
 $productCatalog = array_values(array_map(static function (array $product): array {
     return [
         'id' => $product['id'],
@@ -51,7 +58,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
             <input type="hidden" name="pos_mode" value="1">
             <input type="hidden" name="notes" value="Ticket kiosco">
 
-            <div class="col-lg-4">
+            <div class="col-lg-3">
                 <label class="form-label">Deposito</label>
                 <select name="warehouse_id" class="form-select" required>
                     <?php foreach ($warehouses as $warehouse): ?>
@@ -59,7 +66,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-lg-4">
+            <div class="col-lg-3">
                 <label class="form-label">Moneda</label>
                 <select name="currency_code" class="form-select" id="kiosk-currency" required>
                     <?php foreach ($currencyOptions as $code => $label): ?>
@@ -67,10 +74,20 @@ $productCatalog = array_values(array_map(static function (array $product): array
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-lg-4">
+            <div class="col-lg-3">
                 <label class="form-label">Documento</label>
-                <input type="text" class="form-control"
+                <input type="text" class="form-control" id="kiosk-document-display"
                     value="<?= esc($settings['kiosk_document_label'] ?? 'Ticket Consumidor Final') ?>" readonly>
+            </div>
+            <div class="col-lg-3">
+                <label class="form-label">Cliente</label>
+                <div class="input-group">
+                    <input type="text" id="kiosk-customer-name" class="form-control" value="Consumidor Final" readonly>
+                    <input type="hidden" name="customer_id" id="kiosk-customer-id" value="<?= esc($consumerFinalId) ?>">
+                    <button type="button" class="btn btn-outline-dark" id="open-kiosk-customer-search" title="Buscar cliente" aria-label="Buscar cliente"><i class="bi bi-search"></i></button>
+                    <a href="<?= site_url('ventas/clientes/nuevo' . (!empty($companyId) ? '?company_id=' . $companyId : '')) ?>" class="btn btn-outline-dark" data-popup="true" data-popup-title="Cliente" data-popup-subtitle="Alta rapida de cliente para ventas." title="Nuevo cliente" aria-label="Nuevo cliente" id="kiosk-new-customer-btn"><i class="bi bi-person-plus"></i></a>
+                    <button type="button" class="btn btn-outline-danger d-none" id="clear-kiosk-customer" title="Quitar cliente" aria-label="Quitar cliente"><i class="bi bi-x-lg"></i></button>
+                </div>
             </div>
 
             <div class="col-12">
@@ -182,12 +199,41 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 </div>
             </div>
         </form>
+        <div class="modal fade" id="kioskCustomerSearchModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content rounded-4 border-0 shadow-lg">
+                    <div class="modal-header">
+                        <div>
+                            <h2 class="h5 mb-1">Buscar cliente</h2>
+                            <p class="text-secondary mb-0">Busca por nombre o documento y selecciona el cliente.</p>
+                        </div>
+                        <button type="button" class="btn btn-outline-dark icon-btn" data-bs-dismiss="modal" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <div class="mb-3">
+                            <label class="form-label">Nombre / Documento</label>
+                            <input type="text" id="kiosk-customer-search" class="form-control" placeholder="Escribe el nombre o documento para buscar..." autocomplete="off">
+                        </div>
+                        <div class="small text-secondary mb-3">
+                            Coincidencias: <span class="fw-semibold" id="kiosk-customer-results-count">0</span>
+                        </div>
+                        <div id="kiosk-customer-search-results" class="list-group border rounded-4 overflow-auto" style="max-height: 360px;"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-dark icon-btn" data-bs-dismiss="modal" title="Cancelar" aria-label="Cancelar"><i class="bi bi-x-lg"></i></button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
 <script>
     (() => {
         const catalog = <?= json_encode($productCatalog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+        const customers = <?= json_encode($customers ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+        const consumerFinalId = '<?= esc($consumerFinalId) ?>';
+
         const searchField = document.getElementById('kiosk-search');
         const resultsContainer = document.getElementById('kiosk-search-results');
         const resultsCount = document.getElementById('kiosk-results-count');
@@ -208,6 +254,18 @@ $productCatalog = array_values(array_map(static function (array $product): array
         const submitBtn = document.getElementById('kiosk-submit-btn');
         const toastEl = document.getElementById('codex-kiosk-toast');
         const items = new Map();
+
+        // Customer elements
+        const kioskCustomerName = document.getElementById('kiosk-customer-name');
+        const kioskCustomerId = document.getElementById('kiosk-customer-id');
+        const openCustomerSearch = document.getElementById('open-kiosk-customer-search');
+        const clearCustomerBtn = document.getElementById('clear-kiosk-customer');
+        const customerSearchModalEl = document.getElementById('kioskCustomerSearchModal');
+        const customerSearchInput = document.getElementById('kiosk-customer-search');
+        const customerResultsList = document.getElementById('kiosk-customer-search-results');
+        const customerResultsCount = document.getElementById('kiosk-customer-results-count');
+        const kioskDocumentDisplay = document.getElementById('kiosk-document-display');
+        const defaultKioskDocLabel = '<?= esc($settings['kiosk_document_label'] ?? 'Ticket Consumidor Final') ?>';
 
         // ── Audio feedback ──────────────────────────────────
         const audioCtx = typeof AudioContext !== 'undefined' ? new AudioContext() : null;
@@ -573,6 +631,10 @@ $productCatalog = array_values(array_map(static function (array $product): array
                         showToast('Venta registrada ✓ ' + (data.sale_number || referenceField.value));
                         items.clear();
                         renderTicket();
+                        kioskCustomerId.value = consumerFinalId;
+                        kioskCustomerName.value = 'Consumidor Final';
+                        if (kioskDocumentDisplay) kioskDocumentDisplay.value = defaultKioskDocLabel;
+                        clearCustomerBtn.classList.add('d-none');
                         searchField.value = '';
                         searchField.focus();
                     } else {
@@ -606,9 +668,108 @@ $productCatalog = array_values(array_map(static function (array $product): array
             if (items.size > 0 && !confirm('¿Cancelar la factura actual?')) return;
             items.clear();
             renderTicket();
+            kioskCustomerId.value = consumerFinalId;
+            kioskCustomerName.value = 'Consumidor Final';
+            if (kioskDocumentDisplay) kioskDocumentDisplay.value = defaultKioskDocLabel;
+            clearCustomerBtn.classList.add('d-none');
             searchField.value = '';
             searchField.focus();
             showToast('Ticket cancelado', 'slash-circle');
+        });
+
+        // ── Customer Search Logic ────────────────────────────
+        const resolveCustomerSearchModal = () => {
+            if (!window.bootstrap || !window.bootstrap.Modal) return null;
+            return window.bootstrap.Modal.getOrCreateInstance(customerSearchModalEl);
+        };
+
+        const matchingCustomers = (term) => {
+            const normalized = term.trim().toLowerCase();
+            if (normalized === '') return [];
+            return customers.filter((customer) => {
+                const haystack = `${customer.name} ${customer.document_number || ''} ${customer.email || ''} ${customer.phone || ''}`.toLowerCase();
+                return haystack.includes(normalized);
+            }).slice(0, 12);
+        };
+
+        const renderCustomerResults = (results) => {
+            customerResultsList.innerHTML = '';
+            customerResultsCount.textContent = String(results.length);
+            if (results.length === 0) return;
+
+            results.forEach((customer) => {
+                const option = document.createElement('button');
+                option.type = 'button';
+                option.className = 'list-group-item list-group-item-action text-start';
+                option.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="fw-semibold">${customer.name}</div>
+                            <div class="small text-secondary">
+                                ${customer.document_type || 'DOC'}: ${customer.document_number || '-'} 
+                                ${customer.email ? `· ${customer.email}` : ''}
+                            </div>
+                        </div>
+                        <div>
+                            <span class="badge bg-light text-dark">${customer.tax_profile || 'Cliente'}</span>
+                        </div>
+                    </div>
+                `;
+                option.addEventListener('click', () => {
+                    kioskCustomerId.value = customer.id;
+                    kioskCustomerName.value = customer.name;
+                    if (customer.id !== consumerFinalId && customer.name !== 'Consumidor Final') {
+                        if (kioskDocumentDisplay) kioskDocumentDisplay.value = (customer.document_type || 'DOC') + ' ' + (customer.document_number || '');
+                        clearCustomerBtn.classList.remove('d-none');
+                    } else {
+                        if (kioskDocumentDisplay) kioskDocumentDisplay.value = defaultKioskDocLabel;
+                        clearCustomerBtn.classList.add('d-none');
+                    }
+                    beepConfirm();
+                    showToast('Cliente seleccionado: ' + customer.name);
+                    resolveCustomerSearchModal()?.hide();
+                });
+                customerResultsList.appendChild(option);
+            });
+        };
+
+        openCustomerSearch.addEventListener('click', () => {
+            const searchModal = resolveCustomerSearchModal();
+            if (!searchModal) return;
+            customerSearchInput.value = '';
+            renderCustomerResults([]);
+            customerResultsCount.textContent = '0';
+            searchModal.show();
+            setTimeout(() => customerSearchInput.focus(), 150);
+        });
+
+        customerSearchInput.addEventListener('input', () => renderCustomerResults(matchingCustomers(customerSearchInput.value)));
+        customerSearchInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                const first = customerResultsList.querySelector('button');
+                if (first) first.click();
+            }
+        });
+
+        clearCustomerBtn.addEventListener('click', () => {
+            kioskCustomerId.value = consumerFinalId;
+            kioskCustomerName.value = 'Consumidor Final';
+            if (kioskDocumentDisplay) kioskDocumentDisplay.value = defaultKioskDocLabel;
+            clearCustomerBtn.classList.add('d-none');
+            showToast('Cliente restablecido a Consumidor Final');
+        });
+
+        window.addEventListener('codex:customer-created', (event) => {
+            const newCustomer = event.detail.customer;
+            if (newCustomer) {
+                customers.push(newCustomer);
+                kioskCustomerId.value = newCustomer.id;
+                kioskCustomerName.value = newCustomer.name;
+                if (kioskDocumentDisplay) kioskDocumentDisplay.value = (newCustomer.document_type || 'DOC') + ' ' + (newCustomer.document_number || '');
+                clearCustomerBtn.classList.remove('d-none');
+                showToast('Cliente seleccionado: ' + newCustomer.name);
+            }
         });
 
         // ── Keyboard shortcuts ──────────────────────────────

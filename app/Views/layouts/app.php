@@ -300,6 +300,16 @@ $isPopup = $request->getGet('popup') === '1';
                         return;
                     }
 
+                    if (event.data.type === 'codex-customer-created') {
+                        closePopup();
+                        const customerEvent = new CustomEvent('codex:customer-created', { detail: event.data });
+                        window.dispatchEvent(customerEvent);
+                        if (!document.getElementById('sale-customer-id') && !document.getElementById('kiosk-customer-id')) {
+                            window.location.href = event.data.redirectUrl || window.location.href;
+                        }
+                        return;
+                    }
+
                     if (event.data.type === 'codex-popup-close') {
                         closePopup();
                         window.location.href = event.data.redirectUrl || window.location.href;

@@ -22,17 +22,14 @@ $selectedCompanyId = $selectedCompanyId ?? '';
                 <button class="btn btn-outline-dark icon-btn" title="Cambiar empresa" aria-label="Cambiar empresa"><i class="bi bi-arrow-repeat"></i></button>
             </form>
         <?php endif; ?>
-        <a href="<?= site_url('ventas/reportes' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark">Reportes</a>
+        <a href="<?= site_url('ventas/reportes' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" title="Reportes" aria-label="Reportes"><i class="bi bi-graph-up-arrow"></i></a>
         <?php if ($context['canManage']): ?>
-            <a href="<?= site_url('ventas/pos' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-dark">POS</a>
-            <a href="<?= site_url('ventas/kiosco' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark">Kiosco</a>
-            <a href="<?= site_url('ventas/listas-precio/nueva' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark" data-popup="true" data-popup-title="Lista de precios" data-popup-subtitle="Configurar precios comerciales por producto.">Lista de precios</a>
-            <a href="<?= site_url('ventas/promociones/nueva' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark" data-popup="true" data-popup-title="Promocion" data-popup-subtitle="Crear promociones comerciales activas.">Promociones</a>
+            <a href="<?= site_url('ventas/pos' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-dark icon-btn" title="POS" aria-label="POS"><i class="bi bi-display"></i></a>
+            <a href="<?= site_url('ventas/kiosco' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" title="Kiosco" aria-label="Kiosco"><i class="bi bi-shop"></i></a>
+            <a href="<?= site_url('ventas/listas-precio/nueva' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Lista de precios" data-popup-subtitle="Configurar precios comerciales por producto." title="Lista de precios" aria-label="Lista de precios"><i class="bi bi-tags"></i></a>
+            <a href="<?= site_url('ventas/promociones/nueva' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Promocion" data-popup-subtitle="Crear promociones comerciales activas." title="Promociones" aria-label="Promociones"><i class="bi bi-percent"></i></a>
         <?php endif; ?>
-        <?php if ($context['canManage']): ?>
-            <a href="<?= site_url('ventas/clientes/nuevo' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark" data-popup="true" data-popup-title="Cliente" data-popup-subtitle="Alta rapida de cliente para ventas.">Nuevo cliente</a>
-            <!--<a href="<?= site_url('ventas/nueva' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-dark" data-popup="true" data-popup-title="Venta" data-popup-subtitle="Crear venta integrada con inventario.">Nueva venta</a>-->
-        <?php endif; ?>
+        <a href="<?= site_url('ventas/clientes/nuevo' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Cliente" data-popup-subtitle="Alta rapida de cliente para ventas." title="Nuevo cliente" aria-label="Nuevo cliente"><i class="bi bi-person-plus"></i></a>
     </div>
 </div>
 <?php
@@ -88,20 +85,52 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
 
             <div class="col-12">
                 <div class="row g-3">
-                    <div class="col-md-4">
+                    <?php
+                    $selectedCustomerId = old('customer_id', $sale['customer_id'] ?? '');
+                    $selectedCustomer = null;
+                    foreach ($customers as $c) {
+                        if ($c['id'] === $selectedCustomerId) {
+                            $selectedCustomer = $c;
+                            break;
+                        }
+                    }
+                    if (!$selectedCustomer && !empty($customers)) {
+                        foreach ($customers as $c) {
+                            if ($c['name'] === 'Consumidor Final') {
+                                $selectedCustomer = $c;
+                                break;
+                            }
+                        }
+                        if (!$selectedCustomer) {
+                            $selectedCustomer = $customers[0];
+                        }
+                    }
+                    $consumerFinalId = '';
+                    foreach ($customers as $c) {
+                        if ($c['name'] === 'Consumidor Final') {
+                            $consumerFinalId = $c['id'];
+                            break;
+                        }
+                    }
+                    ?>
+                    <div class="col-md-3">
                         <label class="form-label">Fecha y hora</label>
                         <input type="datetime-local" name="issue_date" class="form-control" value="<?= esc(old('issue_date', ! empty($sale['issue_date']) ? date('Y-m-d\TH:i', strtotime($sale['issue_date'])) : date('Y-m-d\TH:i'))) ?>">
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label">Cliente</label>
-                        <select name="customer_id" class="form-select">
-                            <!-- <option value="">Consumidor Final</option> -->
-                            <?php foreach ($customers as $customer): ?>
-                                <option value="<?= esc($customer['id']) ?>" <?= old('customer_id', $sale['customer_id'] ?? '') === $customer['id'] ? 'selected' : '' ?>><?= esc($customer['name']) ?></option>
-                            <?php endforeach; ?>
-                        </select>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="sale-customer-name" value="<?= esc($selectedCustomer['name'] ?? '') ?>" readonly>
+                            <input type="hidden" name="customer_id" id="sale-customer-id" value="<?= esc($selectedCustomer['id'] ?? '') ?>">
+                            <button type="button" class="btn btn-outline-dark" id="open-customer-search" title="Buscar cliente" aria-label="Buscar cliente"><i class="bi bi-search"></i></button>
+                            <button type="button" class="btn btn-outline-danger <?= ($selectedCustomer && $selectedCustomer['id'] !== $consumerFinalId) ? '' : 'd-none' ?>" id="clear-customer" title="Quitar cliente" aria-label="Quitar cliente"><i class="bi bi-x-lg"></i></button>
+                        </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
+                        <label class="form-label">Documento</label>
+                        <input type="text" class="form-control" id="sale-customer-doc" value="<?= esc(($selectedCustomer['document_type'] ?? 'DOC') . ' ' . ($selectedCustomer['document_number'] ?? '-')) ?>" readonly>
+                    </div>
+                    <div class="col-md-3">
                         <label class="form-label">Deposito origen</label>
                         <select name="warehouse_id" class="form-select" id="sale-warehouse" required>
                             <?php foreach ($warehouses as $warehouse): ?>
@@ -270,10 +299,37 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
         </div>
     </div>
 </div>
+<div class="modal fade" id="customerSearchModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg">
+            <div class="modal-header">
+                <div>
+                    <h2 class="h5 mb-1">Buscar cliente</h2>
+                    <p class="text-secondary mb-0">Busca por nombre o documento y selecciona el cliente.</p>
+                </div>
+                <button type="button" class="btn btn-outline-dark icon-btn" data-bs-dismiss="modal" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label">Cliente</label>
+                    <input type="text" id="customer-search" class="form-control" placeholder="Escribe el nombre o documento para buscar..." autocomplete="off">
+                </div>
+                <div class="small text-secondary mb-3">
+                    Coincidencias: <span class="fw-semibold" id="customer-results-count">0</span>
+                </div>
+                <div id="customer-search-results" class="list-group border rounded-4 overflow-auto" style="max-height: 360px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-dark icon-btn" data-bs-dismiss="modal" title="Cancelar" aria-label="Cancelar"><i class="bi bi-x-lg"></i></button>
+            </div>
+        </div>
+    </div>
+</div>
 <script>
 (() => {
     const products = <?= json_encode($productCatalog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     const taxes = <?= json_encode($taxCatalog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    const customers = <?= json_encode($customers, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     const existingItems = <?= json_encode(array_values(array_map(static function (array $item): array { return ['product_id' => $item['product_id'], 'quantity' => (float) ($item['quantity'] ?? 0), 'unit_price' => (float) ($item['unit_price'] ?? 0), 'discount_rate' => (float) ($item['discount_rate'] ?? 0), 'tax_id' => $item['tax_id'] ?? '']; }, $saleItems)), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     const existingPayments = <?= json_encode(array_values(array_map(static function (array $payment): array { return ['payment_method' => $payment['payment_method'] ?? '', 'amount' => (float) ($payment['amount'] ?? 0), 'reference' => $payment['reference'] ?? '', 'paid_at' => ! empty($payment['paid_at']) ? date('Y-m-d\TH:i', strtotime($payment['paid_at'])) : '', 'notes' => $payment['notes'] ?? '']; }, $salePayments)), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     const body = document.getElementById('sale-items-body');
@@ -286,13 +342,39 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
     const globalDiscount = document.getElementById('global-discount');
     const searchModalElement = document.getElementById('saleSearchModal');
     const acceptSearchButton = document.getElementById('accept-sale-search');
-    if (!body || !paymentsBody || !warehouseField || !globalDiscount || !searchField || !resultsContainer || !resultsCount || !openSearchButton || !searchModalElement || !acceptSearchButton) return;
+
+    const customerSelect = document.getElementById('sale-customer-id');
+    const customerNameField = document.getElementById('sale-customer-name');
+    const customerDocField = document.getElementById('sale-customer-doc');
+    const clearCustomerBtn = document.getElementById('clear-customer');
+    const openCustomerSearchButton = document.getElementById('open-customer-search');
+    const customerSearchField = document.getElementById('customer-search');
+    const customerResultsContainer = document.getElementById('customer-search-results');
+    const customerResultsCount = document.getElementById('customer-results-count');
+    const customerSearchModalElement = document.getElementById('customerSearchModal');
+
+    if (!body || !paymentsBody || !warehouseField || !globalDiscount || !searchField || !resultsContainer || !resultsCount || !openSearchButton || !searchModalElement || !acceptSearchButton || !customerSelect || !customerNameField || !customerDocField || !clearCustomerBtn || !openCustomerSearchButton || !customerSearchField || !customerResultsContainer || !customerResultsCount || !customerSearchModalElement) return;
+
     const resolveSearchModal = () => {
         if (!window.bootstrap || !window.bootstrap.Modal) {
             return null;
         }
-
         return window.bootstrap.Modal.getOrCreateInstance(searchModalElement);
+    };
+
+    const resolveCustomerSearchModal = () => {
+        if (!window.bootstrap || !window.bootstrap.Modal) {
+            return null;
+        }
+        return window.bootstrap.Modal.getOrCreateInstance(customerSearchModalElement);
+    };
+
+    const setSelectValue = (name, value) => {
+        const select = document.querySelector(`select[name="${name}"]`);
+        if (select && value) {
+            select.value = value;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+        }
     };
     const productMap = Object.fromEntries(products.map((p) => [p.id, p]));
     const taxMap = Object.fromEntries(taxes.map((t) => [t.id, t]));
@@ -502,8 +584,117 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
         searchModal?.hide();
     });
 
+    // ── Customer search implementation ───────────────────
+    const matchingCustomers = (term) => {
+        const normalized = term.trim().toLowerCase();
+        if (normalized === '') {
+            return [];
+        }
+        return customers.filter((customer) => {
+            const haystack = `${customer.name} ${customer.document_number || ''} ${customer.email || ''} ${customer.phone || ''}`.toLowerCase();
+            return haystack.includes(normalized);
+        }).slice(0, 12);
+    };
+
+    const renderCustomerResults = (results) => {
+        customerResultsContainer.innerHTML = '';
+        customerResultsCount.textContent = String(results.length);
+        if (results.length === 0) { return; }
+
+        results.forEach((customer) => {
+            const option = document.createElement('button');
+            option.type = 'button';
+            option.className = 'list-group-item list-group-item-action text-start';
+            option.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="fw-semibold">${customer.name}</div>
+                        <div class="small text-secondary">
+                            ${customer.document_type || 'DOC'}: ${customer.document_number || '-'} 
+                            ${customer.email ? `· ${customer.email}` : ''}
+                        </div>
+                    </div>
+                    <div>
+                        <span class="badge bg-light text-dark">${customer.tax_profile || 'Cliente'}</span>
+                    </div>
+                </div>
+            `;
+            option.addEventListener('click', () => {
+                customerSelect.value = customer.id;
+                customerSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                setSelectValue('price_list_id', customer.price_list_id);
+                setSelectValue('sales_agent_id', customer.sales_agent_id);
+                setSelectValue('sales_zone_id', customer.sales_zone_id);
+                setSelectValue('sales_condition_id', customer.sales_condition_id);
+                resolveCustomerSearchModal()?.hide();
+            });
+            customerResultsContainer.appendChild(option);
+        });
+    };
+
+    openCustomerSearchButton.addEventListener('click', () => {
+        const searchModal = resolveCustomerSearchModal();
+        if (!searchModal) return;
+        customerSearchField.value = '';
+        renderCustomerResults([]);
+        customerResultsCount.textContent = '0';
+        searchModal.show();
+        setTimeout(() => customerSearchField.focus(), 150);
+    });
+
+    customerSearchField.addEventListener('input', () => renderCustomerResults(matchingCustomers(customerSearchField.value)));
+    customerSearchField.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            const first = customerResultsContainer.querySelector('button');
+            if (first) first.click();
+        }
+    });
+
+    const consumerFinal = customers.find(c => c.name === 'Consumidor Final');
+    const consumerFinalId = consumerFinal ? consumerFinal.id : '';
+
+    const updateCustomerInfo = () => {
+        const selectedId = customerSelect.value;
+        const customer = customers.find(c => c.id === selectedId);
+        if (customer) {
+            customerNameField.value = customer.name;
+            customerDocField.value = `${customer.document_type || 'DOC'} ${customer.document_number || '-'}`;
+            if (customer.id !== consumerFinalId) {
+                clearCustomerBtn.classList.remove('d-none');
+            } else {
+                clearCustomerBtn.classList.add('d-none');
+            }
+        } else {
+            customerNameField.value = '';
+            customerDocField.value = '';
+            clearCustomerBtn.classList.add('d-none');
+        }
+    };
+
+    customerSelect.addEventListener('change', updateCustomerInfo);
+
+    clearCustomerBtn.addEventListener('click', () => {
+        customerSelect.value = consumerFinalId;
+        customerSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    window.addEventListener('codex:customer-created', (event) => {
+        const newCustomer = event.detail.customer;
+        if (newCustomer) {
+            customers.push(newCustomer);
+            customerSelect.value = newCustomer.id;
+            customerSelect.dispatchEvent(new Event('change', { bubbles: true }));
+            setSelectValue('price_list_id', newCustomer.price_list_id);
+            setSelectValue('sales_agent_id', newCustomer.sales_agent_id);
+            setSelectValue('sales_zone_id', newCustomer.sales_zone_id);
+            setSelectValue('sales_condition_id', newCustomer.sales_condition_id);
+        }
+    });
+
     existingItems.forEach((item) => addItemRow(item));
     existingPayments.forEach((payment) => addPaymentRow(payment));
+    updateCustomerInfo();
     refreshItemStocks();
     syncTotals();
 })();

@@ -7,9 +7,9 @@
         <p class="text-secondary mb-0">Indicadores comerciales, top productos, clientes y trazabilidad con inventario.</p>
     </div>
     <div class="d-flex gap-2">
-        <a href="<?= site_url('ventas/reportes/csv' . (! empty($companies) ? '?company_id=' . $selectedCompanyId . '&date_from=' . ($filters['date_from'] ?? '') . '&date_to=' . ($filters['date_to'] ?? '') : '')) ?>" class="btn btn-outline-success">CSV</a>
-        <a href="<?= site_url('ventas/reportes/pdf' . (! empty($companies) ? '?company_id=' . $selectedCompanyId . '&date_from=' . ($filters['date_from'] ?? '') . '&date_to=' . ($filters['date_to'] ?? '') : '')) ?>" class="btn btn-outline-danger" target="_blank">PDF</a>
-        <a href="<?= site_url('ventas' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark">Volver</a>
+        <a href="<?= site_url('ventas/reportes/csv' . (! empty($companies) ? '?company_id=' . $selectedCompanyId . '&date_from=' . ($filters['date_from'] ?? '') . '&date_to=' . ($filters['date_to'] ?? '') : '')) ?>" class="btn btn-outline-success icon-btn" title="Exportar CSV" aria-label="Exportar CSV"><i class="bi bi-filetype-csv"></i></a>
+        <a href="<?= site_url('ventas/reportes/pdf' . (! empty($companies) ? '?company_id=' . $selectedCompanyId . '&date_from=' . ($filters['date_from'] ?? '') . '&date_to=' . ($filters['date_to'] ?? '') : '')) ?>" class="btn btn-outline-danger icon-btn" target="_blank" title="Exportar PDF" aria-label="Exportar PDF"><i class="bi bi-file-earmark-pdf"></i></a>
+        <a href="<?= site_url('ventas' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" title="Volver a ventas" aria-label="Volver a ventas"><i class="bi bi-arrow-left"></i></a>
     </div>
 </div>
 

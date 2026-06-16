@@ -6,12 +6,12 @@
         <p class="text-secondary mb-0">Estructura del plan contable, libros y balances.</p>
     </div>
     <div class="d-flex gap-2">
-        <a href="<?= site_url('contabilidad') ?>" class="btn btn-outline-dark btn-sm"><i class="bi bi-list-columns-reverse me-1" title="Plan de Cuentas" aria-label="Plan de Cuentas"></i></a>
-        <a href="<?= site_url('contabilidad/diario') ?>" class="btn btn-outline-dark btn-sm"><i class="bi bi-journal-text me-1" title="Libro Diario" aria-label="Libro Diario"></i></a>
-        <a href="<?= site_url('contabilidad/balance-comprobacion') ?>" class="btn btn-outline-dark btn-sm"><i class="bi bi-calculator me-1" title="Balance Comp." aria-label="Balance Comp."></i></a>
-        <a href="<?= site_url('contabilidad/balance-general') ?>" class="btn btn-outline-dark btn-sm"><i class="bi bi-bar-chart me-1" title="Balance General" aria-label="Balance General"></i></a>
-        <a href="<?= site_url('contabilidad/resultados') ?>" class="btn btn-outline-dark btn-sm"><i class="bi bi-graph-up me-1" title="Resultados" aria-label="Resultados"></i></a>
-        <a href="<?= site_url('contabilidad/asientos/nuevo') ?>" class="btn btn-dark btn-sm" data-popup="true" data-popup-title="Asiento contable" data-popup-subtitle="Registrar nuevo asiento."><i class="bi bi-plus-lg me-1"></i> Nuevo Asiento</a>
+        <a href="<?= site_url('contabilidad') ?>" class="btn btn-outline-dark icon-btn" title="Plan de Cuentas" aria-label="Plan de Cuentas"><i class="bi bi-list-columns-reverse"></i></a>
+        <a href="<?= site_url('contabilidad/diario') ?>" class="btn btn-outline-dark icon-btn" title="Libro Diario" aria-label="Libro Diario"><i class="bi bi-journal-text"></i></a>
+        <a href="<?= site_url('contabilidad/balance-comprobacion') ?>" class="btn btn-outline-dark icon-btn" title="Balance Comp." aria-label="Balance Comp."><i class="bi bi-calculator"></i></a>
+        <a href="<?= site_url('contabilidad/balance-general') ?>" class="btn btn-outline-dark icon-btn" title="Balance General" aria-label="Balance General"><i class="bi bi-bar-chart"></i></a>
+        <a href="<?= site_url('contabilidad/resultados') ?>" class="btn btn-outline-dark icon-btn" title="Resultados" aria-label="Resultados"><i class="bi bi-graph-up"></i></a>
+        <a href="<?= site_url('contabilidad/asientos/nuevo') ?>" class="btn btn-dark icon-btn" data-popup="true" data-popup-title="Asiento contable" data-popup-subtitle="Registrar nuevo asiento." title="Nuevo Asiento" aria-label="Nuevo Asiento"><i class="bi bi-plus-lg"></i></a>
     </div>
 </div>
 <div class="card border-0 shadow-sm rounded-4">

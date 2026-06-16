@@ -45,8 +45,6 @@ class SaleModel extends BaseUuidModel
         'customer_name_snapshot',
         'customer_document_snapshot',
         'customer_tax_profile',
-        'customer_address_snapshot',
-        'customer_phone_snapshot',
         'price_list_name',
         'price_list_id',
         'promotion_snapshot',

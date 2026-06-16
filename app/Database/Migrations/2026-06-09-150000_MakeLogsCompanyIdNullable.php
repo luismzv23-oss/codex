@@ -53,6 +53,7 @@ class MakeLogsCompanyIdNullable extends Migration
             ]
         ]);
 
+        
         if ($isMySQL) {
             try {
                 $db->query('ALTER TABLE integration_logs ADD CONSTRAINT integration_logs_company_id_foreign FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE ON UPDATE CASCADE');

@@ -291,7 +291,7 @@
                                 <?= esc(($sale['document_type_name'] ?? 'Venta') . ' ' . $sale['sale_number']) ?>
                                 <div class="small text-secondary"><?= esc($sale['created_by_name'] ?: '-') ?></div>
                             </td>
-                            <td><?= esc($sale['customer_name'] ?: ($sale['customer_name_snapshot'] ?? 'Consumidor Final')) ?>
+                            <td><?= esc(trim((string) ($sale['customer_name_snapshot'] ?? '')) ?: ($sale['customer_name'] ?? 'Consumidor Final')) ?>
                             </td>
                             <td>
                                 <?php if (!empty($sale['cae'])): ?>

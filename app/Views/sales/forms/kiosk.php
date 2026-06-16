@@ -51,6 +51,23 @@ $productCatalog = array_values(array_map(static function (array $product): array
             <input type="hidden" name="pos_mode" value="1">
             <input type="hidden" name="notes" value="Ticket kiosco">
 
+            <div class="col-lg-3 col-md-6">
+                <label class="form-label">Nombre y apellido</label>
+                <input type="text" name="customer_name" class="form-control" placeholder="Consumidor Final" autocomplete="off">
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <label class="form-label">DNI / CUIT</label>
+                <input type="text" name="customer_document" class="form-control" placeholder="Opcional" autocomplete="off">
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <label class="form-label">Domicilio</label>
+                <input type="text" name="customer_address" class="form-control" placeholder="Opcional" autocomplete="off">
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <label class="form-label">Telefono</label>
+                <input type="text" name="customer_phone" class="form-control" placeholder="Opcional" autocomplete="off">
+            </div>
+
             <div class="col-lg-4">
                 <label class="form-label">Deposito</label>
                 <select name="warehouse_id" class="form-select" required>
@@ -202,6 +219,8 @@ $productCatalog = array_values(array_map(static function (array $product): array
         const currencyField = document.getElementById('kiosk-currency');
         const referenceField = document.getElementById('kiosk-reference');
         const form = document.getElementById('kiosk-form');
+        const customerNameField = form.querySelector('input[name="customer_name"]');
+        const customerDocumentField = form.querySelector('input[name="customer_document"]');
         const warehouseField = form.querySelector('select[name="warehouse_id"]');
         const printButton = document.getElementById('kiosk-print-preview');
         const cancelButton = document.getElementById('kiosk-cancel-button');
@@ -504,8 +523,11 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 const discountText = item.discount_rate > 0 ? ` <span style="font-size:10px">- ${Number(item.discount_rate).toFixed(0)}%</span>` : '';
                 return `<div class="ticket-line"><div class="ticket-name">${item.sku} ${item.name}</div><div class="ticket-meta">${item.brand || 'Sin marca'}</div><div class="ticket-row"><span>${formatMoney(item.quantity)} x ${formatMoney(item.unit_price)}${discountText}</span><strong>${formatMoney(amount)}</strong></div></div>`;
             }).join('');
+            const customerName = customerNameField && customerNameField.value.trim() ? customerNameField.value.trim() : 'Consumidor Final';
+            const customerDoc  = customerDocumentField && customerDocumentField.value.trim() ? customerDocumentField.value.trim() : '';
+            const customerLine = `<div class="ticket-small" style="margin-top:6px;"><strong>${customerName}</strong>${customerDoc ? ' &bull; ' + customerDoc : ''}</div>`;
             const change = Math.max(0, (parseFloat(paidAmount.value) || 0) - totalAmount());
-            return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Ticket 80mm</title><style>@page{size:80mm auto;margin:4mm;}*{box-sizing:border-box;}body{margin:0;font-family:"Courier New",monospace;background:#f7f4ef;color:#111;}.preview-shell{min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:18px;}.preview-card{width:100%;max-width:360px;}.ticket{width:80mm;max-width:100%;background:#fff;margin:0 auto;padding:5mm 4mm;border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,.14);}.ticket-center{text-align:center;}.ticket-small{font-size:11px;color:#555;}.ticket-line{border-bottom:1px dashed #bbb;padding:6px 0;}.ticket-name{font-size:12px;font-weight:700;margin-bottom:2px;}.ticket-meta{font-size:11px;color:#666;margin-bottom:4px;}.ticket-row{display:flex;justify-content:space-between;gap:8px;font-size:12px;}.ticket-total{border-top:1px solid #000;margin-top:8px;padding-top:8px;display:flex;justify-content:space-between;font-size:15px;font-weight:700;}.preview-actions{display:flex;justify-content:center;gap:10px;margin-top:14px;}.preview-actions button{border:1px solid #1f2328;border-radius:10px;background:#fff;padding:9px 14px;cursor:pointer;}@media print{body{background:#fff;}.preview-actions{display:none;}.ticket{box-shadow:none;border-radius:0;margin:0;width:72mm;}.preview-shell{padding:0;}}</style></head><body><div class="preview-shell"><div class="preview-card"><div class="ticket"><div class="ticket-center"><div><strong><?= esc($settings['kiosk_document_label'] ?? 'Ticket Consumidor Final') ?></strong></div><div class="ticket-small">${printedAt}</div><div class="ticket-small">${currencyField.options[currencyField.selectedIndex].text}</div><div class="ticket-small">Referencia: ${referenceField.value}</div></div>${rows}<div class="ticket-total"><span>TOTAL</span><span>${totalLabel.textContent}</span></div><div class="ticket-small" style="margin-top:8px;">Pago: ${paymentMethod.options[paymentMethod.selectedIndex].text}</div><div class="ticket-small">Cobrado: ${formatMoney(paidAmount.value || 0)}</div>${change > 0 ? '<div class="ticket-small" style="font-weight:700;color:#198754;">Vuelto: ' + formatMoney(change) + '</div>' : ''}</div><div class="preview-actions"><button type="button" onclick="window.print()">Imprimir</button><button type="button" onclick="window.close()">Cerrar</button></div></div></div></body></html>`;
+            return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Ticket 80mm</title><style>@page{size:80mm auto;margin:4mm;}*{box-sizing:border-box;}body{margin:0;font-family:"Courier New",monospace;background:#f7f4ef;color:#111;}.preview-shell{min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:18px;}.preview-card{width:100%;max-width:360px;}.ticket{width:80mm;max-width:100%;background:#fff;margin:0 auto;padding:5mm 4mm;border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,.14);}.ticket-center{text-align:center;}.ticket-small{font-size:11px;color:#555;}.ticket-line{border-bottom:1px dashed #bbb;padding:6px 0;}.ticket-name{font-size:12px;font-weight:700;margin-bottom:2px;}.ticket-meta{font-size:11px;color:#666;margin-bottom:4px;}.ticket-row{display:flex;justify-content:space-between;gap:8px;font-size:12px;}.ticket-total{border-top:1px solid #000;margin-top:8px;padding-top:8px;display:flex;justify-content:space-between;font-size:15px;font-weight:700;}.preview-actions{display:flex;justify-content:center;gap:10px;margin-top:14px;}.preview-actions button{border:1px solid #1f2328;border-radius:10px;background:#fff;padding:9px 14px;cursor:pointer;}@media print{body{background:#fff;}.preview-actions{display:none;}.ticket{box-shadow:none;border-radius:0;margin:0;width:72mm;}.preview-shell{padding:0;}}</style></head><body><div class="preview-shell"><div class="preview-card"><div class="ticket"><div class="ticket-center"><div><strong><?= esc($settings['kiosk_document_label'] ?? 'Ticket Consumidor Final') ?></strong></div><div class="ticket-small">${printedAt}</div><div class="ticket-small">${currencyField.options[currencyField.selectedIndex].text}</div><div class="ticket-small">Referencia: ${referenceField.value}</div></div>${customerLine}${rows}<div class="ticket-total"><span>TOTAL</span><span>${totalLabel.textContent}</span></div><div class="ticket-small" style="margin-top:8px;">Pago: ${paymentMethod.options[paymentMethod.selectedIndex].text}</div><div class="ticket-small">Cobrado: ${formatMoney(paidAmount.value || 0)}</div>${change > 0 ? '<div class="ticket-small" style="font-weight:700;color:#198754;">Vuelto: ' + formatMoney(change) + '</div>' : ''}</div><div class="preview-actions"><button type="button" onclick="window.print()">Imprimir</button><button type="button" onclick="window.close()">Cerrar</button></div></div></div></body></html>`;
         };
 
         // ── Event listeners ─────────────────────────────────

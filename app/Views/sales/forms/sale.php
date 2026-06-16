@@ -101,6 +101,23 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
                             <?php endforeach; ?>
                         </select>
                     </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Nombre y apellido</label>
+                        <input type="text" name="customer_name" class="form-control" placeholder="Consumidor Final" value="<?= esc(old('customer_name', $sale['customer_name_snapshot'] ?? '')) ?>">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">DNI / CUIT</label>
+                        <input type="text" name="customer_document" class="form-control" placeholder="Opcional" value="<?= esc(old('customer_document', $sale['customer_document_snapshot'] ?? '')) ?>">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Domicilio</label>
+                        <input type="text" name="customer_address" class="form-control" placeholder="Opcional" value="<?= esc(old('customer_address', $sale['customer_address_snapshot'] ?? '')) ?>">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Telefono</label>
+                        <input type="text" name="customer_phone" class="form-control" placeholder="Opcional" value="<?= esc(old('customer_phone', $sale['customer_phone_snapshot'] ?? '')) ?>">
+                    </div>
+
                     <div class="col-md-4">
                         <label class="form-label">Deposito origen</label>
                         <select name="warehouse_id" class="form-select" id="sale-warehouse" required>

@@ -33,10 +33,16 @@
             </tr>
             <tr>
                 <td colspan="2"><strong>Cliente</strong><br><?= esc($sale['customer_name_snapshot'] ?? $customer['billing_name'] ?? $customer['name'] ?? 'Consumidor Final') ?></td>
-                <td><strong>Documento</strong><br><?= esc($sale['customer_document_snapshot'] ?? $customer['document_number'] ?? '-') ?></td>
+                <td><strong>Documento</strong><br><?= esc(! empty($sale['customer_document_snapshot']) ? $sale['customer_document_snapshot'] : '-') ?></td>
                 <td><strong>Moneda</strong><br><?= esc($sale['currency_code'] ?? 'ARS') ?></td>
                 <td><strong>Vencimiento</strong><br><?= esc(! empty($sale['due_date']) ? date('d/m/Y', strtotime($sale['due_date'])) : '-') ?></td>
             </tr>
+            <?php if (! empty($sale['customer_address_snapshot']) || ! empty($sale['customer_phone_snapshot'])): ?>
+            <tr>
+                <td colspan="3"><strong>Domicilio</strong><br><?= esc($sale['customer_address_snapshot'] ?? '-') ?></td>
+                <td colspan="2"><strong>Telefono</strong><br><?= esc($sale['customer_phone_snapshot'] ?? '-') ?></td>
+            </tr>
+            <?php endif; ?>
             <tr>
                 <td colspan="2"><strong>Perfil fiscal</strong><br><?= esc($sale['customer_tax_profile'] ?? $customer['vat_condition'] ?? $customer['tax_profile'] ?? 'Consumidor Final') ?></td>
                 <td><strong>Documento tipo</strong><br><?= esc($sale['document_type_name'] ?? $sale['document_code'] ?? '-') ?></td>

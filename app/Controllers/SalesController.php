@@ -2743,9 +2743,21 @@ class SalesController extends BaseController
                 'payment_status' => $totals['payment_status'],
                 'currency_code' => $currencyCode,
                 'fiscal_profile' => $customer['tax_profile'] ?? ($documentContext['documentType']['channel'] === 'kiosk' ? 'consumidor_final' : 'cliente'),
-                'customer_name_snapshot' => $customer['billing_name'] ?? $customer['name'] ?? 'Consumidor Final',
-                'customer_document_snapshot' => trim(($customer['document_type'] ?? '') . ' ' . ($customer['document_number'] ?? '')),
-                'customer_tax_profile' => $customer['vat_condition'] ?? $customer['tax_profile'] ?? 'Consumidor Final',
+                'customer_name_snapshot' => trim((string) ($input['customer_name'] ?? '')) !== ''
+                    ? trim((string) $input['customer_name'])
+                    : ($customer['billing_name'] ?? $customer['name'] ?? 'Consumidor Final'),
+                'customer_document_snapshot' => trim((string) ($input['customer_document'] ?? '')) !== ''
+                    ? trim((string) $input['customer_document'])
+                    : null,
+                'customer_tax_profile' => (function () use ($input, $customer): string {
+                    $doc = preg_replace('/\D/', '', (string) ($input['customer_document'] ?? ''));
+                    if (strlen($doc) === 11) {
+                        return 'Responsable Inscripto';
+                    }
+                    return $customer['vat_condition'] ?? $customer['tax_profile'] ?? 'Consumidor Final';
+                })(),
+                'customer_address_snapshot' => trim((string) ($input['customer_address'] ?? '')) !== '' ? trim((string) $input['customer_address']) : null,
+                'customer_phone_snapshot'   => trim((string) ($input['customer_phone'] ?? '')) !== ''   ? trim((string) $input['customer_phone'])   : null,
                 'price_list_name' => $priceList['name'] ?? trim((string) ($input['price_list_name'] ?? '')),
                 'price_list_id' => $priceListId,
                 'promotion_snapshot' => $promotionSnapshot === [] ? null : json_encode($promotionSnapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),

@@ -91,7 +91,7 @@
                                 <?php endif; ?>
                                 <?php if (! empty($sale['cae'])): ?><div class="small text-success">CAE: <?= esc($sale['cae']) ?></div><?php endif; ?>
                             </td>
-                            <td><?= esc(trim((string) ($sale['customer_name_snapshot'] ?? '')) ?: ($sale['customer_name'] ?? 'Consumidor Final')) ?></td>
+                            <td><?= esc($sale['customer_name'] ?: ($sale['customer_name_snapshot'] ?? 'Consumidor Final')) ?></td>
                             <td><?= esc($sale['point_of_sale_name'] ?: '-') ?></td>
                             <td><?= esc($sale['warehouse_name'] ?: '-') ?></td>
                             <td><?= esc(match ($sale['status']) {

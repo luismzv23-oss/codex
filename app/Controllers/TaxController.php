@@ -13,7 +13,7 @@ class TaxController extends BaseController
     {
         $user = $this->currentUser();
         if (!$user) return redirect()->to(site_url('login'));
-        $companyId = session('active_company_id') ?? ($user['company_id'] ?? null);
+        $companyId = $this->resolveActiveCompanyId();
         if (!$companyId) return redirect()->to(site_url('dashboard'))->with('error', 'Seleccione una empresa.');
         $company = db_connect()->table('companies')->where('id', $companyId)->get()->getRowArray();
         if (!$company) return redirect()->to(site_url('dashboard'))->with('error', 'Empresa no encontrada.');
@@ -32,15 +32,13 @@ class TaxController extends BaseController
         $libroIva = new LibroIvaDigitalService();
         $sicore   = new SicoreService();
 
-        return view('taxes/index', [
+        return view('taxes/index', $this->taxViewData($ctx, [
             'pageTitle'    => 'Impuestos',
-            'context'      => $ctx,
-            'companyId'    => $companyId,
             'filters'      => ['from' => $from, 'to' => $to],
             'ivaVentas'    => $libroIva->ventasReport($companyId, $from, $to),
             'ivaCompras'   => $libroIva->comprasReport($companyId, $from, $to),
             'sicoreSummary' => $sicore->periodSummary($companyId, $from, $to),
-        ]);
+        ]));
     }
 
     // ── Libro IVA Digital exports ────────────────────────
@@ -105,5 +103,15 @@ class TaxController extends BaseController
             ->setHeader('Content-Type', 'text/plain; charset=UTF-8')
             ->setHeader('Content-Disposition', 'attachment; filename="SICORE_PERCEPCIONES_' . str_replace('-', '', $from) . '.txt"')
             ->setBody($txt);
+    }
+
+    private function taxViewData(array $ctx, array $extra = []): array
+    {
+        return array_merge([
+            'context' => $ctx,
+            'companies' => $this->activeCompanies(),
+            'selectedCompanyId' => $ctx['company']['id'],
+            'companyId' => $ctx['company']['id'],
+        ], $extra);
     }
 }

@@ -3,6 +3,7 @@
 <div class="mb-3"><h2 class="h5 mb-0">Nuevo Asiento Contable</h2></div>
 <form method="post" action="<?= esc($formAction) ?>" id="entryForm">
     <?= csrf_field() ?>
+    <input type="hidden" name="company_id" value="<?= esc($companyId) ?>">
     <?php if ($isPopup ?? false): ?><input type="hidden" name="popup" value="1"><?php endif; ?>
     <div class="row g-3 mb-3">
         <div class="col-md-3"><label class="form-label">Fecha</label><input type="date" name="entry_date" class="form-control" value="<?= date('Y-m-d') ?>" required></div>
@@ -42,7 +43,7 @@
             </table>
         </div>
     </div>
-    <div class="text-end"><button class="btn btn-dark"><i class="bi bi-save"></i> Guardar asiento</button></div>
+    <div class="text-end"><button class="btn btn-dark icon-btn" title="Guardar" aria-label="Guardar"><i class="bi bi-check-lg"></i></button></div>
 </form>
 <script>
 let lineIdx = 2;

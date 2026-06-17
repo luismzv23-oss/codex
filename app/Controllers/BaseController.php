@@ -217,4 +217,48 @@ abstract class BaseController extends Controller
 
         return site_url(ltrim($entryUrl, '/'));
     }
+
+    protected function resolveActiveCompanyId(): ?string
+    {
+        $companyId = trim((string) ($this->request->getGet('company_id') ?: $this->request->getPost('company_id')));
+        if ($companyId !== '') {
+            session()->set('active_company_id', $companyId);
+            return $companyId;
+        }
+
+        $sessionCompanyId = session('active_company_id');
+        if ($sessionCompanyId !== null && $sessionCompanyId !== '') {
+            return $sessionCompanyId;
+        }
+
+        if ($this->isSuperadmin()) {
+            $company = db_connect()->table('companies')->where('active', 1)->orderBy('name', 'ASC')->get()->getRowArray();
+            if ($company) {
+                session()->set('active_company_id', $company['id']);
+                return $company['id'];
+            }
+            return null;
+        }
+
+        $userCompanyId = $this->companyId();
+        if ($userCompanyId) {
+            session()->set('active_company_id', $userCompanyId);
+        }
+        return $userCompanyId;
+    }
+
+    protected function activeCompanies(): array
+    {
+        if ($this->isSuperadmin()) {
+            return db_connect()->table('companies')->where('active', 1)->orderBy('name', 'ASC')->get()->getResultArray();
+        }
+
+        $companyId = $this->companyId();
+        if ($companyId) {
+            return db_connect()->table('companies')->where('id', $companyId)->where('active', 1)->get()->getResultArray();
+        }
+
+        return [];
+    }
 }
+

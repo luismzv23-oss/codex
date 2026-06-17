@@ -6,19 +6,29 @@
         <p class="text-secondary mb-0">Estructura del plan contable, libros y balances.</p>
     </div>
     <div class="d-flex gap-2">
-        <a href="<?= site_url('contabilidad') ?>" class="btn btn-outline-dark btn-sm"><i
+        <?php if (!empty($companies)): ?>
+            <form method="get" action="<?= site_url('contabilidad/balance-comprobacion') ?>" class="d-flex gap-2">
+                <select name="company_id" class="form-select form-select-sm">
+                    <?php foreach ($companies as $company): ?>
+                        <option value="<?= esc($company['id']) ?>" <?= $selectedCompanyId === $company['id'] ? 'selected' : '' ?>>
+                            <?= esc($company['name']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <button class="btn btn-outline-dark btn-sm icon-btn" title="Cambiar empresa" aria-label="Cambiar empresa"><i class="bi bi-arrow-repeat"></i></button>
+            </form>
+        <?php endif; ?>
+        <a href="<?= site_url('contabilidad?company_id=' . $selectedCompanyId) ?>" class="btn btn-outline-dark btn-sm"><i
                 class="bi bi-list-columns-reverse me-1" title="Plan de Cuentas" aria-label="Plan de Cuentas"></i></a>
-        <a href="<?= site_url('contabilidad/diario') ?>" class="btn btn-outline-dark btn-sm"><i
+        <a href="<?= site_url('contabilidad/diario?company_id=' . $selectedCompanyId) ?>" class="btn btn-outline-dark btn-sm"><i
                 class="bi bi-journal-text me-1" title="Libro Diario" aria-label="Libro Diario"></i></a>
-        <a href="<?= site_url('contabilidad/balance-comprobacion') ?>" class="btn btn-outline-dark btn-sm"><i
+        <a href="<?= site_url('contabilidad/balance-comprobacion?company_id=' . $selectedCompanyId) ?>" class="btn btn-outline-dark btn-sm"><i
                 class="bi bi-calculator me-1" title="Balance Comp." aria-label="Balance Comp."></i></a>
-        <a href="<?= site_url('contabilidad/balance-general') ?>" class="btn btn-outline-dark btn-sm"><i
+        <a href="<?= site_url('contabilidad/balance-general?company_id=' . $selectedCompanyId) ?>" class="btn btn-outline-dark btn-sm"><i
                 class="bi bi-bar-chart me-1" title="Balance General" aria-label="Balance General"></i></a>
-        <a href="<?= site_url('contabilidad/resultados') ?>" class="btn btn-outline-dark btn-sm"><i
+        <a href="<?= site_url('contabilidad/resultados?company_id=' . $selectedCompanyId) ?>" class="btn btn-outline-dark btn-sm"><i
                 class="bi bi-graph-up me-1" title="Resultados" aria-label="Resultados"></i></a>
-        <a href="<?= site_url('contabilidad/asientos/nuevo') ?>" class="btn btn-dark btn-sm" data-popup="true"
-            data-popup-title="Asiento contable" data-popup-subtitle="Registrar nuevo asiento."><i
-                class="bi bi-plus-lg me-1"></i> Nuevo Asiento</a>
+        <a href="<?= site_url('contabilidad/asientos/nuevo?company_id=' . $selectedCompanyId) ?>" class="btn btn-dark btn-sm icon-btn" data-popup="true" data-popup-title="Asiento contable" data-popup-subtitle="Registrar nuevo asiento." title="Nuevo Asiento" aria-label="Nuevo Asiento"><i class="bi bi-plus-lg"></i></a>
     </div>
 </div>
 <div class="mb-3">
@@ -26,6 +36,7 @@
     <p class="text-secondary mb-0 small">Sumas y saldos al <?= esc($filters['date'] ?? date('Y-m-d')) ?>.</p>
 </div>
 <form class="row g-2 mb-3">
+    <input type="hidden" name="company_id" value="<?= esc($selectedCompanyId) ?>">
     <div class="col-auto"><input type="date" name="date" class="form-control form-control-sm"
             value="<?= esc($filters['date'] ?? '') ?>"></div>
     <div class="col-auto"><button class="btn btn-outline-dark btn-sm"><i class="bi bi-search"></i></button></div>

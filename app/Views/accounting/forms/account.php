@@ -3,6 +3,7 @@
 <div class="mb-3"><h2 class="h5 mb-0">Nueva Cuenta Contable</h2></div>
 <form method="post" action="<?= esc($formAction) ?>">
     <?= csrf_field() ?>
+    <input type="hidden" name="company_id" value="<?= esc($companyId) ?>">
     <?php if ($isPopup ?? false): ?><input type="hidden" name="popup" value="1"><?php endif; ?>
     <div class="row g-3">
         <div class="col-md-3"><label class="form-label">Codigo</label><input type="text" name="code" class="form-control" required placeholder="1.1.01" value="<?= old('code') ?>"></div>
@@ -42,7 +43,7 @@
         </div>
         <div class="col-md-2"><label class="form-label">Moneda</label><input type="text" name="currency_code" class="form-control" value="ARS"></div>
         <div class="col-md-2"><label class="form-label">Saldo apertura</label><input type="number" step="0.01" name="opening_balance" class="form-control" value="0"></div>
-        <div class="col-12 text-end"><button class="btn btn-dark"><i class="bi bi-save"></i> Guardar</button></div>
+        <div class="col-12 text-end"><button class="btn btn-dark icon-btn" title="Guardar" aria-label="Guardar"><i class="bi bi-check-lg"></i></button></div>
     </div>
 </form>
 <?= $this->endSection() ?>

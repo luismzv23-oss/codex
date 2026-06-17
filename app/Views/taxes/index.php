@@ -2,8 +2,23 @@
 <?= $this->section('content') ?>
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div><h2 class="h5 mb-0">Impuestos</h2><p class="text-secondary mb-0 small">Libro IVA Digital, SICORE, Retenciones y Percepciones.</p></div>
+    <div class="d-flex gap-2">
+        <?php if (!empty($companies)): ?>
+            <form method="get" action="<?= site_url('impuestos') ?>" class="d-flex gap-2">
+                <select name="company_id" class="form-select form-select-sm">
+                    <?php foreach ($companies as $company): ?>
+                        <option value="<?= esc($company['id']) ?>" <?= $selectedCompanyId === $company['id'] ? 'selected' : '' ?>>
+                            <?= esc($company['name']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <button class="btn btn-outline-dark btn-sm icon-btn" title="Cambiar empresa" aria-label="Cambiar empresa"><i class="bi bi-arrow-repeat"></i></button>
+            </form>
+        <?php endif; ?>
+    </div>
 </div>
 <form class="row g-2 mb-4">
+    <input type="hidden" name="company_id" value="<?= esc($selectedCompanyId) ?>">
     <div class="col-auto"><input type="date" name="from" class="form-control form-control-sm" value="<?= esc($filters['from'] ?? '') ?>"></div>
     <div class="col-auto"><input type="date" name="to" class="form-control form-control-sm" value="<?= esc($filters['to'] ?? '') ?>"></div>
     <div class="col-auto"><button class="btn btn-outline-dark btn-sm"><i class="bi bi-search"></i> Filtrar</button></div>
@@ -21,7 +36,7 @@
 <div class="card border-0 shadow-sm rounded-4 mb-4">
     <div class="card-header bg-light rounded-top-4 d-flex justify-content-between align-items-center">
         <span class="fw-semibold"><i class="bi bi-journal-text text-primary"></i> Libro IVA Ventas</span>
-        <a href="<?= site_url('impuestos/iva-ventas/txt') ?>?from=<?= esc($filters['from']) ?>&to=<?= esc($filters['to']) ?>" class="btn btn-outline-primary icon-btn" title="TXT AFIP Ventas (RG 4597)" aria-label="TXT AFIP Ventas (RG 4597)"><i class="bi bi-download"></i></a>
+        <a href="<?= site_url('impuestos/iva-ventas/txt') ?>?from=<?= esc($filters['from']) ?>&to=<?= esc($filters['to']) ?>&company_id=<?= $selectedCompanyId ?>" class="btn btn-outline-primary icon-btn" title="TXT AFIP Ventas (RG 4597)" aria-label="TXT AFIP Ventas (RG 4597)"><i class="bi bi-download"></i></a>
     </div>
     <div class="card-body p-0">
         <table class="table table-hover table-sm align-middle mb-0">
@@ -54,7 +69,7 @@
 <div class="card border-0 shadow-sm rounded-4 mb-4">
     <div class="card-header bg-light rounded-top-4 d-flex justify-content-between align-items-center">
         <span class="fw-semibold"><i class="bi bi-journal-text text-danger"></i> Libro IVA Compras</span>
-        <a href="<?= site_url('impuestos/iva-compras/txt') ?>?from=<?= esc($filters['from']) ?>&to=<?= esc($filters['to']) ?>" class="btn btn-outline-danger icon-btn" title="TXT AFIP Compras (RG 4597)" aria-label="TXT AFIP Compras (RG 4597)"><i class="bi bi-download"></i></a>
+        <a href="<?= site_url('impuestos/iva-compras/txt') ?>?from=<?= esc($filters['from']) ?>&to=<?= esc($filters['to']) ?>&company_id=<?= $selectedCompanyId ?>" class="btn btn-outline-danger icon-btn" title="TXT AFIP Compras (RG 4597)" aria-label="TXT AFIP Compras (RG 4597)"><i class="bi bi-download"></i></a>
     </div>
     <div class="card-body p-0">
         <table class="table table-hover table-sm align-middle mb-0">
@@ -87,8 +102,8 @@
     <div class="card-header bg-light rounded-top-4 d-flex justify-content-between align-items-center">
         <span class="fw-semibold"><i class="bi bi-file-earmark-text text-warning"></i> SICORE — Retenciones y Percepciones</span>
         <div>
-            <a href="<?= site_url('impuestos/sicore/retenciones/txt') ?>?from=<?= esc($filters['from']) ?>&to=<?= esc($filters['to']) ?>" class="btn btn-outline-warning icon-btn" title="Retenciones TXT" aria-label="Retenciones TXT"><i class="bi bi-download"></i></a>
-            <a href="<?= site_url('impuestos/sicore/percepciones/txt') ?>?from=<?= esc($filters['from']) ?>&to=<?= esc($filters['to']) ?>" class="btn btn-outline-warning icon-btn" title="Percepciones TXT" aria-label="Percepciones TXT"><i class="bi bi-download"></i></a>
+            <a href="<?= site_url('impuestos/sicore/retenciones/txt') ?>?from=<?= esc($filters['from']) ?>&to=<?= esc($filters['to']) ?>&company_id=<?= $selectedCompanyId ?>" class="btn btn-outline-warning icon-btn" title="Retenciones TXT" aria-label="Retenciones TXT"><i class="bi bi-download"></i></a>
+            <a href="<?= site_url('impuestos/sicore/percepciones/txt') ?>?from=<?= esc($filters['from']) ?>&to=<?= esc($filters['to']) ?>&company_id=<?= $selectedCompanyId ?>" class="btn btn-outline-warning icon-btn" title="Percepciones TXT" aria-label="Percepciones TXT"><i class="bi bi-download"></i></a>
         </div>
     </div>
     <div class="card-body p-0">

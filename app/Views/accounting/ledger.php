@@ -1,7 +1,16 @@
 <?= $this->extend('layouts/app') ?>
 <?= $this->section('content') ?>
-<div class="mb-3"><h2 class="h5 mb-1"><?= esc($pageTitle) ?></h2><p class="text-secondary mb-0 small">Movimientos de la cuenta <strong><?= esc($account['code'] ?? '') ?> — <?= esc($account['name'] ?? '') ?></strong>.</p></div>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h2 class="h5 mb-1"><?= esc($pageTitle) ?></h2>
+        <p class="text-secondary mb-0 small">Movimientos de la cuenta <strong><?= esc($account['code'] ?? '') ?> — <?= esc($account['name'] ?? '') ?></strong>.</p>
+    </div>
+    <div>
+        <a href="<?= site_url('contabilidad?company_id=' . $selectedCompanyId) ?>" class="btn btn-outline-dark btn-sm icon-btn" title="Volver a Contabilidad" aria-label="Volver a Contabilidad"><i class="bi bi-arrow-left"></i></a>
+    </div>
+</div>
 <form class="row g-2 mb-3">
+    <input type="hidden" name="company_id" value="<?= esc($selectedCompanyId) ?>">
     <div class="col-auto"><input type="date" name="from" class="form-control form-control-sm" value="<?= esc($filters['from'] ?? '') ?>"></div>
     <div class="col-auto"><input type="date" name="to" class="form-control form-control-sm" value="<?= esc($filters['to'] ?? '') ?>"></div>
     <div class="col-auto"><button class="btn btn-outline-dark btn-sm"><i class="bi bi-search"></i></button></div>

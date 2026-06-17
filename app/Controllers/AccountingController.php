@@ -20,7 +20,7 @@ class AccountingController extends BaseController
         if (!$user) {
             return redirect()->to(site_url('login'));
         }
-        $companyId = session('active_company_id') ?? ($user['company_id'] ?? null);
+        $companyId = $this->resolveActiveCompanyId();
         if (!$companyId) {
             return redirect()->to(site_url('dashboard'))->with('error', 'Seleccione una empresa.');
         }
@@ -43,13 +43,11 @@ class AccountingController extends BaseController
             ->orderBy('code')->get()->getResultArray();
         $tree = $this->accounting->chartOfAccounts($companyId);
 
-        return view('accounting/index', [
+        return view('accounting/index', $this->accountingViewData($ctx, [
             'pageTitle'   => 'Contabilidad',
-            'context'     => $ctx,
             'accounts'    => $accounts,
             'tree'        => $tree,
-            'companyId'   => $companyId,
-        ]);
+        ]));
     }
 
     // ── Formulario nueva cuenta ──────────────────────────
@@ -63,14 +61,12 @@ class AccountingController extends BaseController
             ->where('company_id', $companyId)->where('active', 1)->where('is_group', 1)
             ->orderBy('code')->get()->getResultArray();
 
-        return view('accounting/forms/account', [
+        return view('accounting/forms/account', $this->accountingViewData($ctx, [
             'pageTitle'  => 'Nueva cuenta',
-            'context'    => $ctx,
             'parents'    => $parents,
-            'companyId'  => $companyId,
             'formAction' => site_url('contabilidad/cuentas'),
             'isPopup'    => $this->isPopupRequest(),
-        ]);
+        ]));
     }
 
     public function storeAccount()
@@ -126,13 +122,11 @@ class AccountingController extends BaseController
 
         $entries = $builder->orderBy('entry_number', 'DESC')->get()->getResultArray();
 
-        return view('accounting/journal', [
+        return view('accounting/journal', $this->accountingViewData($ctx, [
             'pageTitle' => 'Libro Diario',
-            'context'   => $ctx,
             'entries'   => $entries,
             'filters'   => ['from' => $from, 'to' => $to, 'status' => $status],
-            'companyId' => $companyId,
-        ]);
+        ]));
     }
 
     // ── Formulario nuevo asiento ─────────────────────────
@@ -146,14 +140,12 @@ class AccountingController extends BaseController
             ->where('company_id', $companyId)->where('active', 1)->where('accepts_entries', 1)
             ->orderBy('code')->get()->getResultArray();
 
-        return view('accounting/forms/entry', [
+        return view('accounting/forms/entry', $this->accountingViewData($ctx, [
             'pageTitle'  => 'Nuevo asiento',
-            'context'    => $ctx,
             'accounts'   => $accounts,
-            'companyId'  => $companyId,
             'formAction' => site_url('contabilidad/asientos'),
             'isPopup'    => $this->isPopupRequest(),
-        ]);
+        ]));
     }
 
     public function storeEntry()
@@ -214,13 +206,12 @@ class AccountingController extends BaseController
         $account = db_connect()->table('accounts')->where('id', $accountId)->get()->getRowArray();
         $ledger = $this->accounting->accountLedger($accountId, $from, $to);
 
-        return view('accounting/ledger', [
+        return view('accounting/ledger', $this->accountingViewData($ctx, [
             'pageTitle' => 'Mayor: ' . ($account['code'] ?? '') . ' ' . ($account['name'] ?? ''),
-            'context'   => $ctx,
             'account'   => $account,
             'ledger'    => $ledger,
             'filters'   => ['from' => $from, 'to' => $to],
-        ]);
+        ]));
     }
 
     // ── Balance de Comprobación ──────────────────────────
@@ -232,12 +223,11 @@ class AccountingController extends BaseController
         $date = $this->request->getGet('date') ?: date('Y-m-d');
         $trial = $this->accounting->trialBalance($ctx['company']['id'], $date);
 
-        return view('accounting/trial_balance', [
+        return view('accounting/trial_balance', $this->accountingViewData($ctx, [
             'pageTitle' => 'Balance de Comprobacion',
-            'context'   => $ctx,
             'trial'     => $trial,
             'filters'   => ['date' => $date],
-        ]);
+        ]));
     }
 
     // ── Balance General ─────────────────────────────────
@@ -249,12 +239,11 @@ class AccountingController extends BaseController
         $date = $this->request->getGet('date') ?: date('Y-m-d');
         $balance = $this->accounting->balanceSheet($ctx['company']['id'], $date);
 
-        return view('accounting/balance_sheet', [
+        return view('accounting/balance_sheet', $this->accountingViewData($ctx, [
             'pageTitle' => 'Balance General',
-            'context'   => $ctx,
             'balance'   => $balance,
             'filters'   => ['date' => $date],
-        ]);
+        ]));
     }
 
     // ── Estado de Resultados ────────────────────────────
@@ -267,12 +256,21 @@ class AccountingController extends BaseController
         $to   = $this->request->getGet('to')   ?: date('Y-m-d');
         $statement = $this->accounting->incomeStatement($ctx['company']['id'], $from, $to);
 
-        return view('accounting/income_statement', [
+        return view('accounting/income_statement', $this->accountingViewData($ctx, [
             'pageTitle' => 'Estado de Resultados',
-            'context'   => $ctx,
             'statement' => $statement,
             'filters'   => ['from' => $from, 'to' => $to],
-        ]);
+        ]));
+    }
+
+    private function accountingViewData(array $ctx, array $extra = []): array
+    {
+        return array_merge([
+            'context' => $ctx,
+            'companies' => $this->activeCompanies(),
+            'selectedCompanyId' => $ctx['company']['id'],
+            'companyId' => $ctx['company']['id'],
+        ], $extra);
     }
 }
 

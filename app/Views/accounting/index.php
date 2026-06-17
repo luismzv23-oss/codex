@@ -6,12 +6,24 @@
         <p class="text-secondary mb-0">Estructura del plan contable, libros y balances.</p>
     </div>
     <div class="d-flex gap-2">
-        <a href="<?= site_url('contabilidad') ?>" class="btn btn-outline-dark icon-btn" title="Plan de Cuentas" aria-label="Plan de Cuentas"><i class="bi bi-list-columns-reverse"></i></a>
-        <a href="<?= site_url('contabilidad/diario') ?>" class="btn btn-outline-dark icon-btn" title="Libro Diario" aria-label="Libro Diario"><i class="bi bi-journal-text"></i></a>
-        <a href="<?= site_url('contabilidad/balance-comprobacion') ?>" class="btn btn-outline-dark icon-btn" title="Balance Comp." aria-label="Balance Comp."><i class="bi bi-calculator"></i></a>
-        <a href="<?= site_url('contabilidad/balance-general') ?>" class="btn btn-outline-dark icon-btn" title="Balance General" aria-label="Balance General"><i class="bi bi-bar-chart"></i></a>
-        <a href="<?= site_url('contabilidad/resultados') ?>" class="btn btn-outline-dark icon-btn" title="Resultados" aria-label="Resultados"><i class="bi bi-graph-up"></i></a>
-        <a href="<?= site_url('contabilidad/asientos/nuevo') ?>" class="btn btn-dark icon-btn" data-popup="true" data-popup-title="Asiento contable" data-popup-subtitle="Registrar nuevo asiento." title="Nuevo Asiento" aria-label="Nuevo Asiento"><i class="bi bi-plus-lg"></i></a>
+        <?php if (!empty($companies)): ?>
+            <form method="get" action="<?= site_url('contabilidad') ?>" class="d-flex gap-2">
+                <select name="company_id" class="form-select">
+                    <?php foreach ($companies as $company): ?>
+                        <option value="<?= esc($company['id']) ?>" <?= $selectedCompanyId === $company['id'] ? 'selected' : '' ?>>
+                            <?= esc($company['name']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <button class="btn btn-outline-dark icon-btn" title="Cambiar empresa" aria-label="Cambiar empresa"><i class="bi bi-arrow-repeat"></i></button>
+            </form>
+        <?php endif; ?>
+        <a href="<?= site_url('contabilidad?company_id=' . $selectedCompanyId) ?>" class="btn btn-outline-dark icon-btn" title="Plan de Cuentas" aria-label="Plan de Cuentas"><i class="bi bi-list-columns-reverse"></i></a>
+        <a href="<?= site_url('contabilidad/diario?company_id=' . $selectedCompanyId) ?>" class="btn btn-outline-dark icon-btn" title="Libro Diario" aria-label="Libro Diario"><i class="bi bi-journal-text"></i></a>
+        <a href="<?= site_url('contabilidad/balance-comprobacion?company_id=' . $selectedCompanyId) ?>" class="btn btn-outline-dark icon-btn" title="Balance Comp." aria-label="Balance Comp."><i class="bi bi-calculator"></i></a>
+        <a href="<?= site_url('contabilidad/balance-general?company_id=' . $selectedCompanyId) ?>" class="btn btn-outline-dark icon-btn" title="Balance General" aria-label="Balance General"><i class="bi bi-bar-chart"></i></a>
+        <a href="<?= site_url('contabilidad/resultados?company_id=' . $selectedCompanyId) ?>" class="btn btn-outline-dark icon-btn" title="Resultados" aria-label="Resultados"><i class="bi bi-graph-up"></i></a>
+        <a href="<?= site_url('contabilidad/asientos/nuevo?company_id=' . $selectedCompanyId) ?>" class="btn btn-dark icon-btn" data-popup="true" data-popup-title="Asiento contable" data-popup-subtitle="Registrar nuevo asiento." title="Nuevo Asiento" aria-label="Nuevo Asiento"><i class="bi bi-plus-lg"></i></a>
     </div>
 </div>
 <div class="card border-0 shadow-sm rounded-4">
@@ -22,7 +34,7 @@
             </tr></thead>
             <tbody>
                 <?php if (empty($accounts)): ?>
-                    <tr><td colspan="7" class="text-center text-secondary py-4">No hay cuentas cargadas. <a href="<?= site_url('contabilidad/cuentas/nueva') ?>">Crear la primera cuenta</a>.</td></tr>
+                    <tr><td colspan="7" class="text-center text-secondary py-4">No hay cuentas cargadas. <a href="<?= site_url('contabilidad/cuentas/nueva?company_id=' . $selectedCompanyId) ?>">Crear la primera cuenta</a>.</td></tr>
                 <?php else: ?>
                     <?php foreach ($accounts as $a): ?>
                         <tr class="<?= (int)($a['is_group'] ?? 0) === 1 ? 'fw-semibold' : '' ?>">
@@ -34,7 +46,7 @@
                             <td><?= number_format((float)($a['opening_balance'] ?? 0), 2, ',', '.') ?></td>
                             <td class="text-end">
                                 <?php if ((int)($a['accepts_entries'] ?? 1) === 1): ?>
-                                    <a href="<?= site_url('contabilidad/mayor/' . $a['id']) ?>" class="btn btn-outline-dark btn-sm icon-btn" title="Ver mayor"><i class="bi bi-list-ul"></i></a>
+                                    <a href="<?= site_url('contabilidad/mayor/' . $a['id'] . '?company_id=' . $selectedCompanyId) ?>" class="btn btn-outline-dark btn-sm icon-btn" title="Ver mayor"><i class="bi bi-list-ul"></i></a>
                                 <?php endif; ?>
                             </td>
                         </tr>

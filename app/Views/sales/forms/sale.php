@@ -682,7 +682,12 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
     window.addEventListener('codex:customer-created', (event) => {
         const newCustomer = event.detail.customer;
         if (newCustomer) {
-            customers.push(newCustomer);
+            const idx = customers.findIndex(c => c.id == newCustomer.id);
+            if (idx !== -1) {
+                customers[idx] = newCustomer;
+            } else {
+                customers.push(newCustomer);
+            }
             customerSelect.value = newCustomer.id;
             customerSelect.dispatchEvent(new Event('change', { bubbles: true }));
             setSelectValue('price_list_id', newCustomer.price_list_id);

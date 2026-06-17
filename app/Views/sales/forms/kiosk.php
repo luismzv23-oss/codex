@@ -43,7 +43,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
             </span>
         <?php endif; ?>
         <a href="<?= site_url('ventas' . (!empty($companyId) ? '?company_id=' . $companyId : '')) ?>"
-            class="btn btn-outline-dark">Volver a Ventas</a>
+            class="btn btn-outline-dark icon-btn" title="Volver a Ventas" aria-label="Volver a Ventas"><i class="bi bi-arrow-left"></i></a>
     </div>
 </div>
 
@@ -763,7 +763,12 @@ $productCatalog = array_values(array_map(static function (array $product): array
         window.addEventListener('codex:customer-created', (event) => {
             const newCustomer = event.detail.customer;
             if (newCustomer) {
-                customers.push(newCustomer);
+                const idx = customers.findIndex(c => c.id == newCustomer.id);
+                if (idx !== -1) {
+                    customers[idx] = newCustomer;
+                } else {
+                    customers.push(newCustomer);
+                }
                 kioskCustomerId.value = newCustomer.id;
                 kioskCustomerName.value = newCustomer.name;
                 if (kioskDocumentDisplay) kioskDocumentDisplay.value = (newCustomer.document_type || 'DOC') + ' ' + (newCustomer.document_number || '');

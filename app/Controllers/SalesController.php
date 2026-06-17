@@ -1216,9 +1216,23 @@ class SalesController extends BaseController
             return $context;
         }
 
+        $customerId = $this->request->getGet('id');
+        $customer = null;
+        if ($customerId) {
+            $customer = (new CustomerModel())
+                ->where('company_id', $context['company']['id'])
+                ->find($customerId);
+        }
+
+        $customers = (new CustomerModel())
+            ->where('company_id', $context['company']['id'])
+            ->orderBy('name', 'ASC')
+            ->findAll();
+
         return view('sales/forms/customer', [
             'pageTitle' => 'Cliente',
-            'customer' => null,
+            'customer' => $customer,
+            'customers' => $customers,
             'formAction' => site_url('ventas/clientes'),
             'companyId' => $context['company']['id'],
             'branches' => $this->branchOptions($context['company']['id']),
@@ -1248,7 +1262,10 @@ class SalesController extends BaseController
         $conditionId = trim((string) $this->request->getPost('sales_condition_id')) ?: null;
         $condition = $conditionId ? (new SalesConditionModel())->where('company_id', $context['company']['id'])->find($conditionId) : null;
 
-        $customerId = (new CustomerModel())->insert([
+        $customerId = $this->request->getPost('id');
+        $customerModel = new CustomerModel();
+
+        $customerData = [
             'company_id' => $context['company']['id'],
             'branch_id' => trim((string) $this->request->getPost('branch_id')) ?: null,
             'name' => $name,
@@ -1269,19 +1286,33 @@ class SalesController extends BaseController
             'custom_discount_rate' => (float) $this->request->getPost('custom_discount_rate'),
             'payment_terms_days' => $condition ? max(0, (int) ($condition['payment_terms_days'] ?? 0)) : max(0, (int) $this->request->getPost('payment_terms_days')),
             'active' => $this->request->getPost('active') === '0' ? 0 : 1,
-        ], true);
+        ];
 
-        $newCustomer = (new CustomerModel())->find($customerId);
-        $this->logAudit($context['company']['id'], 'sales', 'customer', $customerId, 'create', null, $newCustomer);
+        if ($customerId) {
+            $existing = $customerModel->where('company_id', $context['company']['id'])->find($customerId);
+            if (!$existing) {
+                return redirect()->back()->with('error', 'El cliente no existe o no pertenece a esta empresa.');
+            }
+            $customerModel->update($customerId, $customerData);
+            $message = 'Cliente actualizado correctamente.';
+            $this->logAudit($context['company']['id'], 'sales', 'customer', $customerId, 'update', $existing, $customerData);
+        } else {
+            $customerId = $customerModel->insert($customerData, true);
+            $message = 'Cliente registrado correctamente.';
+            $newCustomer = $customerModel->find($customerId);
+            $this->logAudit($context['company']['id'], 'sales', 'customer', $customerId, 'create', null, $newCustomer);
+        }
+
+        $newCustomer = $customerModel->find($customerId);
 
         if ($this->isPopupRequest()) {
             return view('sales/forms/customer_popup_close', [
                 'customer' => $newCustomer,
-                'message' => 'Cliente registrado correctamente.',
+                'message' => $message,
             ]);
         }
 
-        return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('message', 'Cliente registrado correctamente.');
+        return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('message', $message);
     }
 
     public function create()

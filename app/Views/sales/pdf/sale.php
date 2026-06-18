@@ -11,6 +11,8 @@
         $fontSizePx = '14px';
     }
 
+    $topLeftText = $ticketSettings['ticket_custom_text_top_left'] ?? 'IVA: Responsable Inscripto';
+
     // Resolve document type name, letter, and AFIP code
     $invoiceLetter = 'X';
     $invoiceCode = '--';
@@ -24,7 +26,9 @@
             $docName = strtoupper($name);
             
             // Resolve Letter
-            if (preg_match('/\b(Factura|Nota de Credito|Nota de Debito)\s+([A-BCM])\b/i', $name, $matches)) {
+            if (!empty($docType['letter'])) {
+                $invoiceLetter = strtoupper($docType['letter']);
+            } elseif (preg_match('/\b(Factura|Nota de Credito|Nota de Debito)\s+([A-BCM])\b/i', $name, $matches)) {
                 $invoiceLetter = strtoupper($matches[2]);
             } elseif (stripos($name, 'Remito') !== false) {
                 $invoiceLetter = 'R';
@@ -32,6 +36,10 @@
                 $invoiceLetter = 'P';
             } elseif (stripos($name, 'Presupuesto') !== false) {
                 $invoiceLetter = 'X';
+            } elseif (stripos($name, 'Ticket') !== false || ($docType['category'] ?? '') === 'ticket') {
+                // Determine ticket letter based on company VAT profile (Responsable Inscripto -> B, Monotributo -> C)
+                $isRI = stripos($topLeftText, 'Responsable Inscripto') !== false;
+                $invoiceLetter = $isRI ? 'B' : 'C';
             }
             
             // Resolve AFIP code
@@ -45,6 +53,9 @@
             elseif (stripos($name, 'Nota de Debito C') !== false) $invoiceCode = '12';
             elseif (stripos($name, 'Nota de Credito C') !== false) $invoiceCode = '13';
             elseif (stripos($name, 'Factura M') !== false) $invoiceCode = '51';
+            elseif (stripos($name, 'Ticket') !== false || ($docType['category'] ?? '') === 'ticket') {
+                $invoiceCode = ($invoiceLetter === 'B') ? '83' : '11';
+            }
 
             // Clean document name for display in right box
             $cleanDocName = $docName;

@@ -51,6 +51,10 @@ Vagrantfile
 /writable/cache/*
 !/writable/cache/index.html
 
+/writable/arca/
+*.key
+*.crt
+
 /writable/logs/*
 !/writable/logs/index.html
 

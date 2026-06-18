@@ -178,13 +178,18 @@ $customers = $customers ?? [];
                         <h2 class="h5 mb-1">Listado de clientes</h2>
                         <p class="text-secondary mb-0">Base de clientes de la empresa.</p>
                     </div>
-                    <div style="max-width: 300px; width: 100%;">
-                        <input type="text" id="list-customer-search" class="form-control form-control-sm" placeholder="Buscar cliente por nombre o documento...">
+                    <div class="d-flex align-items-center gap-2" style="max-width: 350px; width: 100%;">
+                        <button type="button" class="btn btn-outline-success btn-sm icon-btn" title="Exportar a Excel" data-bs-toggle="modal" data-bs-target="#exportExcelModal" aria-label="Exportar a Excel">
+                            <i class="bi bi-file-earmark-excel"></i>
+                        </button>
+                        <div class="flex-grow-1">
+                            <input type="text" id="list-customer-search" class="form-control form-control-sm" placeholder="Buscar cliente por nombre o documento...">
+                        </div>
                     </div>
                 </div>
 
                 <div class="table-responsive">
-                    <table class="table align-middle table-hover table-sm mb-0" id="list-customers-table" data-codex-pagination="10">
+                    <table class="table align-middle table-hover table-sm mb-0" id="list-customers-table">
                         <thead>
                             <tr>
                                 <th>Cliente</th>
@@ -231,28 +236,225 @@ $customers = $customers ?? [];
                         </tbody>
                     </table>
                 </div>
+                <div id="customer-pagination-container"></div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Exportación a Excel -->
+<div class="modal fade" id="exportExcelModal" tabindex="-1" aria-labelledby="exportExcelModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" id="exportExcelModalLabel">Exportar clientes a Excel</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="<?= site_url('ventas/clientes/exportar') ?>" method="post">
+                <?= csrf_field() ?>
+                <div class="modal-body p-4">
+                    <p class="text-secondary mb-3">Selecciona los datos que deseas incluir en la exportación a Excel (.xls):</p>
+                    
+                    <div class="mb-3 d-flex gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-select-all">Seleccionar todos</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-deselect-all">Deseleccionar todos</button>
+                    </div>
+
+                    <div class="row g-2">
+                        <?php
+                        $exportFields = [
+                            'name'                 => ['label' => 'Nombre del cliente', 'checked' => true],
+                            'billing_name'         => ['label' => 'Razón social / Facturación', 'checked' => true],
+                            'document_type'        => ['label' => 'Tipo de documento', 'checked' => true],
+                            'document_number'      => ['label' => 'Número de documento', 'checked' => true],
+                            'tax_profile'          => ['label' => 'Perfil fiscal', 'checked' => false],
+                            'vat_condition'        => ['label' => 'Condición IVA', 'checked' => false],
+                            'email'                => ['label' => 'Email', 'checked' => true],
+                            'phone'                => ['label' => 'Teléfono', 'checked' => true],
+                            'address'              => ['label' => 'Dirección', 'checked' => false],
+                            'price_list_name'      => ['label' => 'Lista de precios', 'checked' => false],
+                            'credit_limit'         => ['label' => 'Límite de crédito', 'checked' => false],
+                            'custom_discount_rate' => ['label' => 'Tasa de descuento %', 'checked' => false],
+                            'payment_terms_days'   => ['label' => 'Plazo de pago (Días)', 'checked' => false],
+                            'branch_id'            => ['label' => 'Sucursal', 'checked' => false],
+                            'sales_agent_id'       => ['label' => 'Vendedor', 'checked' => false],
+                            'sales_zone_id'        => ['label' => 'Zona', 'checked' => false],
+                            'sales_condition_id'   => ['label' => 'Condición de venta', 'checked' => false],
+                            'active'               => ['label' => 'Estado (Activo/Inactivo)', 'checked' => true],
+                        ];
+                        foreach ($exportFields as $key => $info):
+                        ?>
+                            <div class="col-md-6">
+                                <div class="form-check">
+                                    <input class="form-check-input export-field-checkbox" type="checkbox" name="fields[]" value="<?= esc($key) ?>" id="field_<?= esc($key) ?>" <?= $info['checked'] ? 'checked' : '' ?>>
+                                    <label class="form-check-label" for="field_<?= esc($key) ?>">
+                                        <?= esc($info['label']) ?>
+                                    </label>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success"><i class="bi bi-file-earmark-excel me-1"></i> Exportar a Excel</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    // Live client-side search/filter for the customer datatable
+    const table = document.getElementById('list-customers-table');
     const searchInput = document.getElementById('list-customer-search');
+    const paginationContainer = document.getElementById('customer-pagination-container');
+    
+    if (!table || !paginationContainer) return;
+    
+    const tbody = table.tBodies[0];
+    if (!tbody) return;
+    
+    const rows = Array.from(tbody.querySelectorAll(':scope > tr'));
+    const dataRows = rows.filter(row => !row.querySelector('[colspan]'));
+    
+    const pageSize = 10;
+    let currentPage = 1;
+    let filteredRows = [...dataRows];
+    
+    // Create pagination elements
+    const wrapper = document.createElement('div');
+    wrapper.className = 'codex-pagination';
+    
+    const summary = document.createElement('div');
+    summary.className = 'codex-pagination__summary';
+    
+    const controls = document.createElement('div');
+    controls.className = 'codex-pagination__controls';
+    
+    const prev = document.createElement('button');
+    prev.type = 'button';
+    prev.className = 'codex-pagination__btn';
+    prev.innerHTML = '<i class="bi bi-chevron-left"></i>';
+    prev.setAttribute('aria-label', 'Pagina anterior');
+    
+    const pages = document.createElement('div');
+    pages.className = 'codex-pagination__pages';
+    
+    const next = document.createElement('button');
+    next.type = 'button';
+    next.className = 'codex-pagination__btn';
+    next.innerHTML = '<i class="bi bi-chevron-right"></i>';
+    next.setAttribute('aria-label', 'Pagina siguiente');
+    
+    controls.append(prev, pages, next);
+    wrapper.append(summary, controls);
+    paginationContainer.appendChild(wrapper);
+    
+    // Create a special row to display when no search results are found
+    const noResultsRow = document.createElement('tr');
+    noResultsRow.id = 'no-results-row';
+    noResultsRow.style.display = 'none';
+    noResultsRow.innerHTML = `<td colspan="5" class="text-secondary text-center py-3">No se encontraron clientes que coincidan con la búsqueda.</td>`;
+    tbody.appendChild(noResultsRow);
+    
+    function renderPageButtons(pageCount) {
+        pages.innerHTML = '';
+        const start = Math.max(1, currentPage - 2);
+        const end = Math.min(pageCount, currentPage + 2);
+        
+        for (let page = start; page <= end; page++) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = `codex-pagination__btn${page === currentPage ? ' is-active' : ''}`;
+            button.textContent = String(page);
+            button.addEventListener('click', () => {
+                currentPage = page;
+                updateView();
+            });
+            pages.appendChild(button);
+        }
+    }
+    
+    function updateView() {
+        const totalRows = filteredRows.length;
+        
+        if (totalRows === 0) {
+            dataRows.forEach(row => row.style.display = 'none');
+            noResultsRow.style.display = '';
+            wrapper.style.display = 'none';
+            return;
+        }
+        
+        noResultsRow.style.display = 'none';
+        
+        const pageCount = Math.ceil(totalRows / pageSize);
+        if (currentPage > pageCount) currentPage = pageCount || 1;
+        if (currentPage < 1) currentPage = 1;
+        
+        const startIndex = (currentPage - 1) * pageSize;
+        const endIndex = startIndex + pageSize;
+        
+        dataRows.forEach(row => {
+            const index = filteredRows.indexOf(row);
+            if (index >= startIndex && index < endIndex) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        });
+        
+        if (totalRows <= pageSize) {
+            wrapper.style.display = 'none';
+        } else {
+            wrapper.style.display = 'flex';
+            summary.textContent = `Mostrando ${startIndex + 1}-${Math.min(endIndex, totalRows)} de ${totalRows} registros`;
+            prev.disabled = currentPage === 1;
+            next.disabled = currentPage === pageCount;
+            renderPageButtons(pageCount);
+        }
+    }
+    
+    prev.addEventListener('click', () => {
+        if (currentPage > 1) {
+            currentPage--;
+            updateView();
+        }
+    });
+    
+    next.addEventListener('click', () => {
+        const pageCount = Math.ceil(filteredRows.length / pageSize);
+        if (currentPage < pageCount) {
+            currentPage++;
+            updateView();
+        }
+    });
+    
     if (searchInput) {
         searchInput.addEventListener('input', (e) => {
             const q = e.target.value.toLowerCase().trim();
-            const rows = document.querySelectorAll('#list-customers-table tbody tr');
-            rows.forEach(row => {
+            
+            filteredRows = dataRows.filter(row => {
                 const name = row.dataset.name || '';
                 const doc = row.dataset.doc || '';
-                if (name.includes(q) || doc.includes(q)) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                }
+                return name.includes(q) || doc.includes(q);
             });
+            
+            currentPage = 1;
+            updateView();
+        });
+    }
+    
+    updateView();
+    
+    const btnSelectAll = document.getElementById('btn-select-all');
+    const btnDeselectAll = document.getElementById('btn-deselect-all');
+    if (btnSelectAll && btnDeselectAll) {
+        btnSelectAll.addEventListener('click', () => {
+            document.querySelectorAll('.export-field-checkbox').forEach(cb => cb.checked = true);
+        });
+        btnDeselectAll.addEventListener('click', () => {
+            document.querySelectorAll('.export-field-checkbox').forEach(cb => cb.checked = false);
         });
     }
 });

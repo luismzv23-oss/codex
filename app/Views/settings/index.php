@@ -37,7 +37,7 @@
                     </div>
                 </div>
                 <div class="row g-3">
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <div class="border rounded-4 p-3 h-100">
                             <div class="d-flex justify-content-between align-items-start gap-3">
                                 <div>
@@ -48,7 +48,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <div class="border rounded-4 p-3 h-100">
                             <div class="d-flex justify-content-between align-items-start gap-3">
                                 <div>
@@ -56,6 +56,17 @@
                                     <div class="small text-secondary">Argentina ARCA, monedas habilitadas, facturacion estandar y kiosco.</div>
                                 </div>
                                 <a href="<?= site_url('ventas/configuracion?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-outline-dark btn-sm">Configuracion</a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="border rounded-4 p-3 h-100">
+                            <div class="d-flex justify-content-between align-items-start gap-3">
+                                <div>
+                                    <div class="fw-semibold">Impresión y Tickets</div>
+                                    <div class="small text-secondary">Diseño de comprobantes, ancho de papel, cabeceras y leyendas.</div>
+                                </div>
+                                <a href="<?= site_url('configuracion/tickets?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-outline-dark btn-sm" data-popup="true" data-popup-title="Configuracion de Impresion y Tickets" data-popup-subtitle="Personalizar cabeceras, pie de pagina, dimensiones y visibilidad de datos.">Configuracion</a>
                             </div>
                         </div>
                     </div>

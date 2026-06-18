@@ -107,6 +107,7 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     $routes->get('ventas/promociones/nueva', 'SalesController::createPromotionForm', ['filter' => 'permission:systems.view']);
     $routes->post('ventas/promociones', 'SalesController::storePromotion', ['filter' => 'permission:systems.view']);
     $routes->get('ventas/clientes/nuevo', 'SalesController::createCustomerForm', ['filter' => 'permission:systems.view']);
+    $routes->post('ventas/clientes/exportar', 'SalesController::exportCustomers', ['filter' => 'permission:systems.view']);
     $routes->post('ventas/clientes', 'SalesController::storeCustomer', ['filter' => 'permission:systems.view']);
     $routes->get('ventas/nueva', 'SalesController::create', ['filter' => 'permission:systems.view']);
     $routes->post('ventas', 'SalesController::store', ['filter' => 'permission:systems.view']);
@@ -178,6 +179,8 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     $routes->post('configuracion/impuestos', 'SettingsController::storeTax', ['filter' => 'permission:taxes.manage']);
     $routes->post('configuracion/monedas', 'SettingsController::storeCurrency', ['filter' => 'permission:currencies.manage']);
     $routes->post('configuracion/numeraciones', 'SettingsController::storeVoucherSequence', ['filter' => 'permission:voucher_sequences.manage']);
+    $routes->get('configuracion/tickets', 'SettingsController::ticketSettingsForm', ['filter' => 'permission:settings.manage']);
+    $routes->post('configuracion/tickets', 'SettingsController::updateTicketSettings', ['filter' => 'permission:settings.manage']);
 
     // ── Contabilidad (Web) ──────────────────────────────
     $routes->get('contabilidad', 'AccountingController::index', ['filter' => 'permission:systems.view']);

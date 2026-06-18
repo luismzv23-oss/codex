@@ -255,4 +255,159 @@ class SettingsController extends BaseController
             ]);
         }
     }
+
+    public function ticketSettingsForm()
+    {
+        $companyId = $this->resolveCompanyId();
+        $company = $companyId ? (new CompanyModel())->find($companyId) : null;
+
+        if (! $companyId || ! $company) {
+            return redirect()->to('/configuracion')->with('error', 'Empresa no disponible.');
+        }
+
+        $db = db_connect();
+        $rawSettings = $db->table('company_settings')
+            ->where('company_id', $companyId)
+            ->like('key', 'ticket_', 'after')
+            ->get()->getResultArray();
+
+        $settings = [];
+        foreach ($rawSettings as $s) {
+            $settings[$s['key']] = $s['value'];
+        }
+
+        $defaults = [
+            'header_title' => '',
+            'footer_notes' => '',
+            'paper_width' => '80mm',
+            'font_size' => 'medium',
+            'custom_text_top_left' => 'IVA: Responsable Inscripto',
+            'custom_text_top_right' => "Ing. Brutos: CM. 901-111111-0\nInicio de Actividades: 01/04/1994",
+            'custom_text_bottom_left' => "Imprenta Su Imprenta CUIT: 30-12345678-9 Habil. 22222",
+            'custom_text_bottom_right' => "Fecha Impresión: " . date('d/m/Y') . " Numeración: 0001-00001601 al 0001-00001700",
+            'show_sku' => 1,
+            'show_brand' => 1,
+            'show_item_breakdown' => 1,
+            'show_customer' => 1,
+            'show_user' => 1,
+        ];
+
+        $posSettings = [];
+        $kioskSettings = [];
+
+        foreach ($defaults as $subKey => $defaultVal) {
+            $posKey = 'ticket_pos_' . $subKey;
+            $kioskKey = 'ticket_kiosk_' . $subKey;
+            $legacyKey = 'ticket_' . $subKey;
+
+            // POS
+            if (array_key_exists($posKey, $settings)) {
+                $posSettings[$subKey] = $settings[$posKey];
+            } elseif (array_key_exists($legacyKey, $settings)) {
+                $val = $settings[$legacyKey];
+                if ($subKey === 'paper_width') {
+                    $posSettings[$subKey] = (strtolower($val) === 'letter' || strtolower($val) === 'carta') ? 'letter' : 'A4';
+                } else {
+                    $posSettings[$subKey] = $val;
+                }
+            } else {
+                $posSettings[$subKey] = ($subKey === 'paper_width') ? 'A4' : $defaultVal;
+            }
+
+            // Kiosk
+            if (array_key_exists($kioskKey, $settings)) {
+                $kioskSettings[$subKey] = $settings[$kioskKey];
+            } elseif (array_key_exists($legacyKey, $settings)) {
+                $val = $settings[$legacyKey];
+                if ($subKey === 'paper_width') {
+                    $kioskSettings[$subKey] = (strtolower($val) === '58mm' || strtolower($val) === '80mm') ? $val : '80mm';
+                } else {
+                    $kioskSettings[$subKey] = $val;
+                }
+            } else {
+                $kioskSettings[$subKey] = ($subKey === 'paper_width') ? '80mm' : $defaultVal;
+            }
+        }
+
+        return view('settings/forms/tickets', [
+            'pageTitle' => 'Configuracion de Impresion y Tickets',
+            'posSettings' => $posSettings,
+            'kioskSettings' => $kioskSettings,
+            'companyId' => $companyId,
+            'companyName' => $company['name'],
+            'companyLegalName' => $company['legal_name'] ?? $company['name'],
+            'formAction' => site_url('configuracion/tickets'),
+            'isPopup' => $this->isPopupRequest(),
+        ]);
+    }
+
+    public function updateTicketSettings()
+    {
+        $companyId = $this->resolveCompanyId();
+        $company = $companyId ? (new CompanyModel())->find($companyId) : null;
+
+        if (! $companyId || ! $company) {
+            return redirect()->to('/configuracion')->with('error', 'Empresa no disponible.');
+        }
+
+        $db = db_connect();
+        $subKeys = [
+            'header_title',
+            'footer_notes',
+            'paper_width',
+            'font_size',
+            'custom_text_top_left',
+            'custom_text_top_right',
+            'custom_text_bottom_left',
+            'custom_text_bottom_right',
+            'show_sku',
+            'show_brand',
+            'show_item_breakdown',
+            'show_customer',
+            'show_user',
+        ];
+
+        $prefixes = ['ticket_pos_', 'ticket_kiosk_'];
+
+        foreach ($prefixes as $prefix) {
+            foreach ($subKeys as $subKey) {
+                $key = $prefix . $subKey;
+
+                if (in_array($subKey, ['show_sku', 'show_brand', 'show_item_breakdown', 'show_customer', 'show_user'], true)) {
+                    $value = $this->request->getPost($key) === '1' ? '1' : '0';
+                } else {
+                    $rawVal = $this->request->getPost($key);
+                    if ($rawVal === null) {
+                        continue;
+                    }
+                    $value = trim((string) $rawVal);
+                }
+
+                $existing = $db->table('company_settings')
+                    ->where('company_id', $companyId)
+                    ->where('key', $key)
+                    ->get()->getRowArray();
+
+                if ($existing) {
+                    $db->table('company_settings')
+                        ->where('id', $existing['id'])
+                        ->update([
+                            'value' => $value,
+                            'updated_at' => date('Y-m-d H:i:s'),
+                        ]);
+                } else {
+                    $db->table('company_settings')->insert([
+                        'id' => app_uuid(),
+                        'company_id' => $companyId,
+                        'key' => $key,
+                        'value' => $value,
+                        'created_at' => date('Y-m-d H:i:s'),
+                        'updated_at' => date('Y-m-d H:i:s'),
+                    ]);
+                }
+            }
+        }
+
+        return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion de impresion de tickets actualizada correctamente.');
+    }
 }

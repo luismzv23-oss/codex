@@ -980,8 +980,45 @@ class SalesController extends BaseController
         // Auto-open CAJA-KIOSCO session when entering the kiosk screen
         $cashSession = $this->resolveCashSession($companyId, 'kiosk');
 
+        $db = db_connect();
+        $rawTicketSettings = $db->table('company_settings')
+            ->where('company_id', $companyId)
+            ->like('key', 'ticket_', 'after')
+            ->get()->getResultArray();
+
+        $settingsMap = [];
+        foreach ($rawTicketSettings as $s) {
+            $settingsMap[$s['key']] = $s['value'];
+        }
+
+        $defaults = [
+            'header_title' => '',
+            'footer_notes' => '',
+            'paper_width' => '80mm',
+            'show_sku' => 1,
+            'show_brand' => 1,
+            'show_item_breakdown' => 1,
+            'show_customer' => 1,
+            'show_user' => 1,
+        ];
+
+        $ticketSettings = [];
+        foreach ($defaults as $subKey => $defaultVal) {
+            $kioskKey = 'ticket_kiosk_' . $subKey;
+            $legacyKey = 'ticket_' . $subKey;
+
+            if (array_key_exists($kioskKey, $settingsMap)) {
+                $ticketSettings['ticket_' . $subKey] = $settingsMap[$kioskKey];
+            } elseif (array_key_exists($legacyKey, $settingsMap)) {
+                $ticketSettings['ticket_' . $subKey] = $settingsMap[$legacyKey];
+            } else {
+                $ticketSettings['ticket_' . $subKey] = $defaultVal;
+            }
+        }
+
         return view('sales/forms/kiosk', [
             'pageTitle' => 'Ticket Kiosco',
+            'company' => $context['company'],
             'products' => $this->salesProductCatalog($companyId),
             'customers' => $this->customerOptions($companyId),
             'warehouses' => $this->salesWarehouses($companyId),
@@ -990,6 +1027,7 @@ class SalesController extends BaseController
             'formAction' => site_url('ventas/kiosco'),
             'isPopup' => $this->isPopupRequest(),
             'settings' => $this->salesSettings($companyId),
+            'ticketSettings' => $ticketSettings,
             'documentReference' => $this->previewDocumentReference($companyId, 'kiosk'),
             'documentType' => $this->defaultDocumentType($companyId, 'kiosk'),
             'pointOfSale' => $this->defaultPointOfSale($companyId, 'kiosk'),
@@ -1265,6 +1303,19 @@ class SalesController extends BaseController
         $customerId = $this->request->getPost('id');
         $customerModel = new CustomerModel();
 
+        // Validate unique document number per company
+        $documentNumber = trim((string) $this->request->getPost('document_number'));
+        if ($documentNumber !== '') {
+            $query = $customerModel->where('company_id', $context['company']['id'])
+                                  ->where('document_number', $documentNumber);
+            if ($customerId) {
+                $query->where('id !=', $customerId);
+            }
+            if ($query->first()) {
+                return redirect()->back()->withInput()->with('error', 'El número de documento ya está registrado para otro cliente en esta empresa.');
+            }
+        }
+
         $customerData = [
             'company_id' => $context['company']['id'],
             'branch_id' => trim((string) $this->request->getPost('branch_id')) ?: null,
@@ -1313,6 +1364,133 @@ class SalesController extends BaseController
         }
 
         return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('message', $message);
+    }
+
+    public function exportCustomers()
+    {
+        $context = $this->salesContext('view');
+
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+
+        $companyId = $context['company']['id'];
+        $fields = (array) $this->request->getPost('fields');
+
+        if (empty($fields)) {
+            return redirect()->back()->with('error', 'Debes seleccionar al menos un campo para exportar.');
+        }
+
+        $allFields = [
+            'name'                 => 'Nombre',
+            'billing_name'         => 'Razón Social / Facturación',
+            'document_type'        => 'Tipo Documento',
+            'document_number'      => 'Número Documento',
+            'tax_profile'          => 'Perfil Fiscal',
+            'vat_condition'        => 'Condición IVA',
+            'email'                => 'Email',
+            'phone'                => 'Teléfono',
+            'address'              => 'Dirección',
+            'price_list_name'      => 'Lista de Precios',
+            'credit_limit'         => 'Límite de Crédito',
+            'custom_discount_rate' => 'Tasa de Descuento %',
+            'payment_terms_days'   => 'Plazo de Pago (Días)',
+            'branch_id'            => 'Sucursal',
+            'sales_agent_id'       => 'Vendedor',
+            'sales_zone_id'        => 'Zona',
+            'sales_condition_id'   => 'Condición de Venta',
+            'active'               => 'Estado',
+        ];
+
+        $selectedFields = array_intersect(array_keys($allFields), $fields);
+        if (empty($selectedFields)) {
+            return redirect()->back()->with('error', 'Debes seleccionar al menos un campo válido para exportar.');
+        }
+
+        $db = \Config\Database::connect();
+        $builder = $db->table('customers c')
+            ->select('c.*, b.name as branch_name, sa.name as sales_agent_name, sz.name as sales_zone_name, sc.name as sales_condition_name')
+            ->join('branches b', 'b.id = c.branch_id', 'left')
+            ->join('sales_agents sa', 'sa.id = c.sales_agent_id', 'left')
+            ->join('sales_zones sz', 'sz.id = c.sales_zone_id', 'left')
+            ->join('sales_conditions sc', 'sc.id = c.sales_condition_id', 'left')
+            ->where('c.company_id', $companyId)
+            ->orderBy('c.name', 'ASC');
+
+        $customers = $builder->get()->getResultArray();
+        $filename = 'clientes_export_' . date('Ymd_His') . '.xls';
+
+        header("Content-Type: application/vnd.ms-excel; charset=utf-8");
+        header("Content-Disposition: attachment; filename=\"$filename\"");
+        header("Pragma: no-cache");
+        header("Expires: 0");
+
+        echo '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
+        echo '<head>';
+        echo '<meta http-equiv="content-type" content="text/html; charset=UTF-8">';
+        echo '<style>';
+        echo 'table { border-collapse: collapse; }';
+        echo 'td, th { border: 0.5pt solid #ccc; font-family: Arial, sans-serif; font-size: 10pt; padding: 5px; }';
+        echo 'th { background-color: #212529; color: #ffffff; font-weight: bold; }';
+        echo '</style>';
+        echo '</head>';
+        echo '<body>';
+        echo '<table>';
+
+        echo '<tr>';
+        foreach ($selectedFields as $f) {
+            echo '<th>' . htmlspecialchars($allFields[$f], ENT_QUOTES, 'UTF-8') . '</th>';
+        }
+        echo '</tr>';
+
+        $taxProfiles = [
+            'consumidor_final' => 'Consumidor final',
+            'responsable_inscripto' => 'Responsable inscripto',
+            'monotributo' => 'Monotributo',
+            'exento' => 'Exento'
+        ];
+
+        foreach ($customers as $c) {
+            echo '<tr>';
+            foreach ($selectedFields as $f) {
+                $val = '';
+                switch ($f) {
+                    case 'branch_id':
+                        $val = $c['branch_name'] ?? '-';
+                        break;
+                    case 'sales_agent_id':
+                        $val = $c['sales_agent_name'] ?? '-';
+                        break;
+                    case 'sales_zone_id':
+                        $val = $c['sales_zone_name'] ?? '-';
+                        break;
+                    case 'sales_condition_id':
+                        $val = $c['sales_condition_name'] ?? '-';
+                        break;
+                    case 'tax_profile':
+                        $profileKey = $c['tax_profile'] ?? '';
+                        $val = $taxProfiles[$profileKey] ?? $profileKey ?: '-';
+                        break;
+                    case 'active':
+                        $val = ((int) ($c['active'] ?? 0) === 1) ? 'Activo' : 'Inactivo';
+                        break;
+                    case 'credit_limit':
+                    case 'custom_discount_rate':
+                        $val = number_format((float) ($c[$f] ?? 0), 2, ',', '');
+                        break;
+                    default:
+                        $val = $c[$f] ?? '';
+                        break;
+                }
+                echo '<td>' . htmlspecialchars((string) $val, ENT_QUOTES, 'UTF-8') . '</td>';
+            }
+            echo '</tr>';
+        }
+
+        echo '</table>';
+        echo '</body>';
+        echo '</html>';
+        exit;
     }
 
     public function create()
@@ -1762,6 +1940,50 @@ class SalesController extends BaseController
             return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('error', 'Venta no disponible.');
         }
 
+        $db = db_connect();
+        $rawTicketSettings = $db->table('company_settings')
+            ->where('company_id', $context['company']['id'])
+            ->like('key', 'ticket_', 'after')
+            ->get()->getResultArray();
+
+        $settingsMap = [];
+        foreach ($rawTicketSettings as $s) {
+            $settingsMap[$s['key']] = $s['value'];
+        }
+
+        $defaults = [
+            'header_title' => '',
+            'footer_notes' => '',
+            'paper_width' => '80mm',
+            'font_size' => 'medium',
+            'custom_text_top_left' => 'IVA: Responsable Inscripto',
+            'custom_text_top_right' => "Ing. Brutos: CM. 901-111111-0\nInicio de Actividades: 01/04/1994",
+            'custom_text_bottom_left' => "Imprenta Su Imprenta CUIT: 30-12345678-9 Habil. 22222",
+            'custom_text_bottom_right' => "Fecha Impresión: " . date('d/m/Y') . " Numeración: 0001-00001601 al 0001-00001700",
+            'show_sku' => 1,
+            'show_brand' => 1,
+            'show_item_breakdown' => 1,
+            'show_customer' => 1,
+            'show_user' => 1,
+        ];
+
+        $ticketSettings = [];
+        foreach ($defaults as $subKey => $defaultVal) {
+            $posKey = 'ticket_pos_' . $subKey;
+            $legacyKey = 'ticket_' . $subKey;
+
+            if (array_key_exists($posKey, $settingsMap)) {
+                $ticketSettings['ticket_' . $subKey] = $settingsMap[$posKey];
+            } elseif (array_key_exists($legacyKey, $settingsMap)) {
+                $ticketSettings['ticket_' . $subKey] = $settingsMap[$legacyKey];
+            } else {
+                $ticketSettings['ticket_' . $subKey] = $defaultVal;
+            }
+        }
+
+        $creator = (new \App\Models\UserModel())->find($sale['created_by'] ?? '');
+        $creatorName = $creator ? $creator['name'] : '-';
+
         return $this->renderPdf('sales/pdf/sale', [
             'company' => $context['company'],
             'sale' => $sale,
@@ -1770,6 +1992,8 @@ class SalesController extends BaseController
             'payments' => $this->salePayments($id),
             'returns' => $this->saleReturns($id),
             'generatedAt' => date('d/m/Y H:i'),
+            'ticketSettings' => $ticketSettings,
+            'creatorName' => $creatorName,
         ], 'venta-' . $sale['sale_number'] . '.pdf');
     }
 
@@ -3081,7 +3305,12 @@ class SalesController extends BaseController
 
     private function saleItems(string $saleId): array
     {
-        return (new SaleItemModel())->where('sale_id', $saleId)->orderBy('line_number', 'ASC')->findAll();
+        return (new SaleItemModel())
+            ->select('sale_items.*, p.brand')
+            ->join('inventory_products p', 'p.id = sale_items.product_id', 'left')
+            ->where('sale_items.sale_id', $saleId)
+            ->orderBy('sale_items.line_number', 'ASC')
+            ->findAll();
     }
 
     private function kitComponentRows(string $productId): array

@@ -110,6 +110,18 @@ class SalesController extends BaseApiController
             return $this->fail('Debes indicar el nombre del cliente.', 422);
         }
 
+        // Validate unique document number per company
+        $documentNumber = trim((string) ($payload['document_number'] ?? ''));
+        if ($documentNumber !== '') {
+            $existingDoc = (new CustomerModel())
+                ->where('company_id', $context['company']['id'])
+                ->where('document_number', $documentNumber)
+                ->first();
+            if ($existingDoc) {
+                return $this->fail('El número de documento ya está registrado para otro cliente en esta empresa.', 422);
+            }
+        }
+
         $conditionId = trim((string) ($payload['sales_condition_id'] ?? '')) ?: null;
         $condition = $conditionId ? (new SalesConditionModel())->where('company_id', $context['company']['id'])->find($conditionId) : null;
 
@@ -1141,29 +1153,25 @@ class SalesController extends BaseApiController
             $accessLevel = $userAssignment['access_level'] ?? 'view';
         }
 
-        if ($requiredAccess === 'manage' && ! $this->apiIsSuperadmin() && $accessLevel !== 'manage') {
+        $isVendedorAccess = ($this->apiUser()['role_slug'] ?? '') === 'vendedor' || $accessLevel === 'vendedor';
+
+        if ($isVendedorAccess) {
+            $method = \Config\Services::router()->methodName();
+            $allowedForVendedor = [
+                'index', 'show', 'customers', 'storeCustomer', 'posCatalog',
+                'storePos', 'storeKiosk', 'pdf'
+            ];
+            if (!in_array($method, $allowedForVendedor, true)) {
+                return ['error' => 'Tu acceso a Ventas esta limitado a operaciones de POS, Kiosco y Clientes.', 'status' => 403];
+            }
+        }
+
+        if ($requiredAccess === 'manage' && ! $this->apiIsSuperadmin() && $accessLevel !== 'manage' && ! $isVendedorAccess) {
             return ['error' => 'Tu usuario solo tiene acceso de consulta en Ventas.', 'status' => 403];
         }
 
         $this->ensureSalesDefaults($companyId);
         return ['company' => $company, 'access_level' => $accessLevel];
-    }
-
-    private function ensureSalesDefaults(string $companyId): void
-    {
-        $sequenceModel = new VoucherSequenceModel();
-        foreach ([['document_type' => 'PRESUPUESTO', 'prefix' => 'PRE'], ['document_type' => 'PEDIDO', 'prefix' => 'PED'], ['document_type' => 'REMITO', 'prefix' => 'RTO'], ['document_type' => 'FACTURA_B', 'prefix' => 'FCB'], ['document_type' => 'TICKET', 'prefix' => 'TCK'], ['document_type' => 'NC_B', 'prefix' => 'NCB'], ['document_type' => 'RECIBO', 'prefix' => 'REC']] as $row) {
-            if (! $sequenceModel->where('company_id', $companyId)->where('document_type', $row['document_type'])->first()) {
-                $sequenceModel->insert(['company_id' => $companyId, 'branch_id' => null, 'document_type' => $row['document_type'], 'prefix' => $row['prefix'], 'current_number' => 1, 'active' => 1]);
-            }
-        }
-
-        if (! (new SalesPriceListModel())->where('company_id', $companyId)->where('is_default', 1)->first()) {
-            (new SalesPriceListModel())->insert(['company_id' => $companyId, 'name' => 'Lista General', 'description' => 'Lista base del sistema de ventas.', 'is_default' => 1, 'active' => 1]);
-        }
-
-        $this->salesSettings($companyId);
-        $this->ensureSalesDocumentDefaults($companyId);
     }
 
     private function filters(): array
@@ -1696,6 +1704,23 @@ class SalesController extends BaseApiController
             }
         }
         (new SaleModel())->update($sale['id'], ['reservation_status' => $finalStatus === 'cancelled' ? 'cancelled' : 'released', 'reservation_released_at' => date('Y-m-d H:i:s')]);
+    }
+
+    private function ensureSalesDefaults(string $companyId): void
+    {
+        $sequenceModel = new VoucherSequenceModel();
+        foreach ([['document_type' => 'PRESUPUESTO', 'prefix' => 'PRE'], ['document_type' => 'PEDIDO', 'prefix' => 'PED'], ['document_type' => 'REMITO', 'prefix' => 'RTO'], ['document_type' => 'FACTURA_B', 'prefix' => 'FCB'], ['document_type' => 'TICKET', 'prefix' => 'TCK'], ['document_type' => 'NC_B', 'prefix' => 'NCB'], ['document_type' => 'RECIBO', 'prefix' => 'REC']] as $row) {
+            if (! $sequenceModel->where('company_id', $companyId)->where('document_type', $row['document_type'])->first()) {
+                $sequenceModel->insert(['company_id' => $companyId, 'branch_id' => null, 'document_type' => $row['document_type'], 'prefix' => $row['prefix'], 'current_number' => 1, 'active' => 1]);
+            }
+        }
+
+        if (! (new SalesPriceListModel())->where('company_id', $companyId)->where('is_default', 1)->first()) {
+            (new SalesPriceListModel())->insert(['company_id' => $companyId, 'name' => 'Lista General', 'description' => 'Lista base del sistema de ventas.', 'is_default' => 1, 'active' => 1]);
+        }
+
+        $this->salesSettings($companyId);
+        $this->ensureSalesDocumentDefaults($companyId);
     }
 
       private function deliverSaleStock(string $companyId, array $sale, array $items, bool $allowNegative, string $reason)

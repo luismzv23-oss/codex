@@ -233,6 +233,11 @@ $productCatalog = array_values(array_map(static function (array $product): array
         const catalog = <?= json_encode($productCatalog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
         const customers = <?= json_encode($customers ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
         const consumerFinalId = '<?= esc($consumerFinalId) ?>';
+        const ticketSettings = <?= json_encode($ticketSettings ?? [], JSON_UNESCAPED_UNICODE) ?>;
+        const companyName = <?= json_encode($company['name'] ?? '') ?>;
+        const companyLegalName = <?= json_encode($company['legal_name'] ?? '') ?>;
+        const companyTaxId = <?= json_encode($company['tax_id'] ?? '') ?>;
+        const userName = <?= json_encode(auth_user()['name'] ?? '') ?>;
 
         const searchField = document.getElementById('kiosk-search');
         const resultsContainer = document.getElementById('kiosk-search-results');
@@ -555,15 +560,211 @@ $productCatalog = array_values(array_map(static function (array $product): array
         // ── Ticket print markup ─────────────────────────────
         const buildPrintMarkup = () => {
             const printedAt = new Date().toLocaleString('es-AR');
+            const paperWidth = ticketSettings.ticket_paper_width || '80mm';
+            
             const rows = Array.from(items.values()).map((item) => {
                 const base = Number(item.quantity) * Number(item.unit_price);
                 const discountAmount = base * (Number(item.discount_rate || 0) / 100);
                 const amount = base - discountAmount;
                 const discountText = item.discount_rate > 0 ? ` <span style="font-size:10px">- ${Number(item.discount_rate).toFixed(0)}%</span>` : '';
-                return `<div class="ticket-line"><div class="ticket-name">${item.sku} ${item.name}</div><div class="ticket-meta">${item.brand || 'Sin marca'}</div><div class="ticket-row"><span>${formatMoney(item.quantity)} x ${formatMoney(item.unit_price)}${discountText}</span><strong>${formatMoney(amount)}</strong></div></div>`;
+                
+                const skuPart = Number(ticketSettings.ticket_show_sku) === 1 ? `[${item.sku}] ` : '';
+                const brandPart = (Number(ticketSettings.ticket_show_brand) === 1 && item.brand) 
+                    ? `<div class="ticket-meta">${item.brand}</div>` 
+                    : '';
+                
+                const showBreakdown = Number(ticketSettings.ticket_show_item_breakdown) === 1;
+                const breakdownHtml = showBreakdown
+                    ? `<span>${formatMoney(item.quantity)} x ${formatMoney(item.unit_price)}${discountText}</span>`
+                    : `<span>Cant: ${Number(item.quantity)}</span>`;
+                
+                return `
+                    <div class="ticket-line">
+                        <div class="ticket-name">${skuPart}${item.name}</div>
+                        ${brandPart}
+                        <div class="ticket-row">
+                            ${breakdownHtml}
+                            <strong>${formatMoney(amount)}</strong>
+                        </div>
+                    </div>
+                `;
             }).join('');
+            
             const change = Math.max(0, (parseFloat(paidAmount.value) || 0) - totalAmount());
-            return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Ticket 80mm</title><style>@page{size:80mm auto;margin:4mm;}*{box-sizing:border-box;}body{margin:0;font-family:"Courier New",monospace;background:#f7f4ef;color:#111;}.preview-shell{min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:18px;}.preview-card{width:100%;max-width:360px;}.ticket{width:80mm;max-width:100%;background:#fff;margin:0 auto;padding:5mm 4mm;border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,.14);}.ticket-center{text-align:center;}.ticket-small{font-size:11px;color:#555;}.ticket-line{border-bottom:1px dashed #bbb;padding:6px 0;}.ticket-name{font-size:12px;font-weight:700;margin-bottom:2px;}.ticket-meta{font-size:11px;color:#666;margin-bottom:4px;}.ticket-row{display:flex;justify-content:space-between;gap:8px;font-size:12px;}.ticket-total{border-top:1px solid #000;margin-top:8px;padding-top:8px;display:flex;justify-content:space-between;font-size:15px;font-weight:700;}.preview-actions{display:flex;justify-content:center;gap:10px;margin-top:14px;}.preview-actions button{border:1px solid #1f2328;border-radius:10px;background:#fff;padding:9px 14px;cursor:pointer;}@media print{body{background:#fff;}.preview-actions{display:none;}.ticket{box-shadow:none;border-radius:0;margin:0;width:72mm;}.preview-shell{padding:0;}}</style></head><body><div class="preview-shell"><div class="preview-card"><div class="ticket"><div class="ticket-center"><div><strong><?= esc($settings['kiosk_document_label'] ?? 'Ticket Consumidor Final') ?></strong></div><div class="ticket-small">${printedAt}</div><div class="ticket-small">${currencyField.options[currencyField.selectedIndex].text}</div><div class="ticket-small">Referencia: ${referenceField.value}</div></div>${rows}<div class="ticket-total"><span>TOTAL</span><span>${totalLabel.textContent}</span></div><div class="ticket-small" style="margin-top:8px;">Pago: ${paymentMethod.options[paymentMethod.selectedIndex].text}</div><div class="ticket-small">Cobrado: ${formatMoney(paidAmount.value || 0)}</div>${change > 0 ? '<div class="ticket-small" style="font-weight:700;color:#198754;">Vuelto: ' + formatMoney(change) + '</div>' : ''}</div><div class="preview-actions"><button type="button" onclick="window.print()">Imprimir</button><button type="button" onclick="window.close()">Cerrar</button></div></div></div></body></html>`;
+            
+            const headerTitle = ticketSettings.ticket_header_title || companyLegalName || companyName;
+            
+            const showCustomer = Number(ticketSettings.ticket_show_customer) === 1;
+            const customerHtml = showCustomer
+                ? `
+                    <div class="ticket-small" style="margin-top:6px; border-top:1px dashed #bbb; padding-top:4px; text-align:left;">
+                        <strong>Cliente:</strong> ${kioskCustomerName.value}<br>
+                        ${kioskDocumentDisplay ? `<strong>Doc:</strong> ${kioskDocumentDisplay.value}` : ''}
+                    </div>
+                `
+                : '';
+                
+            const showUser = Number(ticketSettings.ticket_show_user) === 1;
+            const userHtml = showUser
+                ? `<div class="ticket-small" style="text-align:left;"><strong>Vendedor:</strong> ${userName}</div>`
+                : '';
+
+            const footerHtml = ticketSettings.ticket_footer_notes
+                ? `
+                    <div class="ticket-small" style="margin-top:10px; border-top:1px dashed #bbb; padding-top:6px; text-align:center; white-space:pre-wrap;">
+                        ${ticketSettings.ticket_footer_notes}
+                    </div>
+                `
+                : '';
+
+            const printableWidth = paperWidth === '58mm' ? '50mm' : '72mm';
+
+            return `<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Ticket ${paperWidth}</title>
+    <style>
+        @page {
+            size: ${paperWidth} auto;
+            margin: 3mm;
+        }
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            margin: 0;
+            font-family: "Courier New", monospace;
+            background: #f7f4ef;
+            color: #111;
+        }
+        .preview-shell {
+            min-height: 100vh;
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 18px;
+        }
+        .preview-card {
+            width: 100%;
+            max-width: 360px;
+        }
+        .ticket {
+            width: ${paperWidth};
+            max-width: 100%;
+            background: #fff;
+            margin: 0 auto;
+            padding: 5mm 4mm;
+            border-radius: 12px;
+            box-shadow: 0 16px 40px rgba(0,0,0,.14);
+        }
+        .ticket-center {
+            text-align: center;
+        }
+        .ticket-small {
+            font-size: 11px;
+            color: #555;
+            line-height: 1.3;
+        }
+        .ticket-line {
+            border-bottom: 1px dashed #bbb;
+            padding: 6px 0;
+        }
+        .ticket-name {
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 2px;
+            word-break: break-word;
+        }
+        .ticket-meta {
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+        .ticket-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            font-size: 12px;
+        }
+        .ticket-total {
+            border-top: 1px solid #000;
+            margin-top: 8px;
+            padding-top: 8px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 15px;
+            font-weight: 700;
+        }
+        .preview-actions {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 14px;
+        }
+        .preview-actions button {
+            border: 1px solid #1f2328;
+            border-radius: 10px;
+            background: #fff;
+            padding: 9px 14px;
+            cursor: pointer;
+        }
+        @media print {
+            body {
+                background: #fff;
+            }
+            .preview-actions {
+                display: none;
+            }
+            .ticket {
+                box-shadow: none;
+                border-radius: 0;
+                margin: 0;
+                width: ${printableWidth};
+            }
+            .preview-shell {
+                padding: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="preview-shell">
+        <div class="preview-card">
+            <div class="ticket">
+                <div class="ticket-center">
+                    <div style="font-size:14px; font-weight:700; text-transform:uppercase; margin-bottom:4px;">${headerTitle}</div>
+                    ${companyTaxId ? `<div class="ticket-small">CUIT: ${companyTaxId}</div>` : ''}
+                    <div style="margin:4px 0; border-bottom:1px dashed #bbb;"></div>
+                    <div><strong><?= esc($settings['kiosk_document_label'] ?? 'Ticket Consumidor Final') ?></strong></div>
+                    <div class="ticket-small">${printedAt}</div>
+                    <div class="ticket-small">${currencyField.options[currencyField.selectedIndex].text}</div>
+                    <div class="ticket-small">Referencia: ${referenceField.value}</div>
+                </div>
+                
+                ${rows}
+                
+                <div class="ticket-total">
+                    <span>TOTAL</span>
+                    <span>${totalLabel.textContent}</span>
+                </div>
+                
+                <div class="ticket-small" style="margin-top:8px; text-align:left;"><strong>Pago:</strong> ${paymentMethod.options[paymentMethod.selectedIndex].text}</div>
+                <div class="ticket-small" style="text-align:left;"><strong>Cobrado:</strong> ${formatMoney(paidAmount.value || 0)}</div>
+                ${change > 0 ? '<div class="ticket-small" style="font-weight:700; color:#198754; text-align:left;"><strong>Vuelto:</strong> ' + formatMoney(change) + '</div>' : ''}
+                
+                ${customerHtml}
+                ${userHtml}
+                ${footerHtml}
+            </div>
+            <div class="preview-actions">
+                <button type="button" onclick="window.print()">Imprimir</button>
+                <button type="button" onclick="window.close()">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>`;
         };
 
         // ── Event listeners ─────────────────────────────────

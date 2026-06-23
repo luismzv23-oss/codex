@@ -196,6 +196,24 @@
                     <p class="text-secondary mb-0">Previsualiza en tiempo real cómo lucirá el ticket impreso térmico o documento.</p>
                 </div>
 
+                <!-- Test Voucher Dropdown for A4/Letter POS -->
+                <div id="test-voucher-container" class="w-100 mb-3" style="display: none;">
+                    <label class="form-label small fw-semibold text-secondary mb-1">
+                        <i class="bi bi-file-earmark-text me-1"></i> Comprobante de prueba (para previsualización)
+                    </label>
+                    <select id="test_voucher_type" class="form-select form-select-sm border-secondary-subtle rounded-3 shadow-sm py-2">
+                        <option value="factura_a" selected>Factura A (Letra A - Cód. 01)</option>
+                        <option value="factura_b">Factura B (Letra B - Cód. 06)</option>
+                        <option value="factura_c">Factura C (Letra C - Cód. 11)</option>
+                        <option value="factura_m">Factura M (Letra M - Cód. 51)</option>
+                        <option value="presupuesto">Presupuesto (Letra X - Cód. --)</option>
+                        <option value="remito">Remito (Letra R - Cód. --)</option>
+                    </select>
+                    <div class="form-text small text-secondary" style="font-size: 11px; margin-top: 4px;">
+                        La letra y el código AFIP se determinan dinámicamente según el tipo de comprobante seleccionado en la venta POS.
+                    </div>
+                </div>
+
                 <!-- Ticket Outer Wrapper -->
                 <div class="ticket-preview-box w-100 d-flex justify-content-center p-3 border rounded-4 bg-white flex-grow-1 align-items-start" style="min-height: 480px; overflow-y: auto;">
                     <div id="live-ticket" class="ticket-paper shadow-sm">
@@ -268,12 +286,12 @@
                                 </div>
                                 <!-- Center: Badge -->
                                 <div style="width: 10%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4px; border-right: 1px solid #000; background: #fff;">
-                                    <div style="border: 2px solid #000; font-size: 18px; font-weight: bold; width: 28px; height: 28px; line-height: 24px; text-align: center; margin-bottom: 2px;">A</div>
-                                    <div style="font-size: 6px; font-weight: bold; text-align: center; white-space: nowrap;">Código Nº 01</div>
+                                    <div id="preview-inv-letter-badge" style="border: 2px solid #000; font-size: 18px; font-weight: bold; width: 28px; height: 28px; line-height: 24px; text-align: center; margin-bottom: 2px;">A</div>
+                                    <div id="preview-inv-letter-code" style="font-size: 6px; font-weight: bold; text-align: center; white-space: nowrap;">Código Nº 01</div>
                                 </div>
                                 <!-- Right: Doc Info -->
                                 <div style="width: 45%; padding: 6px; text-align: left;">
-                                    <h4 style="font-size: 11px; font-weight: bold; margin: 0 0 2px; text-transform: uppercase;">FACTURA</h4>
+                                    <h4 id="preview-inv-doc-title" style="font-size: 11px; font-weight: bold; margin: 0 0 2px; text-transform: uppercase;">FACTURA</h4>
                                     <div style="font-size: 8px; font-weight: bold; margin-bottom: 4px;">Nº 0001-00000123</div>
                                     <div style="color: #444;">
                                         <strong>Fecha:</strong> <?= date('d/m/Y') ?><br>
@@ -467,6 +485,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const paperWidth = paperWidthSelect ? paperWidthSelect.value : '80mm';
         const isPageFormat = isActivePos && (paperWidth === 'A4' || paperWidth === 'letter');
 
+        const testVoucherContainer = document.getElementById('test-voucher-container');
+        if (testVoucherContainer) {
+            testVoucherContainer.style.display = isPageFormat ? 'block' : 'none';
+        }
+
         if (isPageFormat) {
             document.getElementById('ticket-format-layout').style.display = 'none';
             document.getElementById('invoice-format-layout').style.display = 'block';
@@ -505,6 +528,38 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update A4 layout fields
             document.getElementById('preview-inv-header-title').textContent = titleText;
             document.getElementById('preview-inv-footer-notes').textContent = footerText;
+
+            // Update letter badge dynamically based on test voucher selection
+            const testVoucherType = document.getElementById('test_voucher_type').value;
+            let letter = 'A';
+            let code = 'Código Nº 01';
+            let docTitle = 'FACTURA';
+
+            if (testVoucherType === 'factura_b') {
+                letter = 'B';
+                code = 'Código Nº 06';
+                docTitle = 'FACTURA';
+            } else if (testVoucherType === 'factura_c') {
+                letter = 'C';
+                code = 'Código Nº 11';
+                docTitle = 'FACTURA';
+            } else if (testVoucherType === 'factura_m') {
+                letter = 'M';
+                code = 'Código Nº 51';
+                docTitle = 'FACTURA';
+            } else if (testVoucherType === 'presupuesto') {
+                letter = 'X';
+                code = 'Código Nº --';
+                docTitle = 'PRESUPUESTO';
+            } else if (testVoucherType === 'remito') {
+                letter = 'R';
+                code = 'Código Nº --';
+                docTitle = 'REMITO';
+            }
+
+            document.getElementById('preview-inv-letter-badge').textContent = letter;
+            document.getElementById('preview-inv-letter-code').textContent = code;
+            document.getElementById('preview-inv-doc-title').textContent = docTitle;
 
             // Margins position texts
             const topLeftVal = document.getElementById('pos_custom_text_top_left').value.trim() || 'IVA: Responsable Inscripto';
@@ -606,6 +661,11 @@ document.addEventListener('DOMContentLoaded', () => {
         input.addEventListener('input', updatePreview);
         input.addEventListener('change', updatePreview);
     });
+
+    const testVoucherSelect = document.getElementById('test_voucher_type');
+    if (testVoucherSelect) {
+        testVoucherSelect.addEventListener('change', updatePreview);
+    }
 
     const configTabElList = document.querySelectorAll('button[data-bs-toggle="tab"]');
     configTabElList.forEach(tabEl => {

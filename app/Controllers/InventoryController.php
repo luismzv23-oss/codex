@@ -1934,7 +1934,7 @@ class InventoryController extends BaseController
 
             $latestByProduct[$productId] = $row;
 
-            if (count($latestByProduct) >= 8) {
+            if (count($latestByProduct) >= 50) {
                 break;
             }
         }

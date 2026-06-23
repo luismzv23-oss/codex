@@ -1,6 +1,67 @@
 <?php
 $request = service('request');
 $isPopup = $request->getGet('popup') === '1';
+
+// Fetch accessible systems for quick switcher
+$switcherSystems = [];
+if (auth_check() && !$isPopup) {
+    $userId = auth_user()['id'] ?? '';
+    $roleSlug = auth_user()['role_slug'] ?? '';
+    $companyId = auth_user()['company_id'] ?? '';
+    if (!empty($userId)) {
+        $db = \Config\Database::connect();
+        if ($roleSlug === 'superadmin') {
+            $reqCompanyId = service('request')->getGet('company_id') ?: $companyId;
+            if (!empty($reqCompanyId)) {
+                $rows = $db->table('systems')
+                    ->select('systems.*')
+                    ->join('company_systems', 'company_systems.system_id = systems.id')
+                    ->where('company_systems.company_id', $reqCompanyId)
+                    ->where('company_systems.active', 1)
+                    ->where('systems.active', 1)
+                    ->orderBy('systems.name', 'ASC')
+                    ->get()
+                    ->getResultArray();
+            } else {
+                $rows = $db->table('systems')
+                    ->where('systems.active', 1)
+                    ->orderBy('name', 'ASC')
+                    ->get()
+                    ->getResultArray();
+            }
+        } else {
+            $rows = $db->table('user_systems')
+                ->select('systems.id, systems.name, systems.slug, systems.description, systems.entry_url, systems.icon, user_systems.access_level')
+                ->join('systems', 'systems.id = user_systems.system_id')
+                ->join('company_systems', 'company_systems.system_id = systems.id AND company_systems.company_id = user_systems.company_id')
+                ->where('user_systems.user_id', $userId)
+                ->where('user_systems.active', 1)
+                ->where('company_systems.active', 1)
+                ->where('systems.active', 1)
+                ->orderBy('systems.name', 'ASC')
+                ->get()
+                ->getResultArray();
+        }
+        
+        foreach ($rows as $row) {
+            $baseHref = $row['entry_url'];
+            if ($baseHref !== '#') {
+                $reqCompanyId = service('request')->getGet('company_id') ?: $companyId;
+                $companyQuery = (!empty($reqCompanyId) && in_array($row['slug'], ['inventario', 'ventas', 'compras', 'caja', 'contabilidad', 'impuestos', 'comercial'], true))
+                    ? '?company_id=' . $reqCompanyId
+                    : '';
+                $entryHref = site_url($baseHref . $companyQuery);
+                
+                $switcherSystems[] = [
+                    'name' => $row['name'],
+                    'slug' => $row['slug'],
+                    'entry_url' => $entryHref,
+                    'icon' => $row['icon'] ?: 'bi-grid',
+                ];
+            }
+        }
+    }
+}
 ?>
 <!doctype html>
 <html lang="es">
@@ -126,6 +187,14 @@ $isPopup = $request->getGet('popup') === '1';
             opacity: .45;
             cursor: not-allowed;
         }
+        .switcher-card:hover {
+            background-color: rgba(33, 37, 41, 0.05);
+            transform: translateY(-2px);
+        }
+        .switcher-card:hover .icon-btn {
+            background-color: #212529 !important;
+            color: #fff !important;
+        }
     </style>
 </head>
 <body class="<?= $isPopup ? 'popup-mode' : '' ?>">
@@ -155,6 +224,32 @@ $isPopup = $request->getGet('popup') === '1';
                         <?php endif; ?>
                     </ul>
                     <div class="d-flex align-items-center gap-3">
+                        <!-- Lanzador de Módulos (Quick Switcher) -->
+                        <?php if (!empty($switcherSystems)): ?>
+                            <div class="dropdown me-1">
+                                <button class="btn btn-outline-dark dropdown-toggle d-flex align-items-center gap-2 px-3 py-1.5 rounded-3 shadow-sm" type="button" id="moduleSwitcherDropdown" data-bs-toggle="dropdown" aria-expanded="false" style="border: 1px solid rgba(0,0,0,0.12); font-weight: 500; font-size: 13.5px;">
+                                    <i class="bi bi-grid-3x3-gap-fill text-dark"></i>
+                                    <span>Módulos</span>
+                                </button>
+                                <div class="dropdown-menu dropdown-menu-end p-3 border-0 shadow-lg rounded-4 mt-2" aria-labelledby="moduleSwitcherDropdown" style="width: 320px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(0,0,0,0.06) !important; z-index: 2000;">
+                                    <div class="dropdown-header px-2 py-1 text-uppercase tracking-wider text-secondary small fw-bold mb-2">Ecosistema ERP</div>
+                                    <div class="row g-2">
+                                        <?php foreach ($switcherSystems as $sys): ?>
+                                            <div class="col-6">
+                                                <a href="<?= esc($sys['entry_url']) ?>" class="d-flex flex-column align-items-center text-center p-2 rounded-3 text-decoration-none text-dark switcher-card" style="transition: all 0.2s ease;">
+                                                    <span class="icon-btn mb-1.5 rounded-3 bg-light text-dark d-flex align-items-center justify-content-center" style="width: 42px; height: 42px; font-size: 20px;"><i class="bi <?= esc($sys['icon']) ?>"></i></span>
+                                                    <span style="font-size: 11.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;"><?= esc($sys['name']) ?></span>
+                                                </a>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                    <div class="border-top mt-3 pt-2 text-center">
+                                        <a href="<?= site_url('sistemas') ?>" class="text-decoration-none text-secondary small fw-medium" style="font-size: 11px;"><i class="bi bi-gear-fill me-1"></i>Gestionar asignaciones</a>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+
                         <div class="small text-end">
                             <div class="fw-semibold"><?= esc(auth_user()['name'] ?? '') ?></div>
                             <div class="text-secondary"><?= esc(auth_user()['role_name'] ?? '') ?></div>

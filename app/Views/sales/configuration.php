@@ -20,6 +20,21 @@
 </div>
 
 <div class="row g-4">
+    <!-- Interactive Search Toolbar -->
+    <div class="col-12">
+        <div class="card border-0 shadow-sm rounded-4 bg-light">
+            <div class="card-body p-3 d-flex flex-wrap justify-content-between align-items-center gap-3">
+                <div class="input-group" style="max-width: 400px;">
+                    <span class="input-group-text bg-white border-end-0 text-secondary"><i class="bi bi-search"></i></span>
+                    <input type="text" id="salesSearchInput" class="form-control border-start-0 ps-0 shadow-none" placeholder="Filtrar comprobantes, puntos de venta, dispositivos..." aria-label="Buscar en configuración de ventas">
+                    <button class="btn btn-white border border-start-0 text-secondary" type="button" id="clearSalesSearchBtn" style="display: none;" title="Limpiar busqueda"><i class="bi bi-x-lg"></i></button>
+                </div>
+                <div class="small text-secondary">
+                    <i class="bi bi-info-circle me-1"></i> Escribe para buscar en tiempo real en todos los listados de la página.
+                </div>
+            </div>
+        </div>
+    </div>
     <div class="col-12">
         <div class="card border-0 shadow-sm rounded-4"><div class="card-body p-4">
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
@@ -115,28 +130,36 @@
     <div class="col-lg-6">
         <div class="card border-0 shadow-sm rounded-4 h-100"><div class="card-body p-4">
             <h2 class="h4 mb-3">Comprobantes</h2>
-            <?php foreach ($documentTypes as $documentType): ?>
-                <div class="border rounded-3 p-3 mb-2">
-                    <div class="d-flex justify-content-between gap-2">
-                        <div>
-                            <strong><?= esc($documentType['name']) ?></strong>
-                            <div class="small text-secondary"><?= esc($documentType['code']) ?> / <?= esc($documentType['sequence_key']) ?> / <?= esc($documentType['channel']) ?></div>
+            <div id="document-types-list">
+                <?php foreach ($documentTypes as $documentType): ?>
+                    <div class="border rounded-3 p-3 mb-2 data-item">
+                        <div class="d-flex justify-content-between gap-2">
+                            <div>
+                                <strong><?= esc($documentType['name']) ?></strong>
+                                <div class="small text-secondary"><?= esc($documentType['code']) ?> / <?= esc($documentType['sequence_key']) ?> / <?= esc($documentType['channel']) ?></div>
+                            </div>
+                            <span class="small <?= (int) ($documentType['impacts_stock'] ?? 0) === 1 ? 'text-success' : 'text-secondary' ?>"><?= (int) ($documentType['impacts_stock'] ?? 0) === 1 ? 'Impacta stock' : 'Sin stock' ?></span>
                         </div>
-                        <span class="small <?= (int) ($documentType['impacts_stock'] ?? 0) === 1 ? 'text-success' : 'text-secondary' ?>"><?= (int) ($documentType['impacts_stock'] ?? 0) === 1 ? 'Impacta stock' : 'Sin stock' ?></span>
                     </div>
-                </div>
-            <?php endforeach; ?>
+                <?php endforeach; ?>
+                <div class="no-results-row text-secondary text-center py-3" style="display: none;">No se encontraron comprobantes.</div>
+                <?php if ($documentTypes === []): ?><div class="no-data-row text-secondary text-center py-3">No hay comprobantes configurados.</div><?php endif; ?>
+            </div>
         </div></div>
     </div>
     <div class="col-lg-6">
         <div class="card border-0 shadow-sm rounded-4 h-100"><div class="card-body p-4">
             <h2 class="h4 mb-3">Puntos de venta y cuenta corriente</h2>
-            <?php foreach ($pointsOfSale as $pointOfSale): ?>
-                <div class="border rounded-3 p-3 mb-2">
-                    <strong><?= esc($pointOfSale['name']) ?></strong>
-                    <div class="small text-secondary"><?= esc($pointOfSale['code']) ?> / <?= esc($pointOfSale['channel']) ?></div>
-                </div>
-            <?php endforeach; ?>
+            <div id="points-of-sale-list">
+                <?php foreach ($pointsOfSale as $pointOfSale): ?>
+                    <div class="border rounded-3 p-3 mb-2 data-item">
+                        <strong><?= esc($pointOfSale['name']) ?></strong>
+                        <div class="small text-secondary"><?= esc($pointOfSale['code']) ?> / <?= esc($pointOfSale['channel']) ?></div>
+                    </div>
+                <?php endforeach; ?>
+                <div class="no-results-row text-secondary text-center py-3" style="display: none;">No se encontraron puntos de venta.</div>
+                <?php if ($pointsOfSale === []): ?><div class="no-data-row text-secondary text-center py-3">No hay puntos de venta configurados.</div><?php endif; ?>
+            </div>
             <hr>
             <div class="small text-secondary">Comprobantes pendientes</div>
             <div class="fs-4 fw-semibold"><?= esc((string) ($receivableSummary['pending'] ?? 0)) ?></div>
@@ -150,31 +173,35 @@
                 <h2 class="h4 mb-0">Dispositivos de mostrador</h2>
                 <a href="<?= site_url('ventas/dispositivos/nuevo' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-dark icon-btn" data-popup="true" data-popup-title="Dispositivo de mostrador" data-popup-subtitle="Registrar impresoras, lectores y perifericos."><i class="bi bi-plus-lg"></i></a>
             </div>
-            <?php foreach ($deviceSettings as $device): ?>
-                <div class="border rounded-3 p-3 mb-2">
-                    <strong><?= esc($device['device_name']) ?></strong>
-                    <div class="small text-secondary"><?= esc($device['channel']) ?> / <?= esc($device['device_type']) ?> / <?= esc($device['device_code']) ?></div>
-                </div>
-            <?php endforeach; ?>
-            <?php if ($deviceSettings === []): ?><div class="text-secondary">Todavia no hay dispositivos configurados.</div><?php endif; ?>
+            <div id="devices-list">
+                <?php foreach ($deviceSettings as $device): ?>
+                    <div class="border rounded-3 p-3 mb-2 data-item">
+                        <strong><?= esc($device['device_name']) ?></strong>
+                        <div class="small text-secondary"><?= esc($device['channel']) ?> / <?= esc($device['device_type']) ?> / <?= esc($device['device_code']) ?></div>
+                    </div>
+                <?php endforeach; ?>
+                <div class="no-results-row text-secondary text-center py-3" style="display: none;">No se encontraron dispositivos.</div>
+                <?php if ($deviceSettings === []): ?><div class="no-data-row text-secondary text-center py-3">Todavia no hay dispositivos configurados.</div><?php endif; ?>
+            </div>
         </div></div>
     </div>
     <div class="col-lg-6">
         <div class="card border-0 shadow-sm rounded-4 h-100"><div class="card-body p-4">
             <h2 class="h4 mb-3">Bitacora de hardware</h2>
             <div class="table-responsive">
-                <table class="table align-middle mb-0">
+                <table class="table align-middle mb-0" id="hardware-logs-table">
                     <thead><tr><th>Fecha</th><th>Canal</th><th>Evento</th><th>Estado</th></tr></thead>
                     <tbody>
                         <?php foreach ($hardwareLogs as $log): ?>
-                            <tr>
+                            <tr class="data-row">
                                 <td><?= esc(! empty($log['created_at']) ? date('d/m/Y H:i', strtotime($log['created_at'])) : '-') ?></td>
                                 <td><?= esc($log['channel']) ?></td>
                                 <td><?= esc($log['event_type']) ?><div class="small text-secondary"><?= esc($log['device_type']) ?></div></td>
                                 <td><?= esc($log['status']) ?></td>
                             </tr>
                         <?php endforeach; ?>
-                        <?php if ($hardwareLogs === []): ?><tr><td colspan="4" class="text-secondary">Todavia no hay eventos de hardware.</td></tr><?php endif; ?>
+                        <tr class="no-results-row" style="display: none;"><td colspan="4" class="text-secondary text-center py-3">No se encontraron eventos de hardware.</td></tr>
+                        <?php if ($hardwareLogs === []): ?><tr class="no-data-row"><td colspan="4" class="text-secondary text-center py-3">Todavia no hay eventos de hardware.</td></tr><?php endif; ?>
                     </tbody>
                 </table>
             </div>
@@ -184,11 +211,11 @@
         <div class="card border-0 shadow-sm rounded-4"><div class="card-body p-4">
             <h2 class="h4 mb-3">Eventos ARCA recientes</h2>
             <div class="table-responsive">
-                <table class="table align-middle mb-0">
+                <table class="table align-middle mb-0" id="arca-events-table">
                     <thead><tr><th>Fecha</th><th>Evento</th><th>Servicio</th><th>Comprobante</th><th>Estado</th><th>Mensaje</th></tr></thead>
                     <tbody>
                         <?php foreach ($arcaEvents as $event): ?>
-                            <tr>
+                            <tr class="data-row">
                                 <td><?= esc(! empty($event['performed_at']) ? date('d/m/Y H:i', strtotime($event['performed_at'])) : '-') ?></td>
                                 <td><?= esc($event['event_type']) ?></td>
                                 <td><?= esc(strtoupper((string) $event['service_slug'])) ?></td>
@@ -197,11 +224,204 @@
                                 <td><?= esc($event['message'] ?? '-') ?></td>
                             </tr>
                         <?php endforeach; ?>
-                        <?php if ($arcaEvents === []): ?><tr><td colspan="6" class="text-secondary">Todavia no hay eventos fiscales registrados.</td></tr><?php endif; ?>
+                        <tr class="no-results-row" style="display: none;"><td colspan="6" class="text-secondary text-center py-3">No se encontraron eventos fiscales.</td></tr>
+                        <?php if ($arcaEvents === []): ?><tr class="no-data-row"><td colspan="6" class="text-secondary text-center py-3">Todavia no hay eventos fiscales registrados.</td></tr><?php endif; ?>
                     </tbody>
                 </table>
             </div>
         </div></div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    class PaginatedList {
+        constructor(containerId, isTable, pageSize, searchInputId) {
+            this.container = document.getElementById(containerId);
+            if (!this.container) return;
+            this.isTable = isTable;
+            this.pageSize = pageSize;
+            this.currentPage = 1;
+
+            if (this.isTable) {
+                this.tbody = this.container.tBodies[0];
+                if (!this.tbody) return;
+                this.allRows = Array.from(this.tbody.querySelectorAll('tr.data-row'));
+                this.noResultsRow = this.tbody.querySelector('tr.no-results-row');
+                this.noDataRow = this.tbody.querySelector('tr.no-data-row');
+                this.parentWrapper = this.container.closest('.table-responsive');
+            } else {
+                this.allRows = Array.from(this.container.querySelectorAll('.data-item'));
+                this.noResultsRow = this.container.querySelector('.no-results-row');
+                this.noDataRow = this.container.querySelector('.no-data-row');
+                this.parentWrapper = this.container;
+            }
+
+            // Create pagination wrapper
+            this.paginationWrapper = document.createElement('div');
+            this.paginationWrapper.className = 'codex-pagination mt-3';
+            this.parentWrapper.after(this.paginationWrapper);
+
+            // Listen for input search
+            const searchInput = document.getElementById(searchInputId);
+            if (searchInput) {
+                searchInput.addEventListener('input', () => {
+                    this.currentPage = 1;
+                    this.update();
+                });
+            }
+
+            this.update();
+        }
+
+        update() {
+            const query = document.getElementById('salesSearchInput')?.value.toLowerCase().trim() || '';
+            
+            if (this.allRows.length === 0) {
+                if (this.noDataRow) this.noDataRow.style.display = '';
+                if (this.noResultsRow) this.noResultsRow.style.display = 'none';
+                this.paginationWrapper.innerHTML = '';
+                return;
+            }
+
+            let matchedRows = [];
+
+            this.allRows.forEach(row => {
+                let matches = false;
+                if (!query) {
+                    matches = true;
+                } else {
+                    const text = row.textContent.toLowerCase();
+                    matches = text.includes(query);
+                }
+
+                if (matches) {
+                    row.style.display = this.isTable ? '' : 'block';
+                    matchedRows.push(row);
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            const totalCount = matchedRows.length;
+            if (totalCount === 0) {
+                if (this.noResultsRow) this.noResultsRow.style.display = this.isTable ? '' : 'block';
+                if (this.noDataRow) this.noDataRow.style.display = 'none';
+                this.paginationWrapper.innerHTML = '';
+            } else {
+                if (this.noResultsRow) this.noResultsRow.style.display = 'none';
+                if (this.noDataRow) this.noDataRow.style.display = 'none';
+
+                const pageCount = Math.ceil(totalCount / this.pageSize);
+                if (this.currentPage > pageCount) {
+                    this.currentPage = Math.max(1, pageCount);
+                }
+
+                const startIndex = (this.currentPage - 1) * this.pageSize;
+                const endIndex = startIndex + this.pageSize;
+
+                matchedRows.forEach((row, index) => {
+                    if (index >= startIndex && index < endIndex) {
+                        row.style.display = this.isTable ? '' : 'block';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+
+                this.renderPagination(totalCount, pageCount);
+            }
+        }
+
+        renderPagination(totalCount, pageCount) {
+            this.paginationWrapper.innerHTML = '';
+            if (pageCount <= 1) {
+                const summary = document.createElement('div');
+                summary.className = 'codex-pagination__summary';
+                summary.textContent = `Mostrando 1-${totalCount} de ${totalCount} registros`;
+                this.paginationWrapper.appendChild(summary);
+                return;
+            }
+
+            const summary = document.createElement('div');
+            summary.className = 'codex-pagination__summary';
+            const startIndex = (this.currentPage - 1) * this.pageSize;
+            const endIndex = Math.min(startIndex + this.pageSize, totalCount);
+            summary.textContent = `Mostrando ${startIndex + 1}-${endIndex} de ${totalCount} registros`;
+
+            const controls = document.createElement('div');
+            controls.className = 'codex-pagination__controls';
+
+            const prev = document.createElement('button');
+            prev.type = 'button';
+            prev.className = 'codex-pagination__btn';
+            prev.innerHTML = '<i class="bi bi-chevron-left"></i>';
+            prev.disabled = this.currentPage === 1;
+            prev.addEventListener('click', () => {
+                if (this.currentPage > 1) {
+                    this.currentPage--;
+                    this.update();
+                }
+            });
+
+            const pages = document.createElement('div');
+            pages.className = 'codex-pagination__pages';
+
+            const startPage = Math.max(1, this.currentPage - 2);
+            const endPage = Math.min(pageCount, this.currentPage + 2);
+
+            for (let p = startPage; p <= endPage; p++) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = `codex-pagination__btn${p === this.currentPage ? ' is-active' : ''}`;
+                btn.textContent = String(p);
+                btn.addEventListener('click', () => {
+                    this.currentPage = p;
+                    this.update();
+                });
+                pages.appendChild(btn);
+            }
+
+            const next = document.createElement('button');
+            next.type = 'button';
+            next.className = 'codex-pagination__btn';
+            next.innerHTML = '<i class="bi bi-chevron-right"></i>';
+            next.disabled = this.currentPage === pageCount;
+            next.addEventListener('click', () => {
+                if (this.currentPage < pageCount) {
+                    this.currentPage++;
+                    this.update();
+                }
+            });
+
+            controls.appendChild(prev);
+            controls.appendChild(pages);
+            controls.appendChild(next);
+
+            this.paginationWrapper.appendChild(summary);
+            this.paginationWrapper.appendChild(controls);
+        }
+    }
+
+    // Initialize Paginated Lists & Tables
+    new PaginatedList('document-types-list', false, 5, 'salesSearchInput');
+    new PaginatedList('points-of-sale-list', false, 5, 'salesSearchInput');
+    new PaginatedList('devices-list', false, 5, 'salesSearchInput');
+    new PaginatedList('hardware-logs-table', true, 5, 'salesSearchInput');
+    new PaginatedList('arca-events-table', true, 5, 'salesSearchInput');
+
+    // Clear search handler
+    const clearBtn = document.getElementById('clearSalesSearchBtn');
+    const searchInput = document.getElementById('salesSearchInput');
+    if (clearBtn && searchInput) {
+        searchInput.addEventListener('input', () => {
+            clearBtn.style.display = searchInput.value ? 'block' : 'none';
+        });
+        clearBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            clearBtn.style.display = 'none';
+            searchInput.dispatchEvent(new Event('input'));
+        });
+    }
+});
+</script>
 <?= $this->endSection() ?>

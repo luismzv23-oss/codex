@@ -142,9 +142,19 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
                         <label class="form-label">Comprobante</label>
                         <select name="document_type_id" class="form-select">
                             <?php foreach (($documentTypes ?? []) as $documentType): ?>
-                                <option value="<?= esc($documentType['id']) ?>" <?= old('document_type_id', $sale['document_type_id'] ?? (($documentTypes[0]['id'] ?? ''))) === $documentType['id'] ? 'selected' : '' ?>><?= esc($documentType['name']) ?></option>
+                                <option value="<?= esc($documentType['id']) ?>" data-category="<?= esc($documentType['category']) ?>" <?= old('document_type_id', $sale['document_type_id'] ?? (($documentTypes[0]['id'] ?? ''))) === $documentType['id'] ? 'selected' : '' ?>><?= esc($documentType['name']) ?></option>
                             <?php endforeach; ?>
                         </select>
+                    </div>
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="authorize_arca"
+                                   value="1" id="pos-authorize-arca">
+                            <label class="form-check-label" for="pos-authorize-arca">
+                                <i class="bi bi-lightning-charge-fill text-warning"></i>
+                                Autorizar ARCA al confirmar
+                            </label>
+                        </div>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Punto de venta</label>
@@ -702,6 +712,25 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
     updateCustomerInfo();
     refreshItemStocks();
     syncTotals();
+
+    // ARCA checkbox visibility based on document type
+    const docTypeSelect = document.querySelector('[name="document_type_id"]');
+    const arcaCheckbox  = document.getElementById('pos-authorize-arca');
+    const arcaContainer = arcaCheckbox ? arcaCheckbox.closest('.col-12') : null;
+    const arcaCategories = ['invoice', 'credit_note', 'debit_note', 'ticket'];
+
+    function updateArcaCheckbox() {
+        if (!docTypeSelect || !arcaCheckbox || !arcaContainer) return;
+        const selected = docTypeSelect.options[docTypeSelect.selectedIndex];
+        const category = selected ? selected.dataset.category : '';
+        const allowed  = arcaCategories.includes(category);
+        arcaCheckbox.disabled = !allowed;
+        arcaContainer.style.display = allowed ? '' : 'none';
+        if (!allowed) arcaCheckbox.checked = false;
+    }
+
+    docTypeSelect && docTypeSelect.addEventListener('change', updateArcaCheckbox);
+    updateArcaCheckbox();
 })();
 </script>
 <?= $this->endSection() ?>

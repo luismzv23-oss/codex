@@ -144,7 +144,7 @@
                                 <?php if (in_array($sale['status'], ['confirmed', 'returned_partial'], true) && $context['canManage']): ?>
                                     <a href="<?= site_url('ventas/' . $sale['id'] . '/devolucion' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-sm btn-outline-secondary icon-btn" data-popup="true" data-popup-title="Devolucion" data-popup-subtitle="Registrar devolucion total o parcial." title="Devolucion" aria-label="Devolucion"><i class="bi bi-arrow-counterclockwise"></i></a>
                                 <?php endif; ?>
-                                <?php if ($context['canManage'] && in_array(($sale['document_category'] ?? ''), ['invoice', 'ticket', 'credit_note', 'debit_note'], true) && in_array($sale['status'], ['confirmed', 'returned_partial', 'returned_total'], true)): ?>
+                                <?php if ($context['canManage'] && in_array(($sale['document_category'] ?? ''), ['invoice', 'ticket', 'credit_note', 'debit_note'], true) && in_array($sale['status'], ['confirmed', 'returned_partial', 'returned_total'], true) && empty($sale['cae'])): ?>
                                     <form method="post" action="<?= site_url('ventas/' . $sale['id'] . '/arca/autorizar' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="d-inline">
                                         <?= csrf_field() ?>
                                         <button class="btn btn-sm btn-outline-primary icon-btn" title="Autorizar ARCA" aria-label="Autorizar ARCA"><i class="bi bi-shield-check"></i></button>

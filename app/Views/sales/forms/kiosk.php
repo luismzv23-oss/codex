@@ -183,6 +183,30 @@ $productCatalog = array_values(array_map(static function (array $product): array
 
                             <div id="kiosk-hidden-items"></div>
 
+                            <div class="col-12 pt-3">
+                              <div class="d-flex gap-3 align-items-center flex-wrap">
+                                <div class="form-check form-check-inline">
+                                  <input class="form-check-input" type="radio" name="kiosk_emit_type"
+                                         id="kiosk-emit-ticket" value="ticket" checked>
+                                  <label class="form-check-label" for="kiosk-emit-ticket">Ticket</label>
+                                </div>
+                                <div class="form-check form-check-inline">
+                                  <input class="form-check-input" type="radio" name="kiosk_emit_type"
+                                         id="kiosk-emit-factura" value="factura">
+                                  <label class="form-check-label" for="kiosk-emit-factura">Factura</label>
+                                </div>
+                                <div id="kiosk-factura-options" class="d-none">
+                                  <select id="kiosk-factura-doc-type" class="form-select form-select-sm" style="min-width:160px;">
+                                    <?php foreach (($invoiceDocumentTypes ?? []) as $dt): ?>
+                                      <option value="<?= esc($dt['id']) ?>"><?= esc($dt['name']) ?></option>
+                                    <?php endforeach; ?>
+                                  </select>
+                                </div>
+                              </div>
+                              <input type="hidden" name="authorize_arca" id="kiosk-authorize-arca" value="0">
+                              <input type="hidden" name="factura_document_type_id" id="kiosk-factura-doc-type-hidden" value="">
+                            </div>
+
                             <div class="d-flex justify-content-end gap-2 pt-4">
                                 <button type="button" class="btn btn-outline-dark icon-btn" id="kiosk-print-preview"
                                     title="Imprimir factura (F5)" aria-label="Imprimir factura"><i
@@ -255,6 +279,31 @@ $productCatalog = array_values(array_map(static function (array $product): array
         const form = document.getElementById('kiosk-form');
         const warehouseField = form.querySelector('select[name="warehouse_id"]');
         const printButton = document.getElementById('kiosk-print-preview');
+        const authorizeArcaField = document.getElementById('kiosk-authorize-arca');
+        const facturaDocTypeHidden = document.getElementById('kiosk-factura-doc-type-hidden');
+        const facturaDocTypeSelect = document.getElementById('kiosk-factura-doc-type');
+        const facturaOptions = document.getElementById('kiosk-factura-options');
+
+        const syncFacturaDocType = () => {
+            facturaDocTypeHidden.value = facturaDocTypeSelect ? facturaDocTypeSelect.value : '';
+        };
+        if (facturaDocTypeSelect) {
+            facturaDocTypeSelect.addEventListener('change', syncFacturaDocType);
+        }
+
+        document.querySelectorAll('input[name="kiosk_emit_type"]').forEach((radio) => {
+            radio.addEventListener('change', () => {
+                if (radio.value === 'factura') {
+                    facturaOptions.classList.remove('d-none');
+                    authorizeArcaField.value = '1';
+                    syncFacturaDocType();
+                } else {
+                    facturaOptions.classList.add('d-none');
+                    authorizeArcaField.value = '0';
+                    facturaDocTypeHidden.value = '';
+                }
+            });
+        });
         const cancelButton = document.getElementById('kiosk-cancel-button');
         const submitBtn = document.getElementById('kiosk-submit-btn');
         const toastEl = document.getElementById('codex-kiosk-toast');
@@ -829,13 +878,20 @@ $productCatalog = array_values(array_map(static function (array $product): array
 
                     if (data.status === 'ok') {
                         beepConfirm();
-                        showToast('Venta registrada ✓ ' + (data.sale_number || referenceField.value));
+                        let toastMsg = 'Venta registrada ✓ ' + (data.sale_number || referenceField.value);
+                        if (data.arca_cae) {
+                            toastMsg += ' · CAE: ' + data.arca_cae;
+                        }
+                        showToast(toastMsg);
                         items.clear();
                         renderTicket();
                         kioskCustomerId.value = consumerFinalId;
                         kioskCustomerName.value = 'Consumidor Final';
                         if (kioskDocumentDisplay) kioskDocumentDisplay.value = defaultKioskDocLabel;
                         clearCustomerBtn.classList.add('d-none');
+                        // Reset emit type to Ticket
+                        const ticketRadio = document.getElementById('kiosk-emit-ticket');
+                        if (ticketRadio) { ticketRadio.checked = true; ticketRadio.dispatchEvent(new Event('change')); }
                         searchField.value = '';
                         searchField.focus();
                     } else {

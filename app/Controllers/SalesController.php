@@ -196,7 +196,13 @@ class SalesController extends BaseController
             return redirect()->to($this->salesRoute('ventas/pos', $companyId))->with('error', $result);
         }
 
-        $this->processArcaAfterConfirmation($companyId, $saleId);
+        $authorizeArca = $this->request->getPost('authorize_arca') === '1';
+        if ($authorizeArca) {
+            $saleFresh = $this->ownedSale($companyId, $saleId);
+            $this->authorizeSaleInArca($companyId, $saleFresh);
+        } else {
+            $this->processArcaAfterConfirmation($companyId, $saleId);
+        }
         $this->recordHardwareEvent($companyId, 'pos', 'printer', 'sale_confirmed', 'ok', 'sale', $saleId, [
             'sale_number' => $saleNumber,
             'cash_session_id' => $cashSession['id'],
@@ -1032,6 +1038,10 @@ class SalesController extends BaseController
             'documentType' => $this->defaultDocumentType($companyId, 'kiosk'),
             'pointOfSale' => $this->defaultPointOfSale($companyId, 'kiosk'),
             'cashSession' => $cashSession,
+            'invoiceDocumentTypes' => array_values(array_filter(
+                $this->documentTypeOptions($companyId, 'standard'),
+                fn($dt) => ($dt['category'] ?? '') === 'invoice'
+            )),
         ]);
     }
 
@@ -1057,13 +1067,21 @@ class SalesController extends BaseController
             $customerId = $consumer['id'] ?? null;
         }
         $kioskDocumentType = $this->defaultDocumentType($companyId, 'kiosk');
-        $documentReference = $this->nextSequenceNumber($companyId, $kioskDocumentType['sequence_key'], $kioskDocumentType['default_prefix'] ?: 'TCK');
+        $authorizeArca    = $this->request->getPost('authorize_arca') === '1';
+        $facturaDocTypeId = trim((string) ($this->request->getPost('factura_document_type_id') ?? ''));
+
+        if ($authorizeArca && $facturaDocTypeId !== '') {
+            $effectiveDocType = (new SalesDocumentTypeModel())->find($facturaDocTypeId) ?? $kioskDocumentType;
+        } else {
+            $effectiveDocType = $kioskDocumentType;
+        }
+        $documentReference = $this->nextSequenceNumber($companyId, $effectiveDocType['sequence_key'], $effectiveDocType['default_prefix'] ?: 'TCK');
 
         $payload = $this->salePayload($companyId, [
             'customer_id' => $customerId,
             'pos_mode' => '1',
             'price_list_name' => 'KIOSCO',
-            'document_type_id' => $kioskDocumentType['id'] ?? null,
+            'document_type_id' => $effectiveDocType['id'] ?? null,
             'point_of_sale_id' => $this->defaultPointOfSale($companyId, 'kiosk')['id'] ?? null,
             'payments' => [
                 0 => [
@@ -1086,7 +1104,7 @@ class SalesController extends BaseController
             'cash_register_id' => $cashSession['cash_register_id'],
             'cash_session_id' => $cashSession['id'],
             'sale_number' => $documentReference,
-            'document_code' => $payload['documentType']['code'] ?? 'TICKET',
+            'document_code' => $effectiveDocType['code'] ?? 'TICKET',
             'created_by' => $this->currentUser()['id'],
             'pos_mode' => 1,
         ]), true);
@@ -1101,7 +1119,13 @@ class SalesController extends BaseController
             return redirect()->to($this->salesRoute('ventas/kiosco', $companyId))->with('error', $result);
         }
 
-        $this->processArcaAfterConfirmation($companyId, $saleId);
+        $arcaResult = [];
+        if ($authorizeArca) {
+            $saleFresh  = $this->ownedSale($companyId, $saleId);
+            $arcaResult = $this->authorizeSaleInArca($companyId, $saleFresh);
+        } else {
+            $this->processArcaAfterConfirmation($companyId, $saleId);
+        }
         $this->recordHardwareEvent($companyId, 'kiosk', 'printer', 'sale_confirmed', 'ok', 'sale', $saleId, [
             'sale_number' => $documentReference,
             'cash_session_id' => $cashSession['id'],
@@ -1113,6 +1137,9 @@ class SalesController extends BaseController
                 'message' => 'Factura kiosco registrada correctamente.',
                 'sale_number' => $documentReference,
                 'sale_id' => $saleId,
+                'arca_cae'     => $arcaResult['cae'] ?? null,
+                'arca_status'  => $arcaResult['status'] ?? null,
+                'arca_message' => $arcaResult['message'] ?? null,
                 'csrf_token' => csrf_hash(),
             ]);
         }

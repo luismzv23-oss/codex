@@ -332,7 +332,7 @@
                                 <a href="<?= site_url('ventas/' . $sale['id'] . '/pdf' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
                                     class="btn btn-sm btn-outline-danger icon-btn" title="PDF" aria-label="PDF"
                                     target="_blank"><i class="bi bi-file-earmark-pdf"></i></a>
-                                <?php if ($context['canManage'] && in_array(($sale['document_category'] ?? ''), ['invoice', 'ticket', 'credit_note', 'debit_note'], true) && in_array($sale['status'], ['confirmed', 'returned_partial', 'returned_total'], true)): ?>
+                                <?php if ($context['canManage'] && in_array(($sale['document_category'] ?? ''), ['invoice', 'ticket', 'credit_note', 'debit_note'], true) && in_array($sale['status'], ['confirmed', 'returned_partial', 'returned_total'], true) && empty($sale['cae'])): ?>
                                     <form method="post"
                                         action="<?= site_url('ventas/' . $sale['id'] . '/arca/autorizar' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
                                         class="d-inline">

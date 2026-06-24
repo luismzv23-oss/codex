@@ -37,3 +37,4 @@ php spark serve
 - `php spark migrate`
 - `php spark db:seed CoreSeeder`
 
+24/06/2026

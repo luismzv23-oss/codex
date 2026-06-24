@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="es">
+
 <head>
     <meta charset="utf-8">
     <?php
@@ -24,7 +25,7 @@
         if ($docType) {
             $name = $docType['name'];
             $docName = strtoupper($name);
-            
+
             // Resolve Letter
             if (!empty($docType['letter'])) {
                 $invoiceLetter = strtoupper($docType['letter']);
@@ -41,18 +42,28 @@
                 $isRI = stripos($topLeftText, 'Responsable Inscripto') !== false;
                 $invoiceLetter = $isRI ? 'B' : 'C';
             }
-            
+
             // Resolve AFIP code
-            if (stripos($name, 'Factura A') !== false) $invoiceCode = '01';
-            elseif (stripos($name, 'Nota de Debito A') !== false) $invoiceCode = '02';
-            elseif (stripos($name, 'Nota de Credito A') !== false) $invoiceCode = '03';
-            elseif (stripos($name, 'Factura B') !== false) $invoiceCode = '06';
-            elseif (stripos($name, 'Nota de Debito B') !== false) $invoiceCode = '07';
-            elseif (stripos($name, 'Nota de Credito B') !== false) $invoiceCode = '08';
-            elseif (stripos($name, 'Factura C') !== false) $invoiceCode = '11';
-            elseif (stripos($name, 'Nota de Debito C') !== false) $invoiceCode = '12';
-            elseif (stripos($name, 'Nota de Credito C') !== false) $invoiceCode = '13';
-            elseif (stripos($name, 'Factura M') !== false) $invoiceCode = '51';
+            if (stripos($name, 'Factura A') !== false)
+                $invoiceCode = '01';
+            elseif (stripos($name, 'Nota de Debito A') !== false)
+                $invoiceCode = '02';
+            elseif (stripos($name, 'Nota de Credito A') !== false)
+                $invoiceCode = '03';
+            elseif (stripos($name, 'Factura B') !== false)
+                $invoiceCode = '06';
+            elseif (stripos($name, 'Nota de Debito B') !== false)
+                $invoiceCode = '07';
+            elseif (stripos($name, 'Nota de Credito B') !== false)
+                $invoiceCode = '08';
+            elseif (stripos($name, 'Factura C') !== false)
+                $invoiceCode = '11';
+            elseif (stripos($name, 'Nota de Debito C') !== false)
+                $invoiceCode = '12';
+            elseif (stripos($name, 'Nota de Credito C') !== false)
+                $invoiceCode = '13';
+            elseif (stripos($name, 'Factura M') !== false)
+                $invoiceCode = '51';
             elseif (stripos($name, 'Ticket') !== false || ($docType['category'] ?? '') === 'ticket') {
                 $invoiceCode = ($invoiceLetter === 'B') ? '83' : '11';
             }
@@ -66,40 +77,64 @@
     }
     ?>
     <style>
-        body { font-family: DejaVu Sans, sans-serif; color: #000000; font-size: <?= $fontSizePx ?>; margin: 0; padding: 0; }
-        h1, h2, h3 { margin: 0 0 4px; }
-        .section { margin-bottom: 12px; }
-        
+        body {
+            font-family:
+                <?= esc($ticketSettings['ticket_font_family'] ?? 'DejaVu Sans') ?>
+                , sans-serif;
+            color: #000000;
+            font-size:
+                <?= $fontSizePx ?>
+            ;
+            margin: 0;
+            padding: 0;
+        }
+
+        h1,
+        h2,
+        h3 {
+            margin: 0 0 4px;
+        }
+
+        .section {
+            margin-bottom: 12px;
+        }
+
         /* Layout Tables */
         .table-bordered {
             width: 100%;
             border-collapse: collapse;
         }
-        .table-bordered th, .table-bordered td {
+
+        .table-bordered th,
+        .table-bordered td {
             border: 1px solid #000000;
             padding: 5px 6px;
             vertical-align: top;
         }
+
         .table-bordered th {
             background-color: #f2f2f2;
             font-weight: bold;
             text-align: left;
             font-size: 10px;
         }
-        
+
         /* Header Box */
         .header-box {
             width: 100%;
             border-collapse: collapse;
             border: 1px solid #000000;
         }
+
         .header-cell {
             padding: 8px;
             vertical-align: top;
         }
+
         .header-left {
             width: 45%;
         }
+
         .header-center {
             width: 10%;
             text-align: center;
@@ -107,10 +142,11 @@
             border-right: 1px solid #000000;
             position: relative;
         }
+
         .header-right {
             width: 45%;
         }
-        
+
         /* Square letter badge */
         .letter-badge {
             border: 2px solid #000000;
@@ -123,6 +159,7 @@
             text-align: center;
             background: #ffffff;
         }
+
         .letter-code {
             font-size: 9px;
             margin-top: 4px;
@@ -137,6 +174,7 @@
             margin-bottom: 10px;
             border-radius: 2px;
         }
+
         .info-box td {
             border: 0;
             padding: 3px 2px;
@@ -149,6 +187,7 @@
             border-collapse: collapse;
             margin-top: 10px;
         }
+
         .totals-grid td {
             border: 1px solid #000000;
             padding: 6px;
@@ -156,16 +195,27 @@
             width: 16.66%;
             font-size: 11px;
         }
+
         .totals-grid .label {
             font-weight: bold;
             background: #f2f2f2;
             font-size: 9px;
             text-transform: uppercase;
         }
-        
-        .right { text-align: right; }
-        .center { text-align: center; }
-        .muted { color: #555555; font-size: 10px; }
+
+        .right {
+            text-align: right;
+        }
+
+        .center {
+            text-align: center;
+        }
+
+        .muted {
+            color: #555555;
+            font-size: 10px;
+        }
+
         .barcode {
             background: repeating-linear-gradient(90deg, #000000, #000000 2px, #ffffff 2px, #ffffff 4px);
             width: 250px;
@@ -174,6 +224,7 @@
         }
     </style>
 </head>
+
 <body>
     <?php
     $showSku = (int) ($ticketSettings['ticket_show_sku'] ?? 1) === 1;
@@ -184,15 +235,21 @@
 
     // Resolve Custom Position values or defaults
     $topLeftText = $ticketSettings['ticket_custom_text_top_left'] ?? 'IVA: Responsable Inscripto';
-    
+
     // Top right parsing or default
     $topRightText = $ticketSettings['ticket_custom_text_top_right'] ?? '';
     if (empty($topRightText)) {
         $topRightText = "Ing. Brutos: CM. 901-111111-0\nInicio de Actividades: 01/04/1994";
     }
-    
+
     $companyCuit = $company['tax_id'] ?: '30-68914568-0';
     $companyNameText = !empty($ticketSettings['ticket_header_title']) ? $ticketSettings['ticket_header_title'] : ($company['legal_name'] ?: $company['name']);
+    $companySubtitleText = !empty($ticketSettings['ticket_company_subtitle']) ? $ticketSettings['ticket_company_subtitle'] : '';
+    $companyAddressText = isset($ticketSettings['ticket_company_address']) && $ticketSettings['ticket_company_address'] !== '' ? $ticketSettings['ticket_company_address'] : ($company['address'] ?: '');
+    $companyPhoneText = isset($ticketSettings['ticket_company_phone']) && $ticketSettings['ticket_company_phone'] !== '' ? $ticketSettings['ticket_company_phone'] : ($company['phone'] ?: '');
+
+    $boldTopLeft = (int) ($ticketSettings['ticket_bold_top_left'] ?? 1) === 1;
+    $boldTopRight = (int) ($ticketSettings['ticket_bold_top_right'] ?? 0) === 1;
     ?>
 
     <!-- 1. Header Box (3 columns) -->
@@ -201,24 +258,27 @@
             <tr>
                 <!-- Left: Company Details -->
                 <td class="header-cell header-left">
-                    <h2 style="font-size: 16px; font-weight: bold; text-transform: uppercase; margin-bottom: 2px;"><?= esc($companyNameText) ?></h2>
-                    <div style="font-size: 9px; font-weight: bold; margin-bottom: 6px;">IMPRENTA Y LIBRERIA</div>
+                    <h2 style="font-size: 16px; font-weight: bold; text-transform: uppercase; margin-bottom: 2px;">
+                        <?= esc($companyNameText) ?></h2>
+                    <div style="font-size: 9px; font-weight: bold; margin-bottom: 6px;"><?= esc($companySubtitleText) ?></div>
                     <div style="font-size: 10px; line-height: 1.3;">
-                        <?= esc($company['address'] ?: 'El Salvador 689 - (1406) Capital Federal') ?><br>
-                        <?= esc($company['phone'] ?: 'Tel. 4616-1112 / 4639-0048') ?><br>
-                        <span style="font-weight: bold;"><?= esc($topLeftText) ?></span>
+                        <?php if ($companyAddressText !== ''): ?><?= esc($companyAddressText) ?><br><?php endif; ?>
+                        <?php if ($companyPhoneText !== ''): ?><?= esc($companyPhoneText) ?><br><?php endif; ?>
+                        <span
+                            style="font-weight: <?= $boldTopLeft ? 'bold' : 'normal' ?>;"><?= esc($topLeftText) ?></span>
                     </div>
                 </td>
-                
+
                 <!-- Center: Letter Badge & Code -->
                 <td class="header-cell header-center">
                     <div class="letter-badge"><?= esc($invoiceLetter) ?></div>
                     <div class="letter-code">Código Nº <?= esc($invoiceCode) ?></div>
                 </td>
-                
+
                 <!-- Right: Document Info -->
                 <td class="header-cell header-right">
-                    <h2 style="font-size: 16px; font-weight: bold; text-transform: uppercase; margin-bottom: 4px;"><?= esc($cleanDocName) ?></h2>
+                    <h2 style="font-size: 16px; font-weight: bold; text-transform: uppercase; margin-bottom: 4px;">
+                        <?= esc($cleanDocName) ?></h2>
                     <?php
                     $posCode = '0001';
                     if (!empty($sale['point_of_sale_id'])) {
@@ -233,11 +293,15 @@
                         }
                     }
                     ?>
-                    <div style="font-size: 11px; font-weight: bold; margin-bottom: 8px;">Nº <?= esc($posCode) ?>-<?= esc(str_pad($sale['sale_number'] ?? '0', 8, '0', STR_PAD_LEFT)) ?></div>
+                    <div style="font-size: 11px; font-weight: bold; margin-bottom: 8px;">Nº
+                        <?= esc($posCode) ?>-<?= esc(str_pad($sale['sale_number'] ?? '0', 8, '0', STR_PAD_LEFT)) ?>
+                    </div>
                     <div style="font-size: 10px; line-height: 1.4;">
-                        <strong>Fecha:</strong> <?= esc(!empty($sale['issue_date']) ? date('d/m/Y', strtotime($sale['issue_date'])) : date('d/m/Y')) ?><br>
+                        <strong>Fecha:</strong>
+                        <?= esc(!empty($sale['issue_date']) ? date('d/m/Y', strtotime($sale['issue_date'])) : date('d/m/Y')) ?><br>
                         <strong>C.U.I.T.:</strong> <?= esc($companyCuit) ?><br>
-                        <span style="white-space: pre-line;"><?= esc($topRightText) ?></span>
+                        <span
+                            style="white-space: pre-line; font-weight: <?= $boldTopRight ? 'bold' : 'normal' ?>;"><?= esc($topRightText) ?></span>
                     </div>
                 </td>
             </tr>
@@ -267,7 +331,8 @@
                             <td style="width: 48%; border-bottom: 1px dotted #ccc; padding: 0; height: 16px;">
                                 <?= esc($showCustomer ? ($sale['customer_tax_profile'] ?? $customer['vat_condition'] ?? $customer['tax_profile'] ?? '-') : '-') ?>
                             </td>
-                            <td style="width: 10%; padding: 0; text-align: right; padding-right: 8px;"><strong>C.U.I.T.:</strong></td>
+                            <td style="width: 10%; padding: 0; text-align: right; padding-right: 8px;">
+                                <strong>C.U.I.T.:</strong></td>
                             <td style="width: 30%; border-bottom: 1px dotted #ccc; padding: 0; height: 16px;">
                                 <?= esc($showCustomer ? ($sale['customer_document_snapshot'] ?? $customer['document_number'] ?? '-') : '-') ?>
                             </td>
@@ -337,8 +402,10 @@
                             <?php if ($showBrand && !empty($item['brand'])): ?>
                                 <span class="muted">(<?= esc($item['brand']) ?>)</span>
                             <?php endif; ?>
-                            <?php if ($showBreakdown && (float)$item['quantity'] !== 1.0): ?>
-                                <div class="muted" style="font-size: 9px;"><?= number_format((float)$item['quantity'], 2, ',', '.') ?> u x $ <?= number_format((float)$item['unit_price'], 2, ',', '.') ?></div>
+                            <?php if ($showBreakdown && (float) $item['quantity'] !== 1.0): ?>
+                                <div class="muted" style="font-size: 9px;">
+                                    <?= number_format((float) $item['quantity'], 2, ',', '.') ?> u x $
+                                    <?= number_format((float) $item['unit_price'], 2, ',', '.') ?></div>
                             <?php endif; ?>
                         </td>
                         <td class="right">
@@ -370,12 +437,14 @@
                 <td class="label" style="background: #212529; color: #ffffff;">TOTAL $</td>
             </tr>
             <tr>
-                <td style="font-weight: bold;">$ <?= number_format((float) ($sale['subtotal'] ?? 0), 2, ',', '.') ?></td>
+                <td style="font-weight: bold;">$ <?= number_format((float) ($sale['subtotal'] ?? 0), 2, ',', '.') ?>
+                </td>
                 <td>$ <?= number_format((float) ($sale['global_discount_total'] ?? 0), 2, ',', '.') ?></td>
                 <td>$ <?= number_format((float) ($sale['tax_total'] ?? 0), 2, ',', '.') ?></td>
                 <td>$ <?= number_format((float) (($sale['tax_total'] ?? 0) * 1.0), 2, ',', '.') ?></td>
                 <td>$ 0,00</td>
-                <td style="font-weight: bold; font-size: 13px; background: #f8fafc;">$ <?= number_format((float) ($sale['total'] ?? 0), 2, ',', '.') ?></td>
+                <td style="font-weight: bold; font-size: 13px; background: #f8fafc;">$
+                    <?= number_format((float) ($sale['total'] ?? 0), 2, ',', '.') ?></td>
             </tr>
         </table>
     </div>
@@ -391,19 +460,22 @@
                         <?= esc($sale['cae'] ?: '25064106537080') ?>
                     </div>
                 </td>
-                
+
                 <!-- Right: CAE / Vto -->
-                <td style="width: 50%; border: 0; padding: 0; text-align: right; vertical-align: top; font-size: 10px; line-height: 1.4;">
+                <td
+                    style="width: 50%; border: 0; padding: 0; text-align: right; vertical-align: top; font-size: 10px; line-height: 1.4;">
                     <?php if (!empty($sale['cae'])): ?>
                         <strong>C.A.E. Nº:</strong> <?= esc($sale['cae']) ?><br>
-                        <strong>Fecha de Vto. CAE:</strong> <?= esc(!empty($sale['cae_due_date']) ? date('d/m/Y', strtotime($sale['cae_due_date'])) : '-') ?><br>
+                        <strong>Fecha de Vto. CAE:</strong>
+                        <?= esc(!empty($sale['cae_due_date']) ? date('d/m/Y', strtotime($sale['cae_due_date'])) : '-') ?><br>
                     <?php else: ?>
                         <strong>DOCUMENTO NO FISCAL</strong><br>
                         <strong>PRESUPUESTO PREVIO</strong><br>
                     <?php endif; ?>
-                    
+
                     <?php if (!empty($ticketSettings['ticket_footer_notes'])): ?>
-                        <div style="margin-top: 8px; font-style: italic; font-size: 9px; color: #555555; text-align: right;">
+                        <div
+                            style="margin-top: 8px; font-style: italic; font-size: 9px; color: #555555; text-align: right;">
                             <?= esc($ticketSettings['ticket_footer_notes']) ?>
                         </div>
                     <?php endif; ?>
@@ -434,4 +506,5 @@
         </table>
     </div>
 </body>
+
 </html>

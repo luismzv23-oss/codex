@@ -278,9 +278,15 @@ class SettingsController extends BaseController
 
         $defaults = [
             'header_title' => '',
+            'company_subtitle' => '',
+            'company_address' => '',
+            'company_phone' => '',
             'footer_notes' => '',
             'paper_width' => '80mm',
             'font_size' => 'medium',
+            'font_family' => 'DejaVu Sans',
+            'bold_top_left' => 1,
+            'bold_top_right' => 0,
             'custom_text_top_left' => 'IVA: Responsable Inscripto',
             'custom_text_top_right' => "Ing. Brutos: CM. 901-111111-0\nInicio de Actividades: 01/04/1994",
             'custom_text_bottom_left' => "Imprenta Su Imprenta CUIT: 30-12345678-9 Habil. 22222",
@@ -336,6 +342,8 @@ class SettingsController extends BaseController
             'companyId' => $companyId,
             'companyName' => $company['name'],
             'companyLegalName' => $company['legal_name'] ?? $company['name'],
+            'companyAddress' => $company['address'] ?? '',
+            'companyPhone' => $company['phone'] ?? '',
             'formAction' => site_url('configuracion/tickets'),
             'isPopup' => $this->isPopupRequest(),
         ]);
@@ -350,12 +358,21 @@ class SettingsController extends BaseController
             return redirect()->to('/configuracion')->with('error', 'Empresa no disponible.');
         }
 
+        $currentUser = auth_user();
+        $isAdminOrSuperadmin = in_array($currentUser['role_slug'] ?? null, ['admin', 'superadmin'], true);
+
         $db = db_connect();
         $subKeys = [
             'header_title',
+            'company_subtitle',
+            'company_address',
+            'company_phone',
             'footer_notes',
             'paper_width',
             'font_size',
+            'font_family',
+            'bold_top_left',
+            'bold_top_right',
             'custom_text_top_left',
             'custom_text_top_right',
             'custom_text_bottom_left',
@@ -373,7 +390,12 @@ class SettingsController extends BaseController
             foreach ($subKeys as $subKey) {
                 $key = $prefix . $subKey;
 
-                if (in_array($subKey, ['show_sku', 'show_brand', 'show_item_breakdown', 'show_customer', 'show_user'], true)) {
+                // Restrict custom fields and font family modification to admin and superadmin roles
+                if (!$isAdminOrSuperadmin && in_array($subKey, ['custom_text_top_left', 'custom_text_top_right', 'bold_top_left', 'bold_top_right', 'font_family'], true)) {
+                    continue;
+                }
+
+                if (in_array($subKey, ['show_sku', 'show_brand', 'show_item_breakdown', 'show_customer', 'show_user', 'bold_top_left', 'bold_top_right'], true)) {
                     $value = $this->request->getPost($key) === '1' ? '1' : '0';
                 } else {
                     $rawVal = $this->request->getPost($key);

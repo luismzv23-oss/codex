@@ -1,5 +1,10 @@
 <?= $this->extend('layouts/app') ?>
 <?= $this->section('content') ?>
+<?php
+$currentUser = auth_user();
+$isAdminOrSuperadmin = in_array($currentUser['role_slug'] ?? null, ['admin', 'superadmin'], true);
+$disabledAttr = !$isAdminOrSuperadmin ? 'disabled' : '';
+?>
 <div class="row g-4">
     <!-- Left Column: Settings Form -->
     <div class="col-lg-7">
@@ -39,6 +44,18 @@
                                     <div class="form-text small text-secondary">Si se deja vacío, se usará el nombre legal de la empresa.</div>
                                 </div>
                                 <div class="col-md-6">
+                                    <label class="form-label">Subtítulo / Rubro (POS)</label>
+                                    <input type="text" name="ticket_pos_company_subtitle" id="pos_company_subtitle" class="form-control ticket-input" value="<?= esc($posSettings['company_subtitle'] ?? '') ?>" placeholder="Ej: IMPRENTA Y LIBRERIA">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Dirección comercial (POS)</label>
+                                    <input type="text" name="ticket_pos_company_address" id="pos_company_address" class="form-control ticket-input" value="<?= esc($posSettings['company_address'] ?? '') ?>" placeholder="Ej: El Salvador 689 - (1406) Capital Federal">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Teléfono (POS)</label>
+                                    <input type="text" name="ticket_pos_company_phone" id="pos_company_phone" class="form-control ticket-input" value="<?= esc($posSettings['company_phone'] ?? '') ?>" placeholder="Ej: Tel. 4616-1112 / 4639-0048">
+                                </div>
+                                <div class="col-md-6">
                                     <label class="form-label">Ancho de papel (POS)</label>
                                     <select name="ticket_pos_paper_width" id="pos_paper_width" class="form-select ticket-input">
                                         <option value="A4" <?= ($posSettings['paper_width'] ?? 'A4') === 'A4' ? 'selected' : '' ?>>A4 Estándar</option>
@@ -53,6 +70,16 @@
                                         <option value="large" <?= ($posSettings['font_size'] ?? 'medium') === 'large' ? 'selected' : '' ?>>Grande (14px)</option>
                                     </select>
                                 </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Tipografía / Fuente (POS)</label>
+                                    <select name="ticket_pos_font_family" id="pos_font_family" class="form-select ticket-input" <?= $disabledAttr ?>>
+                                        <option value="DejaVu Sans" <?= ($posSettings['font_family'] ?? 'DejaVu Sans') === 'DejaVu Sans' ? 'selected' : '' ?>>DejaVu Sans (Sans-serif)</option>
+                                        <option value="DejaVu Serif" <?= ($posSettings['font_family'] ?? 'DejaVu Sans') === 'DejaVu Serif' ? 'selected' : '' ?>>DejaVu Serif (Serif)</option>
+                                        <option value="Courier" <?= ($posSettings['font_family'] ?? 'DejaVu Sans') === 'Courier' ? 'selected' : '' ?>>Courier (Monoespaciada)</option>
+                                        <option value="Helvetica" <?= ($posSettings['font_family'] ?? 'DejaVu Sans') === 'Helvetica' ? 'selected' : '' ?>>Helvetica</option>
+                                        <option value="Times-Roman" <?= ($posSettings['font_family'] ?? 'DejaVu Sans') === 'Times-Roman' ? 'selected' : '' ?>>Times New Roman</option>
+                                    </select>
+                                </div>
                                 <div class="col-12">
                                     <label class="form-label">Leyenda al pie de página (POS)</label>
                                     <textarea name="ticket_pos_footer_notes" id="pos_footer_notes" class="form-control ticket-input" rows="3" placeholder="Ej: Gracias por elegirnos."><?= esc($posSettings['footer_notes'] ?? '') ?></textarea>
@@ -64,19 +91,27 @@
                                     <div class="row g-2">
                                         <div class="col-md-6">
                                             <label class="form-label small text-secondary mb-1">Cabecera Izquierda (Superior Izq.)</label>
-                                            <input type="text" name="ticket_pos_custom_text_top_left" id="pos_custom_text_top_left" class="form-control form-control-sm ticket-input" value="<?= esc($posSettings['custom_text_top_left'] ?? '') ?>" placeholder="Ej: IVA Responsable Inscripto">
+                                            <input type="text" name="ticket_pos_custom_text_top_left" id="pos_custom_text_top_left" class="form-control form-control-sm ticket-input" value="<?= esc($posSettings['custom_text_top_left'] ?? '') ?>" placeholder="Ej: IVA Responsable Inscripto" <?= $disabledAttr ?>>
+                                            <div class="form-check form-switch mt-1">
+                                                <input class="form-check-input ticket-input" type="checkbox" name="ticket_pos_bold_top_left" id="pos_bold_top_left" value="1" <?= (int) ($posSettings['bold_top_left'] ?? 1) === 1 ? 'checked' : '' ?> <?= $disabledAttr ?>>
+                                                <label class="form-check-label small text-secondary" for="pos_bold_top_left">Texto en negrita</label>
+                                            </div>
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label small text-secondary mb-1">Cabecera Derecha (Superior Der.)</label>
-                                            <input type="text" name="ticket_pos_custom_text_top_right" id="pos_custom_text_top_right" class="form-control form-control-sm ticket-input" value="<?= esc($posSettings['custom_text_top_right'] ?? '') ?>" placeholder="Ej: CUIT: 30-11223344-5">
+                                            <input type="text" name="ticket_pos_custom_text_top_right" id="pos_custom_text_top_right" class="form-control form-control-sm ticket-input" value="<?= esc($posSettings['custom_text_top_right'] ?? '') ?>" placeholder="Ej: CUIT: 30-11223344-5" <?= $disabledAttr ?>>
+                                            <div class="form-check form-switch mt-1">
+                                                <input class="form-check-input ticket-input" type="checkbox" name="ticket_pos_bold_top_right" id="pos_bold_top_right" value="1" <?= (int) ($posSettings['bold_top_right'] ?? 0) === 1 ? 'checked' : '' ?> <?= $disabledAttr ?>>
+                                                <label class="form-check-label small text-secondary" for="pos_bold_top_right">Texto en negrita</label>
+                                            </div>
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label small text-secondary mb-1">Pie Izquierda (Inferior Izq.)</label>
-                                            <input type="text" name="ticket_pos_custom_text_bottom_left" id="pos_custom_text_bottom_left" class="form-control form-control-sm ticket-input" value="<?= esc($posSettings['custom_text_bottom_left'] ?? '') ?>" placeholder="Ej: CAI/CAE: 12345678901234">
+                                            <input type="text" name="ticket_pos_custom_text_bottom_left" id="pos_custom_text_bottom_left" class="form-control form-control-sm ticket-input" value="<?= esc($posSettings['custom_text_bottom_left'] ?? '') ?>" placeholder="Ej: CAI/CAE: 12345678901234" <?= $disabledAttr ?>>
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label small text-secondary mb-1">Pie Derecha (Inferior Der.)</label>
-                                            <input type="text" name="ticket_pos_custom_text_bottom_right" id="pos_custom_text_bottom_right" class="form-control form-control-sm ticket-input" value="<?= esc($posSettings['custom_text_bottom_right'] ?? '') ?>" placeholder="Ej: Vto. CAE: 31/12/2026">
+                                            <input type="text" name="ticket_pos_custom_text_bottom_right" id="pos_custom_text_bottom_right" class="form-control form-control-sm ticket-input" value="<?= esc($posSettings['custom_text_bottom_right'] ?? '') ?>" placeholder="Ej: Vto. CAE: 31/12/2026" <?= $disabledAttr ?>>
                                         </div>
                                     </div>
                                 </div>
@@ -128,15 +163,61 @@
                                     <div class="form-text small text-secondary">Si se deja vacío, se usará el nombre legal de la empresa.</div>
                                 </div>
                                 <div class="col-md-6">
+                                    <label class="form-label">Subtítulo / Rubro (Kiosco)</label>
+                                    <input type="text" name="ticket_kiosk_company_subtitle" id="kiosk_company_subtitle" class="form-control ticket-input" value="<?= esc($kioskSettings['company_subtitle'] ?? '') ?>" placeholder="Ej: IMPRENTA Y LIBRERIA">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Dirección comercial (Kiosco)</label>
+                                    <input type="text" name="ticket_kiosk_company_address" id="kiosk_company_address" class="form-control ticket-input" value="<?= esc($kioskSettings['company_address'] ?? '') ?>" placeholder="Ej: El Salvador 689 - (1406) Capital Federal">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Teléfono (Kiosco)</label>
+                                    <input type="text" name="ticket_kiosk_company_phone" id="kiosk_company_phone" class="form-control ticket-input" value="<?= esc($kioskSettings['company_phone'] ?? '') ?>" placeholder="Ej: Tel. 4616-1112 / 4639-0048">
+                                </div>
+                                <div class="col-md-6">
                                     <label class="form-label">Ancho de papel (Kiosco)</label>
                                     <select name="ticket_kiosk_paper_width" id="kiosk_paper_width" class="form-select ticket-input">
                                         <option value="80mm" <?= ($kioskSettings['paper_width'] ?? '80mm') === '80mm' ? 'selected' : '' ?>>80mm (Térmico Estándar)</option>
                                         <option value="58mm" <?= ($kioskSettings['paper_width'] ?? '80mm') === '58mm' ? 'selected' : '' ?>>58mm (Térmico Angosto)</option>
                                     </select>
                                 </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Tipografía / Fuente (Kiosco)</label>
+                                    <select name="ticket_kiosk_font_family" id="kiosk_font_family" class="form-select ticket-input" <?= $disabledAttr ?>>
+                                        <option value="Courier" <?= ($kioskSettings['font_family'] ?? 'Courier') === 'Courier' ? 'selected' : '' ?>>Courier (Monoespaciada)</option>
+                                        <option value="Helvetica 75 Bold" <?= ($kioskSettings['font_family'] ?? 'Courier') === 'Helvetica 75 Bold' ? 'selected' : '' ?>>Helvetica 75 Bold</option>
+                                        <option value="DejaVu Sans" <?= ($kioskSettings['font_family'] ?? 'Courier') === 'DejaVu Sans' ? 'selected' : '' ?>>DejaVu Sans (Sans-serif)</option>
+                                        <option value="DejaVu Serif" <?= ($kioskSettings['font_family'] ?? 'Courier') === 'DejaVu Serif' ? 'selected' : '' ?>>DejaVu Serif (Serif)</option>
+                                        <option value="Helvetica" <?= ($kioskSettings['font_family'] ?? 'Courier') === 'Helvetica' ? 'selected' : '' ?>>Helvetica</option>
+                                        <option value="Times-Roman" <?= ($kioskSettings['font_family'] ?? 'Courier') === 'Times-Roman' ? 'selected' : '' ?>>Times New Roman</option>
+                                    </select>
+                                </div>
                                 <div class="col-12">
                                     <label class="form-label">Leyenda al pie de página (Kiosco)</label>
                                     <textarea name="ticket_kiosk_footer_notes" id="kiosk_footer_notes" class="form-control ticket-input" rows="3" placeholder="Ej: Retire su pedido por caja. Gracias por su compra."><?= esc($kioskSettings['footer_notes'] ?? '') ?></textarea>
+                                </div>
+
+                                <!-- Custom Position Texts for Kiosco -->
+                                <div class="col-12 mt-3">
+                                    <label class="form-label fw-semibold text-dark">Ubicación de textos personalizados en las cabeceras (Kiosco)</label>
+                                    <div class="row g-2">
+                                        <div class="col-md-6">
+                                            <label class="form-label small text-secondary mb-1">Cabecera Izquierda (Superior Izq.)</label>
+                                            <input type="text" name="ticket_kiosk_custom_text_top_left" id="kiosk_custom_text_top_left" class="form-control form-control-sm ticket-input" value="<?= esc($kioskSettings['custom_text_top_left'] ?? '') ?>" placeholder="Ej: IVA Responsable Inscripto" <?= $disabledAttr ?>>
+                                            <div class="form-check form-switch mt-1">
+                                                <input class="form-check-input ticket-input" type="checkbox" name="ticket_kiosk_bold_top_left" id="kiosk_bold_top_left" value="1" <?= (int) ($kioskSettings['bold_top_left'] ?? 1) === 1 ? 'checked' : '' ?> <?= $disabledAttr ?>>
+                                                <label class="form-check-label small text-secondary" for="kiosk_bold_top_left">Texto en negrita</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label small text-secondary mb-1">Cabecera Derecha (Superior Der.)</label>
+                                            <input type="text" name="ticket_kiosk_custom_text_top_right" id="kiosk_custom_text_top_right" class="form-control form-control-sm ticket-input" value="<?= esc($kioskSettings['custom_text_top_right'] ?? '') ?>" placeholder="Ej: CUIT: 30-11223344-5" <?= $disabledAttr ?>>
+                                            <div class="form-check form-switch mt-1">
+                                                <input class="form-check-input ticket-input" type="checkbox" name="ticket_kiosk_bold_top_right" id="kiosk_bold_top_right" value="1" <?= (int) ($kioskSettings['bold_top_right'] ?? 0) === 1 ? 'checked' : '' ?> <?= $disabledAttr ?>>
+                                                <label class="form-check-label small text-secondary" for="kiosk_bold_top_right">Texto en negrita</label>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div class="col-12">
                                     <label class="form-label fw-semibold text-dark">Opciones de visualización (Kiosco)</label>
@@ -191,9 +272,24 @@
     <div class="col-lg-5">
         <div class="card border-0 shadow-sm rounded-4 h-100 bg-light">
             <div class="card-body p-4 d-flex flex-column align-items-center">
-                <div class="w-100 mb-3 text-center text-lg-start">
-                    <h2 class="h5 mb-1">Vista Previa Interactiva</h2>
-                    <p class="text-secondary mb-0">Previsualiza en tiempo real cómo lucirá el ticket impreso térmico o documento.</p>
+                <div class="w-100 mb-3 text-center text-lg-start d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <h2 class="h5 mb-1">Vista Previa Interactiva</h2>
+                        <p class="text-secondary mb-0" style="font-size: 0.85rem;">Previsualiza en tiempo real cómo lucirá el ticket impreso térmico o documento.</p>
+                    </div>
+                    <!-- Zoom Controls -->
+                    <div class="d-flex align-items-center gap-1 bg-white border rounded-3 p-1 shadow-sm">
+                        <button type="button" class="btn btn-sm btn-light border-0 py-1 px-2" id="btn-zoom-out" title="Alejar (Zoom -)" aria-label="Alejar">
+                            <i class="bi bi-zoom-out"></i>
+                        </button>
+                        <span class="small fw-semibold px-2 text-secondary" id="zoom-percentage" style="min-width: 45px; text-align: center;">100%</span>
+                        <button type="button" class="btn btn-sm btn-light border-0 py-1 px-2" id="btn-zoom-in" title="Acercar (Zoom +)" aria-label="Acercar">
+                            <i class="bi bi-zoom-in"></i>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-light border-0 py-1 px-2 text-danger" id="btn-zoom-reset" title="Restablecer" aria-label="Restablecer">
+                            <i class="bi bi-arrow-counterclockwise"></i>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Test Voucher Dropdown for A4/Letter POS -->
@@ -226,6 +322,11 @@
                                 <h3 id="preview-ticket-title" class="fw-bold m-0 p-0 fs-6">EMPRESA</h3>
                                 <div id="preview-ticket-company-name" class="text-secondary small">Legal Company Name</div>
                                 <div class="text-secondary small mt-1">Fecha: <?= date('d/m/Y H:i') ?></div>
+                            </div>
+                            
+                            <div id="preview-ticket-custom-headers" style="display: flex; justify-content: space-between; font-size: 9px; margin-top: 4px; border-bottom: 1px dotted #ccc; padding-bottom: 4px;">
+                                <span id="preview-ticket-text-top-left" style="font-weight: bold;">IVA: Responsable Inscripto</span>
+                                <span id="preview-ticket-text-top-right" style="text-align: right; white-space: pre-line;">Ing. Brutos: CM. 901-111111-0</span>
                             </div>
 
                             <div class="ticket-dashed-line" id="preview-top-line"></div>
@@ -277,11 +378,11 @@
                                 <!-- Left: Company -->
                                 <div style="width: 45%; padding: 6px; border-right: 1px solid #000; text-align: left;">
                                     <h4 id="preview-inv-header-title" style="font-size: 11px; font-weight: bold; margin: 0 0 2px; text-transform: uppercase;">LA IMPRENTA S.A.</h4>
-                                    <div style="font-size: 7.5px; font-weight: bold; margin-bottom: 4px;">IMPRENTA Y LIBRERIA</div>
+                                    <div id="preview-inv-company-subtitle" style="font-size: 7.5px; font-weight: bold; margin-bottom: 4px;">IMPRENTA Y LIBRERIA</div>
                                     <div style="color: #444;">
-                                        El Salvador 689 - (1406) Capital Federal<br>
-                                        Tel. 4616-1112 / 4639-0048<br>
-                                        <strong id="preview-inv-text-top-left" style="color:#000;">IVA: Responsable Inscripto</strong>
+                                        <span id="preview-inv-company-address">El Salvador 689 - (1406) Capital Federal</span><br>
+                                        <span id="preview-inv-company-phone">Tel. 4616-1112 / 4639-0048</span><br>
+                                        <span id="preview-inv-text-top-left" style="color:#000; font-weight: bold;">IVA: Responsable Inscripto</span>
                                     </div>
                                 </div>
                                 <!-- Center: Badge -->
@@ -448,6 +549,8 @@ Inicio de Actividades: 01/04/1994</span>
 document.addEventListener('DOMContentLoaded', () => {
     const companyName = <?= json_encode($companyName ?? 'Empresa') ?>;
     const companyLegalName = <?= json_encode($companyLegalName ?? 'Legal Name') ?>;
+    const companyAddress = <?= json_encode($companyAddress ?? '') ?>;
+    const companyPhone = <?= json_encode($companyPhone ?? '') ?>;
     
     // Preview DOM elements
     const liveTicket = document.getElementById('live-ticket');
@@ -460,6 +563,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const prefix = isActivePos ? 'pos' : 'kiosk';
 
         const headerTitleInput = document.getElementById(`${prefix}_header_title`);
+        const companySubtitleInput = document.getElementById(`${prefix}_company_subtitle`);
+        const companyAddressInput = document.getElementById(`${prefix}_company_address`);
+        const companyPhoneInput = document.getElementById(`${prefix}_company_phone`);
         const paperWidthSelect = document.getElementById(`${prefix}_paper_width`);
         const footerNotesTextarea = document.getElementById(`${prefix}_footer_notes`);
         
@@ -469,11 +575,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const showCustomerCheckbox = document.getElementById(`${prefix}_show_customer`);
         const showUserCheckbox = document.getElementById(`${prefix}_show_user`);
 
-        // POS-specific extra controls
-        const fontSizeSelect = document.getElementById('pos_font_size');
+        // Tab-specific extra controls
+        const fontSizeSelect = document.getElementById(`${prefix}_font_size`);
+        const fontFamilySelect = document.getElementById(`${prefix}_font_family`);
 
         const customTitle = headerTitleInput ? headerTitleInput.value.trim() : '';
         const titleText = customTitle !== '' ? customTitle.toUpperCase() : companyName.toUpperCase();
+        const subtitleText = companySubtitleInput ? companySubtitleInput.value.trim().toUpperCase() : '';
+        const addressText = companyAddressInput ? companyAddressInput.value.trim() : '';
+        const phoneText = companyPhoneInput ? companyPhoneInput.value.trim() : '';
         const footerText = footerNotesTextarea ? footerNotesTextarea.value.trim() : '';
 
         const showSku = showSkuCheckbox ? showSkuCheckbox.checked : true;
@@ -524,10 +634,54 @@ document.addEventListener('DOMContentLoaded', () => {
             liveTicket.style.fontSize = '11px';
         }
 
+        // Apply Font Family
+        if (fontFamilySelect) {
+            const selectedFont = fontFamilySelect.value;
+            if (selectedFont === 'Helvetica 75 Bold') {
+                liveTicket.style.fontFamily = '"Helvetica 75 Bold", "Helvetica Neue", Helvetica, Arial, sans-serif';
+                liveTicket.style.fontWeight = 'bold';
+            } else if (selectedFont === 'DejaVu Sans') {
+                liveTicket.style.fontFamily = '"DejaVu Sans", sans-serif';
+                liveTicket.style.fontWeight = 'normal';
+            } else if (selectedFont === 'DejaVu Serif') {
+                liveTicket.style.fontFamily = '"DejaVu Serif", serif';
+                liveTicket.style.fontWeight = 'normal';
+            } else if (selectedFont === 'Helvetica') {
+                liveTicket.style.fontFamily = 'Helvetica, Arial, sans-serif';
+                liveTicket.style.fontWeight = 'normal';
+            } else if (selectedFont === 'Times-Roman') {
+                liveTicket.style.fontFamily = '"Times New Roman", Times, serif';
+                liveTicket.style.fontWeight = 'normal';
+            } else {
+                liveTicket.style.fontFamily = '"Courier New", Courier, monospace';
+                liveTicket.style.fontWeight = 'normal';
+            }
+        } else {
+            liveTicket.style.fontFamily = "'Courier New', Courier, monospace";
+            liveTicket.style.fontWeight = 'normal';
+        }
+
         if (isPageFormat) {
             // Update A4 layout fields
             document.getElementById('preview-inv-header-title').textContent = titleText;
             document.getElementById('preview-inv-footer-notes').textContent = footerText;
+
+            // Subtitle, Address, Phone
+            const previewSubtitle = document.getElementById('preview-inv-company-subtitle');
+            if (previewSubtitle) {
+                previewSubtitle.textContent = subtitleText;
+                previewSubtitle.style.display = subtitleText !== '' ? 'block' : 'none';
+            }
+            const previewAddress = document.getElementById('preview-inv-company-address');
+            if (previewAddress) {
+                const finalAddressText = addressText !== '' ? addressText : companyAddress;
+                previewAddress.textContent = finalAddressText !== '' ? finalAddressText : 'El Salvador 689 - (1406) Capital Federal';
+            }
+            const previewPhone = document.getElementById('preview-inv-company-phone');
+            if (previewPhone) {
+                const finalPhoneText = phoneText !== '' ? phoneText : companyPhone;
+                previewPhone.textContent = finalPhoneText !== '' ? finalPhoneText : 'Tel. 4616-1112 / 4639-0048';
+            }
 
             // Update letter badge dynamically based on test voucher selection
             const testVoucherType = document.getElementById('test_voucher_type').value;
@@ -571,6 +725,11 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('preview-inv-text-top-right').textContent = topRightVal;
             document.getElementById('preview-inv-text-bottom-left').textContent = bottomLeftVal;
             document.getElementById('preview-inv-text-bottom-right').textContent = bottomRightVal;
+
+            const boldTopLeft = document.getElementById(`${prefix}_bold_top_left`) ? document.getElementById(`${prefix}_bold_top_left`).checked : true;
+            const boldTopRight = document.getElementById(`${prefix}_bold_top_right`) ? document.getElementById(`${prefix}_bold_top_right`).checked : false;
+            document.getElementById('preview-inv-text-top-left').style.fontWeight = boldTopLeft ? 'bold' : 'normal';
+            document.getElementById('preview-inv-text-top-right').style.fontWeight = boldTopRight ? 'bold' : 'normal';
 
             // Visibility checkboxes
             document.getElementById('preview-inv-customer-name').textContent = showCustomer ? 'Juan Pérez' : 'Consumidor Final';
@@ -616,6 +775,28 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('preview-ticket-company-name').style.display = customTitle !== '' ? 'block' : 'none';
             document.getElementById('preview-ticket-footer-block').textContent = footerText;
             document.getElementById('preview-ticket-footer-block').style.display = footerText !== '' ? 'block' : 'none';
+
+            // Custom headers in ticket preview
+            const ticketTopLeft = document.getElementById('preview-ticket-text-top-left');
+            const ticketTopRight = document.getElementById('preview-ticket-text-top-right');
+            const ticketCustomHeaders = document.getElementById('preview-ticket-custom-headers');
+            
+            const activeTopLeft = document.getElementById(`${prefix}_custom_text_top_left`) ? document.getElementById(`${prefix}_custom_text_top_left`).value.trim() : '';
+            const activeTopRight = document.getElementById(`${prefix}_custom_text_top_right`) ? document.getElementById(`${prefix}_custom_text_top_right`).value.trim() : '';
+            const activeBoldTopLeft = document.getElementById(`${prefix}_bold_top_left`) ? document.getElementById(`${prefix}_bold_top_left`).checked : true;
+            const activeBoldTopRight = document.getElementById(`${prefix}_bold_top_right`) ? document.getElementById(`${prefix}_bold_top_right`).checked : false;
+
+            if (ticketTopLeft) {
+                ticketTopLeft.textContent = activeTopLeft || 'IVA: Responsable Inscripto';
+                ticketTopLeft.style.fontWeight = activeBoldTopLeft ? 'bold' : 'normal';
+            }
+            if (ticketTopRight) {
+                ticketTopRight.textContent = activeTopRight || 'Ing. Brutos: CM. 901-111111-0';
+                ticketTopRight.style.fontWeight = activeBoldTopRight ? 'bold' : 'normal';
+            }
+            if (ticketCustomHeaders) {
+                ticketCustomHeaders.style.display = (activeTopLeft || activeTopRight) ? 'flex' : 'none';
+            }
 
             // Visibility checkboxes
             document.getElementById('preview-ticket-customer-block').style.display = showCustomer ? 'block' : 'none';
@@ -673,6 +854,38 @@ document.addEventListener('DOMContentLoaded', () => {
             updatePreview();
         });
     });
+
+    // Zoom control logic
+    let zoomLevel = 1.0;
+    const zoomPercentageEl = document.getElementById('zoom-percentage');
+    const btnZoomIn = document.getElementById('btn-zoom-in');
+    const btnZoomOut = document.getElementById('btn-zoom-out');
+    const btnZoomReset = document.getElementById('btn-zoom-reset');
+
+    function applyZoom() {
+        zoomLevel = Math.round(zoomLevel * 10) / 10;
+        zoomPercentageEl.textContent = `${Math.round(zoomLevel * 100)}%`;
+        liveTicket.style.zoom = zoomLevel;
+    }
+
+    if (btnZoomIn && btnZoomOut && btnZoomReset) {
+        btnZoomIn.addEventListener('click', () => {
+            if (zoomLevel < 2.0) {
+                zoomLevel += 0.1;
+                applyZoom();
+            }
+        });
+        btnZoomOut.addEventListener('click', () => {
+            if (zoomLevel > 0.5) {
+                zoomLevel -= 0.1;
+                applyZoom();
+            }
+        });
+        btnZoomReset.addEventListener('click', () => {
+            zoomLevel = 1.0;
+            applyZoom();
+        });
+    }
 
     updatePreview();
 });

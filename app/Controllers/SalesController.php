@@ -999,8 +999,16 @@ class SalesController extends BaseController
 
         $defaults = [
             'header_title' => '',
+            'company_subtitle' => '',
+            'company_address' => '',
+            'company_phone' => '',
             'footer_notes' => '',
             'paper_width' => '80mm',
+            'font_family' => 'Courier',
+            'bold_top_left' => 1,
+            'bold_top_right' => 0,
+            'custom_text_top_left' => 'IVA: Responsable Inscripto',
+            'custom_text_top_right' => "Ing. Brutos: CM. 901-111111-0\nInicio de Actividades: 01/04/1994",
             'show_sku' => 1,
             'show_brand' => 1,
             'show_item_breakdown' => 1,
@@ -1980,9 +1988,15 @@ class SalesController extends BaseController
 
         $defaults = [
             'header_title' => '',
+            'company_subtitle' => '',
+            'company_address' => '',
+            'company_phone' => '',
             'footer_notes' => '',
             'paper_width' => '80mm',
             'font_size' => 'medium',
+            'font_family' => 'DejaVu Sans',
+            'bold_top_left' => 1,
+            'bold_top_right' => 0,
             'custom_text_top_left' => 'IVA: Responsable Inscripto',
             'custom_text_top_right' => "Ing. Brutos: CM. 901-111111-0\nInicio de Actividades: 01/04/1994",
             'custom_text_bottom_left' => "Imprenta Su Imprenta CUIT: 30-12345678-9 Habil. 22222",

@@ -43,7 +43,8 @@ $productCatalog = array_values(array_map(static function (array $product): array
             </span>
         <?php endif; ?>
         <a href="<?= site_url('ventas' . (!empty($companyId) ? '?company_id=' . $companyId : '')) ?>"
-            class="btn btn-outline-dark icon-btn" title="Volver a Ventas" aria-label="Volver a Ventas"><i class="bi bi-arrow-left"></i></a>
+            class="btn btn-outline-dark icon-btn" title="Volver a Ventas" aria-label="Volver a Ventas"><i
+                class="bi bi-arrow-left"></i></a>
     </div>
 </div>
 
@@ -84,9 +85,14 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 <div class="input-group">
                     <input type="text" id="kiosk-customer-name" class="form-control" value="Consumidor Final" readonly>
                     <input type="hidden" name="customer_id" id="kiosk-customer-id" value="<?= esc($consumerFinalId) ?>">
-                    <button type="button" class="btn btn-outline-dark" id="open-kiosk-customer-search" title="Buscar cliente" aria-label="Buscar cliente"><i class="bi bi-search"></i></button>
-                    <a href="<?= site_url('ventas/clientes/nuevo' . (!empty($companyId) ? '?company_id=' . $companyId : '')) ?>" class="btn btn-outline-dark" data-popup="true" data-popup-title="Cliente" data-popup-subtitle="Alta rapida de cliente para ventas." title="Nuevo cliente" aria-label="Nuevo cliente" id="kiosk-new-customer-btn"><i class="bi bi-person-plus"></i></a>
-                    <button type="button" class="btn btn-outline-danger d-none" id="clear-kiosk-customer" title="Quitar cliente" aria-label="Quitar cliente"><i class="bi bi-x-lg"></i></button>
+                    <button type="button" class="btn btn-outline-dark" id="open-kiosk-customer-search"
+                        title="Buscar cliente" aria-label="Buscar cliente"><i class="bi bi-search"></i></button>
+                    <a href="<?= site_url('ventas/clientes/nuevo' . (!empty($companyId) ? '?company_id=' . $companyId : '')) ?>"
+                        class="btn btn-outline-dark" data-popup="true" data-popup-title="Cliente"
+                        data-popup-subtitle="Alta rapida de cliente para ventas." title="Nuevo cliente"
+                        aria-label="Nuevo cliente" id="kiosk-new-customer-btn"><i class="bi bi-person-plus"></i></a>
+                    <button type="button" class="btn btn-outline-danger d-none" id="clear-kiosk-customer"
+                        title="Quitar cliente" aria-label="Quitar cliente"><i class="bi bi-x-lg"></i></button>
                 </div>
             </div>
 
@@ -184,27 +190,29 @@ $productCatalog = array_values(array_map(static function (array $product): array
                             <div id="kiosk-hidden-items"></div>
 
                             <div class="col-12 pt-3">
-                              <div class="d-flex gap-3 align-items-center flex-wrap">
-                                <div class="form-check form-check-inline">
-                                  <input class="form-check-input" type="radio" name="kiosk_emit_type"
-                                         id="kiosk-emit-ticket" value="ticket" checked>
-                                  <label class="form-check-label" for="kiosk-emit-ticket">Ticket</label>
+                                <div class="d-flex gap-3 align-items-center flex-wrap">
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="radio" name="kiosk_emit_type"
+                                            id="kiosk-emit-ticket" value="ticket" checked>
+                                        <label class="form-check-label" for="kiosk-emit-ticket">Ticket</label>
+                                    </div>
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="radio" name="kiosk_emit_type"
+                                            id="kiosk-emit-factura" value="factura">
+                                        <label class="form-check-label" for="kiosk-emit-factura">Factura</label>
+                                    </div>
+                                    <div id="kiosk-factura-options" class="d-none">
+                                        <select id="kiosk-factura-doc-type" class="form-select form-select-sm"
+                                            style="min-width:160px;">
+                                            <?php foreach (($invoiceDocumentTypes ?? []) as $dt): ?>
+                                                <option value="<?= esc($dt['id']) ?>"><?= esc($dt['name']) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
                                 </div>
-                                <div class="form-check form-check-inline">
-                                  <input class="form-check-input" type="radio" name="kiosk_emit_type"
-                                         id="kiosk-emit-factura" value="factura">
-                                  <label class="form-check-label" for="kiosk-emit-factura">Factura</label>
-                                </div>
-                                <div id="kiosk-factura-options" class="d-none">
-                                  <select id="kiosk-factura-doc-type" class="form-select form-select-sm" style="min-width:160px;">
-                                    <?php foreach (($invoiceDocumentTypes ?? []) as $dt): ?>
-                                      <option value="<?= esc($dt['id']) ?>"><?= esc($dt['name']) ?></option>
-                                    <?php endforeach; ?>
-                                  </select>
-                                </div>
-                              </div>
-                              <input type="hidden" name="authorize_arca" id="kiosk-authorize-arca" value="0">
-                              <input type="hidden" name="factura_document_type_id" id="kiosk-factura-doc-type-hidden" value="">
+                                <input type="hidden" name="authorize_arca" id="kiosk-authorize-arca" value="0">
+                                <input type="hidden" name="factura_document_type_id" id="kiosk-factura-doc-type-hidden"
+                                    value="">
                             </div>
 
                             <div class="d-flex justify-content-end gap-2 pt-4">
@@ -231,20 +239,24 @@ $productCatalog = array_values(array_map(static function (array $product): array
                             <h2 class="h5 mb-1">Buscar cliente</h2>
                             <p class="text-secondary mb-0">Busca por nombre o documento y selecciona el cliente.</p>
                         </div>
-                        <button type="button" class="btn btn-outline-dark icon-btn" data-bs-dismiss="modal" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
+                        <button type="button" class="btn btn-outline-dark icon-btn" data-bs-dismiss="modal"
+                            aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
                     </div>
                     <div class="modal-body p-4">
                         <div class="mb-3">
                             <label class="form-label">Nombre / Documento</label>
-                            <input type="text" id="kiosk-customer-search" class="form-control" placeholder="Escribe el nombre o documento para buscar..." autocomplete="off">
+                            <input type="text" id="kiosk-customer-search" class="form-control"
+                                placeholder="Escribe el nombre o documento para buscar..." autocomplete="off">
                         </div>
                         <div class="small text-secondary mb-3">
                             Coincidencias: <span class="fw-semibold" id="kiosk-customer-results-count">0</span>
                         </div>
-                        <div id="kiosk-customer-search-results" class="list-group border rounded-4 overflow-auto" style="max-height: 360px;"></div>
+                        <div id="kiosk-customer-search-results" class="list-group border rounded-4 overflow-auto"
+                            style="max-height: 360px;"></div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-outline-dark icon-btn" data-bs-dismiss="modal" title="Cancelar" aria-label="Cancelar"><i class="bi bi-x-lg"></i></button>
+                        <button type="button" class="btn btn-outline-dark icon-btn" data-bs-dismiss="modal"
+                            title="Cancelar" aria-label="Cancelar"><i class="bi bi-x-lg"></i></button>
                     </div>
                 </div>
             </div>
@@ -586,9 +598,9 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 <div class="d-flex justify-content-between align-items-start gap-3">
                     <div class="d-flex gap-3 align-items-start text-start">
                         ${product.image
-                            ? `<img src="/uploads/products/${product.image}" style="width:40px;height:40px;object-fit:cover;" class="rounded flex-shrink-0">`
-                            : `<span class="d-flex align-items-center justify-content-center rounded bg-light text-secondary flex-shrink-0" style="width:40px;height:40px;"><i class="bi bi-box"></i></span>`
-                        }
+                        ? `<img src="/uploads/products/${product.image}" style="width:40px;height:40px;object-fit:cover;" class="rounded flex-shrink-0">`
+                        : `<span class="d-flex align-items-center justify-content-center rounded bg-light text-secondary flex-shrink-0" style="width:40px;height:40px;"><i class="bi bi-box"></i></span>`
+                    }
                         <div>
                             <div class="fw-semibold">${product.sku} - ${product.name}</div>
                             <div class="small text-secondary">${product.brand || 'Sin marca'}</div>
@@ -610,23 +622,48 @@ $productCatalog = array_values(array_map(static function (array $product): array
         const buildPrintMarkup = () => {
             const printedAt = new Date().toLocaleString('es-AR');
             const paperWidth = ticketSettings.ticket_paper_width || '80mm';
-            
+
+            const fontFamilyOption = ticketSettings.ticket_font_family || 'Courier';
+            let fontFamilyStyle = '"Courier New", Courier, monospace';
+            let fontWeightStyle = 'normal';
+            if (fontFamilyOption === 'Helvetica 75 Bold') {
+                fontFamilyStyle = '"Helvetica 75 Bold", "Helvetica Neue", Helvetica, Arial, sans-serif';
+                fontWeightStyle = 'bold';
+            } else if (fontFamilyOption === 'Helvetica') {
+                fontFamilyStyle = '"Helvetica Neue", Helvetica, Arial, sans-serif';
+            } else if (fontFamilyOption === 'DejaVu Sans') {
+                fontFamilyStyle = '"DejaVu Sans", sans-serif';
+            } else if (fontFamilyOption === 'DejaVu Serif') {
+                fontFamilyStyle = '"DejaVu Serif", serif';
+            } else if (fontFamilyOption === 'Times-Roman') {
+                fontFamilyStyle = '"Times New Roman", Times, serif';
+            }
+
+            const topLeftText = ticketSettings.ticket_custom_text_top_left || '';
+            const topRightText = ticketSettings.ticket_custom_text_top_right || '';
+            const boldTopLeft = Number(ticketSettings.ticket_bold_top_left) === 1;
+            const boldTopRight = Number(ticketSettings.ticket_bold_top_right) === 1;
+
+            const companySubtitle = ticketSettings.ticket_company_subtitle || '';
+            const companyAddress = ticketSettings.ticket_company_address || '';
+            const companyPhone = ticketSettings.ticket_company_phone || '';
+
             const rows = Array.from(items.values()).map((item) => {
                 const base = Number(item.quantity) * Number(item.unit_price);
                 const discountAmount = base * (Number(item.discount_rate || 0) / 100);
                 const amount = base - discountAmount;
                 const discountText = item.discount_rate > 0 ? ` <span style="font-size:10px">- ${Number(item.discount_rate).toFixed(0)}%</span>` : '';
-                
+
                 const skuPart = Number(ticketSettings.ticket_show_sku) === 1 ? `[${item.sku}] ` : '';
-                const brandPart = (Number(ticketSettings.ticket_show_brand) === 1 && item.brand) 
-                    ? `<div class="ticket-meta">${item.brand}</div>` 
+                const brandPart = (Number(ticketSettings.ticket_show_brand) === 1 && item.brand)
+                    ? `<div class="ticket-meta">${item.brand}</div>`
                     : '';
-                
+
                 const showBreakdown = Number(ticketSettings.ticket_show_item_breakdown) === 1;
                 const breakdownHtml = showBreakdown
                     ? `<span>${formatMoney(item.quantity)} x ${formatMoney(item.unit_price)}${discountText}</span>`
                     : `<span>Cant: ${Number(item.quantity)}</span>`;
-                
+
                 return `
                     <div class="ticket-line">
                         <div class="ticket-name">${skuPart}${item.name}</div>
@@ -638,11 +675,11 @@ $productCatalog = array_values(array_map(static function (array $product): array
                     </div>
                 `;
             }).join('');
-            
+
             const change = Math.max(0, (parseFloat(paidAmount.value) || 0) - totalAmount());
-            
+
             const headerTitle = ticketSettings.ticket_header_title || companyLegalName || companyName;
-            
+
             const showCustomer = Number(ticketSettings.ticket_show_customer) === 1;
             const customerHtml = showCustomer
                 ? `
@@ -652,7 +689,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                     </div>
                 `
                 : '';
-                
+
             const showUser = Number(ticketSettings.ticket_show_user) === 1;
             const userHtml = showUser
                 ? `<div class="ticket-small" style="text-align:left;"><strong>Vendedor:</strong> ${userName}</div>`
@@ -683,7 +720,8 @@ $productCatalog = array_values(array_map(static function (array $product): array
         }
         body {
             margin: 0;
-            font-family: "Courier New", monospace;
+            font-family: ${fontFamilyStyle};
+            font-weight: ${fontWeightStyle};
             background: #f7f4ef;
             color: #111;
         }
@@ -783,8 +821,17 @@ $productCatalog = array_values(array_map(static function (array $product): array
             <div class="ticket">
                 <div class="ticket-center">
                     <div style="font-size:14px; font-weight:700; text-transform:uppercase; margin-bottom:4px;">${headerTitle}</div>
+                    ${companySubtitle ? `<div style="font-size:10px; font-weight:700; text-transform:uppercase; margin-bottom:4px;">${companySubtitle}</div>` : ''}
                     ${companyTaxId ? `<div class="ticket-small">CUIT: ${companyTaxId}</div>` : ''}
+                    ${companyAddress ? `<div class="ticket-small">${companyAddress}</div>` : ''}
+                    ${companyPhone ? `<div class="ticket-small">${companyPhone}</div>` : ''}
+                    ${(topLeftText || topRightText) ? `
+                    <div style="display: flex; justify-content: space-between; font-size: 10px; margin-top: 4px; padding-bottom: 4px; border-bottom: 1px dashed #bbb;">
+                        <span style="font-weight: ${boldTopLeft ? 'bold' : 'normal'}; text-align: left; white-space: pre-line;">${topLeftText}</span>
+                        <span style="font-weight: ${boldTopRight ? 'bold' : 'normal'}; text-align: right; white-space: pre-line;">${topRightText}</span>
+                    </div>` : `
                     <div style="margin:4px 0; border-bottom:1px dashed #bbb;"></div>
+                    `}
                     <div><strong><?= esc($settings['kiosk_document_label'] ?? 'Ticket Consumidor Final') ?></strong></div>
                     <div class="ticket-small">${printedAt}</div>
                     <div class="ticket-small">${currencyField.options[currencyField.selectedIndex].text}</div>

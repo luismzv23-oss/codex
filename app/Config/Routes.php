@@ -198,7 +198,11 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     // ── Impuestos (Web) ─────────────────────────────────
     $routes->get('impuestos', 'TaxController::index', ['filter' => 'permission:systems.view']);
     $routes->get('impuestos/iva-ventas/txt', 'TaxController::exportIvaVentasTxt', ['filter' => 'permission:systems.view']);
+    $routes->get('impuestos/iva-ventas/cbte', 'TaxController::exportIvaVentasCbte', ['filter' => 'permission:systems.view']);
+    $routes->get('impuestos/iva-ventas/alicuotas', 'TaxController::exportIvaVentasAlicuotas', ['filter' => 'permission:systems.view']);
     $routes->get('impuestos/iva-compras/txt', 'TaxController::exportIvaComprasTxt', ['filter' => 'permission:systems.view']);
+    $routes->get('impuestos/iva-compras/cbte', 'TaxController::exportIvaComprasCbte', ['filter' => 'permission:systems.view']);
+    $routes->get('impuestos/iva-compras/alicuotas', 'TaxController::exportIvaComprasAlicuotas', ['filter' => 'permission:systems.view']);
     $routes->get('impuestos/sicore/retenciones/txt', 'TaxController::exportSicoreRetencionesTxt', ['filter' => 'permission:systems.view']);
     $routes->get('impuestos/sicore/percepciones/txt', 'TaxController::exportSicorePercepcionesTxt', ['filter' => 'permission:systems.view']);
 

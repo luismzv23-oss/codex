@@ -217,7 +217,9 @@ class AccountingService
         if ($existing > 0) return ['ok' => true, 'already_synced' => true];
 
         $map = $this->getAccountMapping($companyId);
-        if (empty($map)) return ['ok' => true, 'skipped' => 'no_account_mapping'];
+        if (empty($map)) {
+            throw new \RuntimeException("Falta configuracion de mapeo de cuentas contables para la empresa.");
+        }
 
         $sale['user_id'] = $userId;
         return $this->journalFromSale($companyId, $sale, $map);
@@ -233,7 +235,9 @@ class AccountingService
         if (!$receipt) return ['ok' => false, 'error' => 'Receipt not found'];
 
         $map = $this->getAccountMapping($companyId);
-        if (empty($map)) return ['ok' => true, 'skipped' => 'no_account_mapping'];
+        if (empty($map)) {
+            throw new \RuntimeException("Falta configuracion de mapeo de cuentas contables para la empresa.");
+        }
 
         $lines = [];
         $amount = (float)($receipt['total'] ?? 0);
@@ -245,7 +249,9 @@ class AccountingService
         // Credit: Accounts Receivable
         if (!empty($map['receivable'])) $lines[] = ['account_id' => $map['receivable'], 'debit' => 0, 'credit' => $amount, 'description' => 'Cobranza cliente'];
 
-        if (empty($lines)) return ['ok' => true, 'skipped' => 'no_accounts'];
+        if (empty($lines)) {
+            throw new \RuntimeException("Falta configurar la cuenta de caja/banco o de clientes (receivable) para registrar el recibo de venta.");
+        }
 
         return $this->createJournalEntry($companyId, [
             'description' => 'Cobro recibo #' . ($receipt['receipt_number'] ?? ''),
@@ -265,7 +271,9 @@ class AccountingService
         if (!$ret) return ['ok' => false, 'error' => 'Return not found'];
 
         $map = $this->getAccountMapping($companyId);
-        if (empty($map)) return ['ok' => true, 'skipped' => 'no_account_mapping'];
+        if (empty($map)) {
+            throw new \RuntimeException("Falta configuracion de mapeo de cuentas contables para la empresa.");
+        }
 
         $lines = [];
         $total = (float)($ret['total'] ?? 0);
@@ -277,7 +285,9 @@ class AccountingService
         if (!empty($map['iva_debito']) && $tax > 0) $lines[] = ['account_id' => $map['iva_debito'], 'debit' => $tax, 'credit' => 0, 'description' => 'NC - IVA Debito Fiscal'];
         if (!empty($map['receivable'])) $lines[] = ['account_id' => $map['receivable'], 'debit' => 0, 'credit' => $total, 'description' => 'NC - Cuenta cliente'];
 
-        if (empty($lines)) return ['ok' => true, 'skipped' => 'no_accounts'];
+        if (empty($lines)) {
+            throw new \RuntimeException("Falta configurar las cuentas contables de devolucion (revenue/receivable) para registrar la NC de venta.");
+        }
 
         return $this->createJournalEntry($companyId, [
             'description' => 'NC Devolucion #' . ($ret['return_number'] ?? ''),
@@ -297,12 +307,16 @@ class AccountingService
         if (!$receipt) return ['ok' => false, 'error' => 'Purchase receipt not found'];
 
         $map = $this->getAccountMapping($companyId);
-        if (empty($map)) return ['ok' => true, 'skipped' => 'no_account_mapping'];
+        if (empty($map)) {
+            throw new \RuntimeException("Falta configuracion de mapeo de cuentas contables para la empresa.");
+        }
 
         // Purchase receipts don't always generate journal entries (only invoices do)
         // But if there's an inventory account, we can track the stock value
         $invAccount = $map['inventory'] ?? null;
-        if (!$invAccount) return ['ok' => true, 'skipped' => 'no_inventory_account'];
+        if (!$invAccount) {
+            throw new \RuntimeException("Falta configurar la cuenta contable de inventario (inventory) para registrar el remito de compra.");
+        }
 
         $total = (float)($receipt['total'] ?? 0);
         if ($total <= 0) return ['ok' => true, 'skipped' => 'zero_amount'];
@@ -330,7 +344,9 @@ class AccountingService
         if (!$ret) return ['ok' => false, 'error' => 'Purchase return not found'];
 
         $map = $this->getAccountMapping($companyId);
-        if (empty($map)) return ['ok' => true, 'skipped' => 'no_account_mapping'];
+        if (empty($map)) {
+            throw new \RuntimeException("Falta configuracion de mapeo de cuentas contables para la empresa.");
+        }
 
         $total = (float)($ret['total'] ?? 0);
         $tax   = (float)($ret['tax_total'] ?? 0);
@@ -341,7 +357,9 @@ class AccountingService
         if (!empty($map['expense']))     $lines[] = ['account_id' => $map['expense'], 'debit' => 0, 'credit' => $sub, 'description' => 'Reversa gasto compra'];
         if (!empty($map['iva_credito']) && $tax > 0) $lines[] = ['account_id' => $map['iva_credito'], 'debit' => 0, 'credit' => $tax, 'description' => 'Reversa IVA Credito'];
 
-        if (empty($lines)) return ['ok' => true, 'skipped' => 'no_accounts'];
+        if (empty($lines)) {
+            throw new \RuntimeException("Falta configurar las cuentas contables de compras/proveedores (expense/payable) para registrar la NC de compra.");
+        }
 
         return $this->createJournalEntry($companyId, [
             'description' => 'NC Proveedor Dev. #' . ($ret['return_number'] ?? ''),
@@ -361,7 +379,9 @@ class AccountingService
         if (!$payment) return ['ok' => false, 'error' => 'Payment not found'];
 
         $map = $this->getAccountMapping($companyId);
-        if (empty($map)) return ['ok' => true, 'skipped' => 'no_account_mapping'];
+        if (empty($map)) {
+            throw new \RuntimeException("Falta configuracion de mapeo de cuentas contables para la empresa.");
+        }
 
         $amount = (float)($payment['amount'] ?? 0);
         $lines = [];
@@ -372,7 +392,9 @@ class AccountingService
         $cashAccount = $map['cash'] ?? $map['bank'] ?? null;
         if ($cashAccount) $lines[] = ['account_id' => $cashAccount, 'debit' => 0, 'credit' => $amount, 'description' => 'Egreso por pago'];
 
-        if (empty($lines)) return ['ok' => true, 'skipped' => 'no_accounts'];
+        if (empty($lines)) {
+            throw new \RuntimeException("Falta configurar las cuentas de proveedores o caja/banco para registrar el pago de compra.");
+        }
 
         return $this->createJournalEntry($companyId, [
             'description' => 'Pago proveedor #' . ($payment['payment_number'] ?? $paymentId),
@@ -405,7 +427,7 @@ class AccountingService
 
         $map = $this->getAccountMapping($companyId);
         if (empty($map)) {
-            return ['ok' => true, 'skipped' => 'no_account_mapping'];
+            throw new \RuntimeException("Falta configuracion de mapeo de cuentas contables para la empresa.");
         }
 
         $difference = (float) ($closure['difference_amount'] ?? 0);
@@ -418,7 +440,7 @@ class AccountingService
         $differenceAccount = $map['cash_difference'] ?? $map['expense'] ?? null;
 
         if (!$cashAccount || !$differenceAccount) {
-            return ['ok' => true, 'skipped' => 'no_accounts'];
+            throw new \RuntimeException("Falta configurar las cuentas de caja o diferencias de caja (cash_difference) para registrar la diferencia del cierre.");
         }
 
         if ($difference > 0) {

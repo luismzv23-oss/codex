@@ -683,7 +683,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
             const showCustomer = Number(ticketSettings.ticket_show_customer) === 1;
             const customerHtml = showCustomer
                 ? `
-                    <div class="ticket-small" style="margin-top:6px; border-top:1px dashed #bbb; padding-top:4px; text-align:left;">
+                    <div class="ticket-small" style="margin-top:6px; border-top:1px dashed #000; padding-top:4px; text-align:left;">
                         <strong>Cliente:</strong> ${kioskCustomerName.value}<br>
                         ${kioskDocumentDisplay ? `<strong>Doc:</strong> ${kioskDocumentDisplay.value}` : ''}
                     </div>
@@ -697,7 +697,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
 
             const footerHtml = ticketSettings.ticket_footer_notes
                 ? `
-                    <div class="ticket-small" style="margin-top:10px; border-top:1px dashed #bbb; padding-top:6px; text-align:center; white-space:pre-wrap;">
+                    <div class="ticket-small" style="margin-top:10px; border-top:1px dashed #000; padding-top:6px; text-align:center; white-space:pre-wrap;">
                         ${ticketSettings.ticket_footer_notes}
                     </div>
                 `
@@ -723,7 +723,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
             font-family: ${fontFamilyStyle};
             font-weight: ${fontWeightStyle};
             background: #f7f4ef;
-            color: #111;
+            color: #000;
         }
         .preview-shell {
             min-height: 100vh;
@@ -744,17 +744,18 @@ $productCatalog = array_values(array_map(static function (array $product): array
             padding: 5mm 4mm;
             border-radius: 12px;
             box-shadow: 0 16px 40px rgba(0,0,0,.14);
+            color: #000;
         }
         .ticket-center {
             text-align: center;
         }
         .ticket-small {
             font-size: 11px;
-            color: #555;
-            line-height: 1.3;
+            color: #000;
+            line-height: 1.35;
         }
         .ticket-line {
-            border-bottom: 1px dashed #bbb;
+            border-bottom: 1px dashed #000;
             padding: 6px 0;
         }
         .ticket-name {
@@ -765,7 +766,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
         }
         .ticket-meta {
             font-size: 11px;
-            color: #666;
+            color: #000;
             margin-bottom: 4px;
         }
         .ticket-row {
@@ -799,6 +800,11 @@ $productCatalog = array_values(array_map(static function (array $product): array
         @media print {
             body {
                 background: #fff;
+                color: #000 !important;
+            }
+            .ticket, .ticket * {
+                color: #000 !important;
+                background: #fff !important;
             }
             .preview-actions {
                 display: none;
@@ -821,16 +827,16 @@ $productCatalog = array_values(array_map(static function (array $product): array
             <div class="ticket">
                 <div class="ticket-center">
                     <div style="font-size:14px; font-weight:700; text-transform:uppercase; margin-bottom:4px;">${headerTitle}</div>
-                    ${companySubtitle ? `<div style="font-size:10px; font-weight:700; text-transform:uppercase; margin-bottom:4px;">${companySubtitle}</div>` : ''}
+                    ${companySubtitle ? `<div style="font-size:11px; font-weight:700; text-transform:uppercase; margin-bottom:4px;">${companySubtitle}</div>` : ''}
                     ${companyTaxId ? `<div class="ticket-small">CUIT: ${companyTaxId}</div>` : ''}
                     ${companyAddress ? `<div class="ticket-small">${companyAddress}</div>` : ''}
                     ${companyPhone ? `<div class="ticket-small">${companyPhone}</div>` : ''}
                     ${(topLeftText || topRightText) ? `
-                    <div style="display: flex; justify-content: space-between; font-size: 10px; margin-top: 4px; padding-bottom: 4px; border-bottom: 1px dashed #bbb;">
+                    <div style="display: flex; justify-content: space-between; font-size: 11px; margin-top: 4px; padding-bottom: 4px; border-bottom: 1px dashed #000;">
                         <span style="font-weight: ${boldTopLeft ? 'bold' : 'normal'}; text-align: left; white-space: pre-line;">${topLeftText}</span>
                         <span style="font-weight: ${boldTopRight ? 'bold' : 'normal'}; text-align: right; white-space: pre-line;">${topRightText}</span>
                     </div>` : `
-                    <div style="margin:4px 0; border-bottom:1px dashed #bbb;"></div>
+                    <div style="margin:4px 0; border-bottom:1px dashed #000;"></div>
                     `}
                     <div><strong><?= esc($settings['kiosk_document_label'] ?? 'Ticket Consumidor Final') ?></strong></div>
                     <div class="ticket-small">${printedAt}</div>

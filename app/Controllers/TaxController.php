@@ -58,6 +58,38 @@ class TaxController extends BaseController
             ->setBody($txt);
     }
 
+    public function exportIvaVentasCbte()
+    {
+        $ctx = $this->taxContext();
+        if ($ctx instanceof RedirectResponse) return $ctx;
+
+        $from = $this->request->getGet('from') ?: date('Y-m-01');
+        $to   = $this->request->getGet('to')   ?: date('Y-m-d');
+        $txt  = (new LibroIvaDigitalService())->exportVentasCbteTxt($ctx['company']['id'], $from, $to);
+        $period = str_replace('-', '', substr($from, 0, 7));
+
+        return $this->response
+            ->setHeader('Content-Type', 'text/plain; charset=UTF-8')
+            ->setHeader('Content-Disposition', 'attachment; filename="LIBRO_IVA_VENTAS_CBTE_' . $period . '.txt"')
+            ->setBody($txt);
+    }
+
+    public function exportIvaVentasAlicuotas()
+    {
+        $ctx = $this->taxContext();
+        if ($ctx instanceof RedirectResponse) return $ctx;
+
+        $from = $this->request->getGet('from') ?: date('Y-m-01');
+        $to   = $this->request->getGet('to')   ?: date('Y-m-d');
+        $txt  = (new LibroIvaDigitalService())->exportVentasAlicuotasTxt($ctx['company']['id'], $from, $to);
+        $period = str_replace('-', '', substr($from, 0, 7));
+
+        return $this->response
+            ->setHeader('Content-Type', 'text/plain; charset=UTF-8')
+            ->setHeader('Content-Disposition', 'attachment; filename="LIBRO_IVA_VENTAS_ALICUOTAS_' . $period . '.txt"')
+            ->setBody($txt);
+    }
+
     public function exportIvaComprasTxt()
     {
         $ctx = $this->taxContext();
@@ -71,6 +103,38 @@ class TaxController extends BaseController
         return $this->response
             ->setHeader('Content-Type', 'text/plain; charset=UTF-8')
             ->setHeader('Content-Disposition', 'attachment; filename="LIBRO_IVA_COMPRAS_' . $period . '.txt"')
+            ->setBody($txt);
+    }
+
+    public function exportIvaComprasCbte()
+    {
+        $ctx = $this->taxContext();
+        if ($ctx instanceof RedirectResponse) return $ctx;
+
+        $from = $this->request->getGet('from') ?: date('Y-m-01');
+        $to   = $this->request->getGet('to')   ?: date('Y-m-d');
+        $txt  = (new LibroIvaDigitalService())->exportComprasCbteTxt($ctx['company']['id'], $from, $to);
+        $period = str_replace('-', '', substr($from, 0, 7));
+
+        return $this->response
+            ->setHeader('Content-Type', 'text/plain; charset=UTF-8')
+            ->setHeader('Content-Disposition', 'attachment; filename="LIBRO_IVA_COMPRAS_CBTE_' . $period . '.txt"')
+            ->setBody($txt);
+    }
+
+    public function exportIvaComprasAlicuotas()
+    {
+        $ctx = $this->taxContext();
+        if ($ctx instanceof RedirectResponse) return $ctx;
+
+        $from = $this->request->getGet('from') ?: date('Y-m-01');
+        $to   = $this->request->getGet('to')   ?: date('Y-m-d');
+        $txt  = (new LibroIvaDigitalService())->exportComprasAlicuotasTxt($ctx['company']['id'], $from, $to);
+        $period = str_replace('-', '', substr($from, 0, 7));
+
+        return $this->response
+            ->setHeader('Content-Type', 'text/plain; charset=UTF-8')
+            ->setHeader('Content-Disposition', 'attachment; filename="LIBRO_IVA_COMPRAS_ALICUOTAS_' . $period . '.txt"')
             ->setBody($txt);
     }
 

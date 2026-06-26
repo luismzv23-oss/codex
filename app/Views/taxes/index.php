@@ -36,7 +36,10 @@
 <div class="card border-0 shadow-sm rounded-4 mb-4">
     <div class="card-header bg-light rounded-top-4 d-flex justify-content-between align-items-center">
         <span class="fw-semibold"><i class="bi bi-journal-text text-primary"></i> Libro IVA Ventas</span>
-        <a href="<?= site_url('impuestos/iva-ventas/txt') ?>?from=<?= esc($filters['from']) ?>&to=<?= esc($filters['to']) ?>&company_id=<?= $selectedCompanyId ?>" class="btn btn-outline-primary icon-btn" title="TXT AFIP Ventas (RG 4597)" aria-label="TXT AFIP Ventas (RG 4597)"><i class="bi bi-download"></i></a>
+        <div class="d-flex gap-2">
+            <a href="<?= site_url('impuestos/iva-ventas/cbte') ?>?from=<?= esc($filters['from']) ?>&to=<?= esc($filters['to']) ?>&company_id=<?= $selectedCompanyId ?>" class="btn btn-sm btn-outline-primary" title="Descargar Comprobantes TXT"><i class="bi bi-file-earmark-arrow-down"></i> Comprobantes</a>
+            <a href="<?= site_url('impuestos/iva-ventas/alicuotas') ?>?from=<?= esc($filters['from']) ?>&to=<?= esc($filters['to']) ?>&company_id=<?= $selectedCompanyId ?>" class="btn btn-sm btn-outline-primary" title="Descargar Alicuotas TXT"><i class="bi bi-file-earmark-arrow-down"></i> Alícuotas</a>
+        </div>
     </div>
     <div class="card-body p-0">
         <table class="table table-hover table-sm align-middle mb-0">
@@ -69,7 +72,10 @@
 <div class="card border-0 shadow-sm rounded-4 mb-4">
     <div class="card-header bg-light rounded-top-4 d-flex justify-content-between align-items-center">
         <span class="fw-semibold"><i class="bi bi-journal-text text-danger"></i> Libro IVA Compras</span>
-        <a href="<?= site_url('impuestos/iva-compras/txt') ?>?from=<?= esc($filters['from']) ?>&to=<?= esc($filters['to']) ?>&company_id=<?= $selectedCompanyId ?>" class="btn btn-outline-danger icon-btn" title="TXT AFIP Compras (RG 4597)" aria-label="TXT AFIP Compras (RG 4597)"><i class="bi bi-download"></i></a>
+        <div class="d-flex gap-2">
+            <a href="<?= site_url('impuestos/iva-compras/cbte') ?>?from=<?= esc($filters['from']) ?>&to=<?= esc($filters['to']) ?>&company_id=<?= $selectedCompanyId ?>" class="btn btn-sm btn-outline-danger" title="Descargar Comprobantes TXT"><i class="bi bi-file-earmark-arrow-down"></i> Comprobantes</a>
+            <a href="<?= site_url('impuestos/iva-compras/alicuotas') ?>?from=<?= esc($filters['from']) ?>&to=<?= esc($filters['to']) ?>&company_id=<?= $selectedCompanyId ?>" class="btn btn-sm btn-outline-danger" title="Descargar Alicuotas TXT"><i class="bi bi-file-earmark-arrow-down"></i> Alícuotas</a>
+        </div>
     </div>
     <div class="card-body p-0">
         <table class="table table-hover table-sm align-middle mb-0">

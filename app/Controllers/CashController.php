@@ -369,4 +369,160 @@ class CashController extends BaseController
     {
         return new CashService();
     }
+
+    public function endorseCheckForm(string $checkId)
+    {
+        $context = $this->cashContext('manage');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+
+        $check = (new \App\Models\CashCheckModel())->where('company_id', $context['company']['id'])->find($checkId);
+        if (!$check || !in_array($check['status'], ['portfolio', 'received'], true)) {
+            return redirect()->to($this->cashRoute('caja', $context['company']['id']))->with('error', 'El cheque no está disponible para endoso.');
+        }
+
+        return view('cash/forms/endorse', [
+            'pageTitle' => 'Endosar cheque',
+            'companyId' => $context['company']['id'],
+            'check' => $check,
+            'suppliers' => (new SupplierModel())->where('company_id', $context['company']['id'])->where('active', 1)->orderBy('name', 'ASC')->findAll(),
+            'sessions' => $this->cashService()->activeSessions($context['company']['id']),
+            'formAction' => site_url('caja/cheques/' . $checkId . '/endosar'),
+            'isPopup' => $this->isPopupRequest(),
+        ]);
+    }
+
+    public function storeEndorseCheck(string $checkId)
+    {
+        $context = $this->cashContext('manage');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+
+        $supplierId = trim((string) $this->request->getPost('supplier_id'));
+        $sessionId = trim((string) $this->request->getPost('cash_session_id'));
+        $notes = trim((string) $this->request->getPost('notes'));
+
+        if ($supplierId === '' || $sessionId === '') {
+            return redirect()->back()->withInput()->with('error', 'Debes seleccionar un proveedor y una sesión de caja.');
+        }
+
+        $success = $this->cashService()->endorseCheck(
+            $context['company']['id'],
+            $checkId,
+            $supplierId,
+            $sessionId,
+            $this->currentUser()['id'],
+            $notes
+        );
+
+        if (!$success) {
+            return redirect()->back()->withInput()->with('error', 'No se pudo registrar el endoso del cheque.');
+        }
+
+        return $this->popupOrRedirect($this->cashRoute('caja', $context['company']['id']), 'Cheque endosado correctamente.');
+    }
+
+    public function depositCheckForm(string $checkId)
+    {
+        $context = $this->cashContext('manage');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+
+        $check = (new \App\Models\CashCheckModel())->where('company_id', $context['company']['id'])->find($checkId);
+        if (!$check || !in_array($check['status'], ['portfolio', 'received'], true)) {
+            return redirect()->to($this->cashRoute('caja', $context['company']['id']))->with('error', 'El cheque no está disponible para depósito.');
+        }
+
+        return view('cash/forms/deposit', [
+            'pageTitle' => 'Depositar cheque',
+            'companyId' => $context['company']['id'],
+            'check' => $check,
+            'sessions' => $this->cashService()->activeSessions($context['company']['id']),
+            'formAction' => site_url('caja/cheques/' . $checkId . '/depositar'),
+            'isPopup' => $this->isPopupRequest(),
+        ]);
+    }
+
+    public function storeDepositCheck(string $checkId)
+    {
+        $context = $this->cashContext('manage');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+
+        $sessionId = trim((string) $this->request->getPost('cash_session_id'));
+        $notes = trim((string) $this->request->getPost('notes'));
+
+        if ($sessionId === '') {
+            return redirect()->back()->withInput()->with('error', 'Debes seleccionar una sesión de caja.');
+        }
+
+        $success = $this->cashService()->depositCheck(
+            $context['company']['id'],
+            $checkId,
+            $sessionId,
+            $this->currentUser()['id'],
+            $notes
+        );
+
+        if (!$success) {
+            return redirect()->back()->withInput()->with('error', 'No se pudo registrar el depósito del cheque.');
+        }
+
+        return $this->popupOrRedirect($this->cashRoute('caja', $context['company']['id']), 'Cheque depositado correctamente.');
+    }
+
+    public function rejectCheckForm(string $checkId)
+    {
+        $context = $this->cashContext('manage');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+
+        $check = (new \App\Models\CashCheckModel())->where('company_id', $context['company']['id'])->find($checkId);
+        if (!$check || !in_array($check['status'], ['deposited', 'endorsed'], true)) {
+            return redirect()->to($this->cashRoute('caja', $context['company']['id']))->with('error', 'El cheque no está en un estado que permita rechazo.');
+        }
+
+        return view('cash/forms/reject', [
+            'pageTitle' => 'Rechazar cheque',
+            'companyId' => $context['company']['id'],
+            'check' => $check,
+            'sessions' => $this->cashService()->activeSessions($context['company']['id']),
+            'formAction' => site_url('caja/cheques/' . $checkId . '/rechazar'),
+            'isPopup' => $this->isPopupRequest(),
+        ]);
+    }
+
+    public function storeRejectCheck(string $checkId)
+    {
+        $context = $this->cashContext('manage');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+
+        $sessionId = trim((string) $this->request->getPost('cash_session_id'));
+        $notes = trim((string) $this->request->getPost('notes'));
+
+        if ($sessionId === '') {
+            return redirect()->back()->withInput()->with('error', 'Debes seleccionar una sesión de caja.');
+        }
+
+        $success = $this->cashService()->rejectCheck(
+            $context['company']['id'],
+            $checkId,
+            $sessionId,
+            $this->currentUser()['id'],
+            $notes
+        );
+
+        if (!$success) {
+            return redirect()->back()->withInput()->with('error', 'No se pudo registrar el rechazo del cheque.');
+        }
+
+        return $this->popupOrRedirect($this->cashRoute('caja', $context['company']['id']), 'Cheque rechazado correctamente.');
+    }
 }

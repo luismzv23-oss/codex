@@ -3972,8 +3972,17 @@ class SalesController extends BaseController
 
     private function nextSequenceNumber(string $companyId, string $documentType, string $defaultPrefix): string
     {
+        $db = db_connect();
+        $db->transStart();
+
         $model = new VoucherSequenceModel();
-        $sequence = $model->where('company_id', $companyId)->where('document_type', $documentType)->first();
+        
+        $sequence = $model->db->table('voucher_sequences')
+            ->where('company_id', $companyId)
+            ->where('document_type', $documentType)
+            ->forUpdate()
+            ->get()
+            ->getRowArray();
 
         if (!$sequence) {
             $branch = (new BranchModel())->where('company_id', $companyId)->where('code', 'MAIN')->first();
@@ -3985,12 +3994,19 @@ class SalesController extends BaseController
                 'current_number' => 1,
                 'active' => 1,
             ], true);
-            $sequence = $model->find($id);
+            
+            $sequence = $model->db->table('voucher_sequences')
+                ->where('id', $id)
+                ->forUpdate()
+                ->get()
+                ->getRowArray();
         }
 
         $number = (int) ($sequence['current_number'] ?? 1);
         $formatted = strtoupper(trim((string) ($sequence['prefix'] ?? $defaultPrefix))) . '-' . str_pad((string) $number, 8, '0', STR_PAD_LEFT);
         $model->update($sequence['id'], ['current_number' => $number + 1]);
+
+        $db->transComplete();
 
         return $formatted;
     }
@@ -4781,6 +4797,87 @@ class SalesController extends BaseController
             ->update(['status' => 'delivered', 'delivered_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]);
 
         return redirect()->to(site_url('ventas'))->with('message', 'Remito entregado.');
+    }
+
+    public function testSequenceConcurrency()
+    {
+        $companyId = $this->isSuperadmin() ? ((new \App\Models\CompanyModel())->first()['id'] ?? null) : $this->companyId();
+        if (!$companyId) {
+            return $this->response->setJSON(['success' => false, 'message' => 'No active company found.']);
+        }
+        $seq = $this->nextSequenceNumber($companyId, 'CONCURRENCY_TEST', 'TST');
+        return $this->response->setJSON([
+            'success' => true,
+            'sequence' => $seq,
+            'time' => date('H:i:s') . ' ' . microtime(true),
+        ]);
+    }
+
+    public function testStockConcurrency()
+    {
+        $companyId = $this->isSuperadmin() ? ((new \App\Models\CompanyModel())->first()['id'] ?? null) : $this->companyId();
+        if (!$companyId) {
+            return $this->response->setJSON(['success' => false, 'message' => 'No active company found.']);
+        }
+        $db = db_connect();
+        
+        $stockLevel = $db->table('inventory_stock_levels')
+            ->where('company_id', $companyId)
+            ->where('quantity >=', 10)
+            ->get()
+            ->getRowArray();
+            
+        if (!$stockLevel) {
+            $product = $db->table('inventory_products')->where('company_id', $companyId)->get()->getRowArray();
+            if (!$product) {
+                return $this->response->setJSON(['success' => false, 'message' => 'No products found to run test.']);
+            }
+            $warehouse = $db->table('warehouses')->where('company_id', $companyId)->get()->getRowArray();
+            if (!$warehouse) {
+                return $this->response->setJSON(['success' => false, 'message' => 'No warehouses found to run test.']);
+            }
+            $db->table('inventory_stock_levels')->insert([
+                'id' => \App\Libraries\UUID::v4(),
+                'company_id' => $companyId,
+                'product_id' => $product['id'],
+                'warehouse_id' => $warehouse['id'],
+                'quantity' => 100.0,
+                'reserved_quantity' => 0.0,
+                'min_stock' => 0.0,
+            ]);
+            $stockLevel = $db->table('inventory_stock_levels')
+                ->where('company_id', $companyId)
+                ->where('product_id', $product['id'])
+                ->get()
+                ->getRowArray();
+        }
+        
+        $productId = $stockLevel['product_id'];
+        $warehouseId = $stockLevel['warehouse_id'];
+        
+        $db->transStart();
+        
+        $this->lockStockLevel($companyId, $productId, $warehouseId);
+        $canReserve = $this->canReserve($companyId, $productId, $warehouseId, 1.0);
+        
+        if ($canReserve) {
+            $this->applyReservedDelta($companyId, $productId, $warehouseId, 1.0);
+            $db->transComplete();
+            return $this->response->setJSON([
+                'success' => true,
+                'product_id' => $productId,
+                'warehouse_id' => $warehouseId,
+                'message' => 'Stock reserved successfully',
+            ]);
+        } else {
+            $db->transRollback();
+            return $this->response->setJSON([
+                'success' => false,
+                'product_id' => $productId,
+                'warehouse_id' => $warehouseId,
+                'message' => 'Insufficient stock',
+            ]);
+        }
     }
 }
 

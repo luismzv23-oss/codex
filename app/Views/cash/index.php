@@ -141,19 +141,38 @@
                 <h2 class="h4 mb-3">Cheques</h2>
                 <div class="table-responsive">
                     <table class="table align-middle mb-0" id="checks-table">
-                        <thead><tr><th>Cheque</th><th>Tercero</th><th>Vence</th><th>Estado</th><th>Monto</th></tr></thead>
+                        <thead><tr><th>Cheque</th><th>Tercero</th><th>Vence</th><th>Estado</th><th>Monto</th><th class="text-end"></th></tr></thead>
                         <tbody>
                         <?php foreach ($checks as $check): ?>
                             <tr class="data-row">
                                 <td><?= esc($check['check_number']) ?><div class="small text-secondary"><?= esc($check['bank_name']) ?></div></td>
                                 <td><?= esc($check['customer_name'] ?: ($check['supplier_name'] ?: '-')) ?></td>
                                 <td><?= esc(! empty($check['due_date']) ? date('d/m/Y', strtotime($check['due_date'])) : '-') ?></td>
-                                <td><?= esc($check['status']) ?></td>
+                                <td>
+                                    <?php
+                                    $statusBadge = 'bg-secondary';
+                                    if ($check['status'] === 'portfolio' || $check['status'] === 'received') $statusBadge = 'bg-success';
+                                    elseif ($check['status'] === 'deposited') $statusBadge = 'bg-primary';
+                                    elseif ($check['status'] === 'endorsed') $statusBadge = 'bg-info';
+                                    elseif ($check['status'] === 'rejected') $statusBadge = 'bg-danger';
+                                    ?>
+                                    <span class="badge <?= $statusBadge ?>"><?= esc($check['status']) ?></span>
+                                </td>
                                 <td><?= number_format((float) ($check['amount'] ?? 0), 2, ',', '.') ?></td>
+                                <td class="text-end">
+                                    <?php if (! empty($context['canManage'])): ?>
+                                        <?php if (in_array($check['status'], ['portfolio', 'received'], true)): ?>
+                                            <a href="<?= site_url('caja/cheques/' . $check['id'] . '/endosar' . (! empty($selectedCompanyId) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-sm btn-outline-dark icon-btn" data-popup="true" data-popup-title="Endosar cheque" data-popup-subtitle="Endosar el cheque a un proveedor." title="Endosar cheque" aria-label="Endosar cheque"><i class="bi bi-person-fill-check"></i></a>
+                                            <a href="<?= site_url('caja/cheques/' . $check['id'] . '/depositar' . (! empty($selectedCompanyId) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-sm btn-outline-dark icon-btn" data-popup="true" data-popup-title="Depositar cheque" data-popup-subtitle="Depositar cheque en sesión de caja." title="Depositar cheque" aria-label="Depositar cheque"><i class="bi bi-bank"></i></a>
+                                        <?php elseif (in_array($check['status'], ['deposited', 'endorsed'], true)): ?>
+                                            <a href="<?= site_url('caja/cheques/' . $check['id'] . '/rechazar' . (! empty($selectedCompanyId) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-sm btn-outline-danger icon-btn" data-popup="true" data-popup-title="Rechazar cheque" data-popup-subtitle="Registrar rechazo del cheque." title="Rechazar cheque" aria-label="Rechazar cheque"><i class="bi bi-exclamation-triangle"></i></a>
+                                        <?php endif; ?>
+                                    <?php endif; ?>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
-                        <tr class="no-results-row" style="display: none;"><td colspan="5" class="text-secondary text-center py-3">No se encontraron cheques.</td></tr>
-                        <?php if ($checks === []): ?><tr class="no-data-row"><td colspan="5" class="text-secondary">No hay cheques registrados.</td></tr><?php endif; ?>
+                        <tr class="no-results-row" style="display: none;"><td colspan="6" class="text-secondary text-center py-3">No se encontraron cheques.</td></tr>
+                        <?php if ($checks === []): ?><tr class="no-data-row"><td colspan="6" class="text-secondary">No hay cheques registrados.</td></tr><?php endif; ?>
                         </tbody>
                     </table>
                 </div>

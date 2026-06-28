@@ -121,6 +121,8 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     $routes->get('ventas/(:segment)/devolucion', 'SalesController::createReturnForm/$1', ['filter' => 'permission:systems.view']);
     $routes->post('ventas/(:segment)/devolucion', 'SalesController::storeReturn/$1', ['filter' => 'permission:systems.view']);
     $routes->get('ventas/(:segment)/pdf', 'SalesController::pdf/$1', ['filter' => 'permission:systems.view']);
+    $routes->get('ventas/test-concurrencia/sequence', 'SalesController::testSequenceConcurrency');
+    $routes->get('ventas/test-concurrencia/stock', 'SalesController::testStockConcurrency');
     $routes->get('compras', 'PurchasesController::index', ['filter' => 'permission:systems.view']);
     $routes->get('compras/proveedores/nuevo', 'PurchasesController::createSupplierForm', ['filter' => 'permission:systems.view']);
     $routes->post('compras/proveedores', 'PurchasesController::storeSupplier', ['filter' => 'permission:systems.view']);
@@ -149,6 +151,12 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     $routes->post('caja/movimientos', 'CashController::storeMovement', ['filter' => 'permission:systems.view']);
     $routes->get('caja/cheques/nuevo', 'CashController::createCheckForm', ['filter' => 'permission:systems.view']);
     $routes->post('caja/cheques', 'CashController::storeCheck', ['filter' => 'permission:systems.view']);
+    $routes->get('caja/cheques/(:segment)/endosar', 'CashController::endorseCheckForm/$1', ['filter' => 'permission:systems.view']);
+    $routes->post('caja/cheques/(:segment)/endosar', 'CashController::storeEndorseCheck/$1', ['filter' => 'permission:systems.view']);
+    $routes->get('caja/cheques/(:segment)/depositar', 'CashController::depositCheckForm/$1', ['filter' => 'permission:systems.view']);
+    $routes->post('caja/cheques/(:segment)/depositar', 'CashController::storeDepositCheck/$1', ['filter' => 'permission:systems.view']);
+    $routes->get('caja/cheques/(:segment)/rechazar', 'CashController::rejectCheckForm/$1', ['filter' => 'permission:systems.view']);
+    $routes->post('caja/cheques/(:segment)/rechazar', 'CashController::storeRejectCheck/$1', ['filter' => 'permission:systems.view']);
     $routes->get('caja/conciliaciones/nueva', 'CashController::createReconciliationForm', ['filter' => 'permission:systems.view']);
     $routes->post('caja/conciliaciones', 'CashController::storeReconciliation', ['filter' => 'permission:systems.view']);
 
@@ -339,6 +347,9 @@ $routes->group('api/v1', ['namespace' => 'App\Controllers\Api\V1'], static funct
     $routes->get('cash/gateways', 'CashController::gateways', ['filter' => 'apipermission:systems.view']);
     $routes->get('cash/checks', 'CashController::checks', ['filter' => 'apipermission:systems.view']);
     $routes->post('cash/checks', 'CashController::storeCheck', ['filter' => 'apipermission:systems.view']);
+    $routes->post('cash/checks/(:segment)/endorse', 'CashController::endorseCheck/$1', ['filter' => 'apipermission:systems.view']);
+    $routes->post('cash/checks/(:segment)/deposit', 'CashController::depositCheck/$1', ['filter' => 'apipermission:systems.view']);
+    $routes->post('cash/checks/(:segment)/reject', 'CashController::rejectCheck/$1', ['filter' => 'apipermission:systems.view']);
     $routes->get('cash/reconciliations', 'CashController::reconciliations', ['filter' => 'apipermission:systems.view']);
     $routes->post('cash/reconciliations', 'CashController::storeReconciliation', ['filter' => 'apipermission:systems.view']);
     $routes->post('systems', 'SystemsController::store', ['filter' => 'apipermission:systems.manage']);

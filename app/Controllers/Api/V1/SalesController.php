@@ -2134,15 +2134,41 @@ class SalesController extends BaseApiController
 
     private function nextSequenceNumber(string $companyId, string $documentType, string $defaultPrefix): string
     {
+        $db = db_connect();
+        $db->transStart();
+
         $model = new VoucherSequenceModel();
-        $sequence = $model->where('company_id', $companyId)->where('document_type', $documentType)->first();
-        if (! $sequence) {
-            $id = $model->insert(['company_id' => $companyId, 'branch_id' => null, 'document_type' => $documentType, 'prefix' => $defaultPrefix, 'current_number' => 1, 'active' => 1], true);
-            $sequence = $model->find($id);
+        
+        $sequence = $model->db->table('voucher_sequences')
+            ->where('company_id', $companyId)
+            ->where('document_type', $documentType)
+            ->forUpdate()
+            ->get()
+            ->getRowArray();
+
+        if (!$sequence) {
+            $id = $model->insert([
+                'company_id' => $companyId,
+                'branch_id' => null,
+                'document_type' => $documentType,
+                'prefix' => $defaultPrefix,
+                'current_number' => 1,
+                'active' => 1,
+            ], true);
+            
+            $sequence = $model->db->table('voucher_sequences')
+                ->where('id', $id)
+                ->forUpdate()
+                ->get()
+                ->getRowArray();
         }
+
         $number = (int) ($sequence['current_number'] ?? 1);
         $formatted = strtoupper(trim((string) ($sequence['prefix'] ?? $defaultPrefix))) . '-' . str_pad((string) $number, 8, '0', STR_PAD_LEFT);
         $model->update($sequence['id'], ['current_number' => $number + 1]);
+
+        $db->transComplete();
+
         return $formatted;
     }
 }

@@ -858,20 +858,40 @@ class PurchasesController extends BaseApiController
         }
         return ['subtotal' => round($subtotal, 2), 'tax_total' => round($taxTotal, 2), 'total' => round($subtotal + $taxTotal, 2)];
     }
-
     private function nextSequenceNumber(string $companyId, string $documentType, string $prefix): string
     {
+        $db = db_connect();
+        $db->transStart();
+
         $sequenceModel = new VoucherSequenceModel();
-        $sequence = $sequenceModel->where('company_id', $companyId)->where('document_type', $documentType)->first();
-        if (! $sequence) {
+        
+        $sequence = $sequenceModel->db->table('voucher_sequences')
+            ->where('company_id', $companyId)
+            ->where('document_type', $documentType)
+            ->forUpdate()
+            ->get()
+            ->getRowArray();
+
+        if (!$sequence) {
             $this->ensurePurchaseDefaults($companyId);
-            $sequence = $sequenceModel->where('company_id', $companyId)->where('document_type', $documentType)->first();
+            
+            $sequence = $sequenceModel->db->table('voucher_sequences')
+                ->where('company_id', $companyId)
+                ->where('document_type', $documentType)
+                ->forUpdate()
+                ->get()
+                ->getRowArray();
         }
+
         $current = (int) ($sequence['current_number'] ?? 1);
         $formatted = strtoupper($prefix) . '-' . str_pad((string) $current, 8, '0', STR_PAD_LEFT);
-        if (! empty($sequence['id'])) {
+        
+        if (!empty($sequence['id'])) {
             $sequenceModel->update($sequence['id'], ['current_number' => $current + 1]);
         }
+
+        $db->transComplete();
+
         return $formatted;
     }
 

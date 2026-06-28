@@ -282,4 +282,90 @@ class CashController extends BaseApiController
     {
         return new CashService();
     }
+
+    public function endorseCheck(string $id)
+    {
+        $context = $this->cashContext('manage');
+        if (isset($context['error'])) {
+            return $this->fail($context['error'], $context['status']);
+        }
+
+        $payload = $this->payload();
+        $supplierId = trim((string) ($payload['supplier_id'] ?? ''));
+        $sessionId = trim((string) ($payload['cash_session_id'] ?? ''));
+        $notes = trim((string) ($payload['notes'] ?? ''));
+
+        if ($supplierId === '' || $sessionId === '') {
+            return $this->fail('Debes especificar supplier_id y cash_session_id.', 422);
+        }
+
+        $success = $this->cashService()->endorseCheck(
+            $context['company']['id'],
+            $id,
+            $supplierId,
+            $sessionId,
+            $this->apiUser()['id'] ?? 'system',
+            $notes
+        );
+
+        return $success
+            ? $this->success(['check_id' => $id, 'status' => 'endorsed'])
+            : $this->fail('No se pudo endosar el cheque. Verifica el ID y el estado actual del cheque.', 422);
+    }
+
+    public function depositCheck(string $id)
+    {
+        $context = $this->cashContext('manage');
+        if (isset($context['error'])) {
+            return $this->fail($context['error'], $context['status']);
+        }
+
+        $payload = $this->payload();
+        $sessionId = trim((string) ($payload['cash_session_id'] ?? ''));
+        $notes = trim((string) ($payload['notes'] ?? ''));
+
+        if ($sessionId === '') {
+            return $this->fail('Debes especificar cash_session_id.', 422);
+        }
+
+        $success = $this->cashService()->depositCheck(
+            $context['company']['id'],
+            $id,
+            $sessionId,
+            $this->apiUser()['id'] ?? 'system',
+            $notes
+        );
+
+        return $success
+            ? $this->success(['check_id' => $id, 'status' => 'deposited'])
+            : $this->fail('No se pudo depositar el cheque. Verifica el ID y el estado actual del cheque.', 422);
+    }
+
+    public function rejectCheck(string $id)
+    {
+        $context = $this->cashContext('manage');
+        if (isset($context['error'])) {
+            return $this->fail($context['error'], $context['status']);
+        }
+
+        $payload = $this->payload();
+        $sessionId = trim((string) ($payload['cash_session_id'] ?? ''));
+        $notes = trim((string) ($payload['notes'] ?? ''));
+
+        if ($sessionId === '') {
+            return $this->fail('Debes especificar cash_session_id.', 422);
+        }
+
+        $success = $this->cashService()->rejectCheck(
+            $context['company']['id'],
+            $id,
+            $sessionId,
+            $this->apiUser()['id'] ?? 'system',
+            $notes
+        );
+
+        return $success
+            ? $this->success(['check_id' => $id, 'status' => 'rejected'])
+            : $this->fail('No se pudo registrar el rechazo del cheque. Verifica el ID y el estado del cheque.', 422);
+    }
 }

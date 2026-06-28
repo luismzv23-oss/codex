@@ -415,4 +415,125 @@ class CashService
             'register_type' => $register['register_type'],
         ]);
     }
+
+    public function endorseCheck(string $companyId, string $checkId, string $supplierId, string $sessionId, string $userId, ?string $notes = null): bool
+    {
+        $checkModel = new CashCheckModel();
+        $check = $checkModel->where('company_id', $companyId)->find($checkId);
+        if (!$check || !in_array($check['status'], ['portfolio', 'received'], true)) {
+            return false;
+        }
+
+        $session = (new CashSessionModel())->where('company_id', $companyId)->where('status', 'open')->find($sessionId);
+        if (!$session) {
+            return false;
+        }
+
+        $db = db_connect();
+        $db->transStart();
+
+        $checkModel->update($checkId, [
+            'status' => 'endorsed',
+            'supplier_id' => $supplierId,
+            'notes' => trim(($check['notes'] ?? '') . "\n" . ($notes ?? '')),
+        ]);
+
+        $this->registerMovement([
+            'company_id' => $companyId,
+            'cash_register_id' => $session['cash_register_id'],
+            'cash_session_id' => $sessionId,
+            'movement_type' => 'check_endorsement',
+            'payment_method' => 'check',
+            'cash_check_id' => $checkId,
+            'amount' => -1 * (float) $check['amount'],
+            'reference_type' => 'check_endorsement',
+            'reference_id' => $checkId,
+            'reference_number' => $check['check_number'],
+            'notes' => $notes ?: 'Endoso de cheque de terceros',
+            'created_by' => $userId,
+        ]);
+
+        $db->transComplete();
+        return $db->transStatus();
+    }
+
+    public function depositCheck(string $companyId, string $checkId, string $sessionId, string $userId, ?string $notes = null): bool
+    {
+        $checkModel = new CashCheckModel();
+        $check = $checkModel->where('company_id', $companyId)->find($checkId);
+        if (!$check || !in_array($check['status'], ['portfolio', 'received'], true)) {
+            return false;
+        }
+
+        $session = (new CashSessionModel())->where('company_id', $companyId)->where('status', 'open')->find($sessionId);
+        if (!$session) {
+            return false;
+        }
+
+        $db = db_connect();
+        $db->transStart();
+
+        $checkModel->update($checkId, [
+            'status' => 'deposited',
+            'notes' => trim(($check['notes'] ?? '') . "\n" . ($notes ?? '')),
+        ]);
+
+        $this->registerMovement([
+            'company_id' => $companyId,
+            'cash_register_id' => $session['cash_register_id'],
+            'cash_session_id' => $sessionId,
+            'movement_type' => 'check_deposit',
+            'payment_method' => 'check',
+            'cash_check_id' => $checkId,
+            'amount' => -1 * (float) $check['amount'],
+            'reference_type' => 'check_deposit',
+            'reference_id' => $checkId,
+            'reference_number' => $check['check_number'],
+            'notes' => $notes ?: 'Depósito de cheque de terceros',
+            'created_by' => $userId,
+        ]);
+
+        $db->transComplete();
+        return $db->transStatus();
+    }
+
+    public function rejectCheck(string $companyId, string $checkId, string $sessionId, string $userId, ?string $notes = null): bool
+    {
+        $checkModel = new CashCheckModel();
+        $check = $checkModel->where('company_id', $companyId)->find($checkId);
+        if (!$check || !in_array($check['status'], ['deposited', 'endorsed'], true)) {
+            return false;
+        }
+
+        $session = (new CashSessionModel())->where('company_id', $companyId)->where('status', 'open')->find($sessionId);
+        if (!$session) {
+            return false;
+        }
+
+        $db = db_connect();
+        $db->transStart();
+
+        $checkModel->update($checkId, [
+            'status' => 'rejected',
+            'notes' => trim(($check['notes'] ?? '') . "\n" . ($notes ?? '')),
+        ]);
+
+        $this->registerMovement([
+            'company_id' => $companyId,
+            'cash_register_id' => $session['cash_register_id'],
+            'cash_session_id' => $sessionId,
+            'movement_type' => 'check_rejection',
+            'payment_method' => 'check',
+            'cash_check_id' => $checkId,
+            'amount' => -1 * (float) $check['amount'],
+            'reference_type' => 'check_rejection',
+            'reference_id' => $checkId,
+            'reference_number' => $check['check_number'],
+            'notes' => $notes ?: 'Rechazo de cheque de terceros',
+            'created_by' => $userId,
+        ]);
+
+        $db->transComplete();
+        return $db->transStatus();
+    }
 }

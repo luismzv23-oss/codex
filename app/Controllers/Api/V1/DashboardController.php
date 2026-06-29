@@ -178,7 +178,7 @@ class DashboardController extends BaseApiController
     {
         $series = [];
         for ($i = 5; $i >= 0; $i--) {
-            $month = date('Y-m', strtotime("-{$i} months"));
+            $month = date('Y-m', strtotime("first day of -{$i} months"));
             $start = $month . '-01 00:00:00';
             $end = date('Y-m-t 23:59:59', strtotime($start));
             $builder = db_connect()->table('sales')

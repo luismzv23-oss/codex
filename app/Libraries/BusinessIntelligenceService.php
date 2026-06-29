@@ -153,10 +153,10 @@ class BusinessIntelligenceService
     {
         return match($period) {
             'week' => [date('Y-m-d', strtotime('monday last week')), date('Y-m-d', strtotime('sunday last week'))],
-            'month' => [date('Y-m-01', strtotime('-1 month')), date('Y-m-t', strtotime('-1 month'))],
-            'quarter' => [date('Y-m-01', strtotime('-5 months')), date('Y-m-t', strtotime('-3 months'))],
+            'month' => [date('Y-m-01', strtotime('first day of -1 month')), date('Y-m-t', strtotime('first day of -1 month'))],
+            'quarter' => [date('Y-m-01', strtotime('first day of -5 months')), date('Y-m-t', strtotime('first day of -3 months'))],
             'year' => [date('Y-01-01', strtotime('-1 year')), date('Y-12-31', strtotime('-1 year'))],
-            default => [date('Y-m-01', strtotime('-1 month')), date('Y-m-t', strtotime('-1 month'))],
+            default => [date('Y-m-01', strtotime('first day of -1 month')), date('Y-m-t', strtotime('first day of -1 month'))],
         };
     }
 }

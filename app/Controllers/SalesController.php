@@ -4145,12 +4145,10 @@ class SalesController extends BaseController
 
         $model = new VoucherSequenceModel();
         
-        $sequence = $model->db->table('voucher_sequences')
-            ->where('company_id', $companyId)
-            ->where('document_type', $documentType)
-            ->forUpdate()
-            ->get()
-            ->getRowArray();
+        $sequence = $model->db->query(
+            "SELECT * FROM voucher_sequences WHERE company_id = ? AND document_type = ? FOR UPDATE",
+            [$companyId, $documentType]
+        )->getRowArray();
 
         if (!$sequence) {
             $branch = (new BranchModel())->where('company_id', $companyId)->where('code', 'MAIN')->first();
@@ -4163,11 +4161,10 @@ class SalesController extends BaseController
                 'active' => 1,
             ], true);
             
-            $sequence = $model->db->table('voucher_sequences')
-                ->where('id', $id)
-                ->forUpdate()
-                ->get()
-                ->getRowArray();
+            $sequence = $model->db->query(
+                "SELECT * FROM voucher_sequences WHERE id = ? FOR UPDATE",
+                [$id]
+            )->getRowArray();
         }
 
         $number = (int) ($sequence['current_number'] ?? 1);

@@ -25,9 +25,10 @@ use App\Models\SaleReturnItemModel;
 use App\Models\SaleReturnModel;
 use App\Models\SalesAgentModel;
 use App\Models\SalesCommissionModel;
+use App\Models\SalesConditionModel;
+use App\Models\SalesDiscountPolicyModel;
 use App\Models\SalesDocumentTypeModel;
 use App\Models\SalesArcaEventModel;
-use App\Models\SalesConditionModel;
 use App\Models\SalesPointOfSaleModel;
 use App\Models\PosDeviceSettingModel;
 use App\Models\SalesPriceListItemModel;
@@ -1677,6 +1678,23 @@ class SalesController extends BaseApiController
     private function expandSaleItemsToStockRows(array $items): array { $rows = []; foreach ($items as $item) { $productId = (string) ($item['product_id'] ?? ''); $quantity = (float) ($item['quantity'] ?? 0); if ($productId === '' || $quantity <= 0) { continue; } $productType = (string) ($item['product_type'] ?? 'simple'); if ($productType !== 'kit') { $rows[] = ['product_id' => $productId, 'quantity' => $quantity, 'unit_cost' => (float) ($item['unit_cost'] ?? 0), 'source_product_name' => (string) ($item['product_name'] ?? ''), 'source_product_type' => $productType]; continue; } $components = $this->kitComponentRows($productId); if ($components === []) { $rows[] = ['product_id' => $productId, 'quantity' => $quantity, 'unit_cost' => (float) ($item['unit_cost'] ?? 0), 'source_product_name' => (string) ($item['product_name'] ?? ''), 'source_product_type' => $productType]; continue; } foreach ($components as $component) { $componentQty = (float) ($component['quantity'] ?? 0) * $quantity; if ($componentQty <= 0) { continue; } $rows[] = ['product_id' => (string) ($component['component_product_id'] ?? ''), 'quantity' => $componentQty, 'unit_cost' => (float) ($component['component_cost_price'] ?? 0), 'source_product_name' => (string) ($item['product_name'] ?? ''), 'source_product_type' => $productType, 'component_name' => (string) ($component['component_name'] ?? '')]; } } return $rows; }
     private function aggregateStockRows(array $rows): array { $grouped = []; foreach ($rows as $row) { $productId = (string) ($row['product_id'] ?? ''); $quantity = (float) ($row['quantity'] ?? 0); if ($productId === '' || $quantity <= 0) { continue; } if (! isset($grouped[$productId])) { $grouped[$productId] = $row; $grouped[$productId]['quantity'] = 0.0; } $grouped[$productId]['quantity'] += $quantity; } return array_values($grouped); }
     private function salePayments(string $saleId): array { return (new SalePaymentModel())->where('sale_id', $saleId)->findAll(); }
+
+    private function refreshSalePaymentStatus(string $saleId): void
+    {
+        $sale = (new SaleModel())->find($saleId);
+        if (!$sale) {
+            return;
+        }
+
+        $paidTotal = round(array_sum(array_map(static fn(array $row): float => (float) ($row['amount'] ?? 0), $this->salePayments($saleId))), 2);
+        $paymentStatus = $paidTotal <= 0 ? 'pending' : ($paidTotal < (float) $sale['total'] ? 'partial' : 'paid');
+
+        (new SaleModel())->update($saleId, [
+            'paid_total' => $paidTotal,
+            'payment_status' => $paymentStatus,
+        ]);
+    }
+
     private function saleReturns(string $saleId): array { return (new SaleReturnModel())->where('sale_id', $saleId)->findAll(); }
     private function ownedSale(string $companyId, string $saleId): ?array { return (new SaleModel())->where('company_id', $companyId)->where('id', $saleId)->first() ?: null; }
 
@@ -2222,12 +2240,10 @@ class SalesController extends BaseApiController
 
         $model = new VoucherSequenceModel();
         
-        $sequence = $model->db->table('voucher_sequences')
-            ->where('company_id', $companyId)
-            ->where('document_type', $documentType)
-            ->forUpdate()
-            ->get()
-            ->getRowArray();
+        $sequence = $model->db->query(
+            "SELECT * FROM voucher_sequences WHERE company_id = ? AND document_type = ? FOR UPDATE",
+            [$companyId, $documentType]
+        )->getRowArray();
 
         if (!$sequence) {
             $id = $model->insert([
@@ -2239,11 +2255,10 @@ class SalesController extends BaseApiController
                 'active' => 1,
             ], true);
             
-            $sequence = $model->db->table('voucher_sequences')
-                ->where('id', $id)
-                ->forUpdate()
-                ->get()
-                ->getRowArray();
+            $sequence = $model->db->query(
+                "SELECT * FROM voucher_sequences WHERE id = ? FOR UPDATE",
+                [$id]
+            )->getRowArray();
         }
 
         $number = (int) ($sequence['current_number'] ?? 1);

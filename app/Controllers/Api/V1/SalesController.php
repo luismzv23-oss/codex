@@ -1579,7 +1579,69 @@ class SalesController extends BaseApiController
             $taxTotal = round($subtotal * ($taxRate / 100), 2);
             $rows[] = ['line_number' => count($rows) + 1, 'product_id' => $productId, 'tax_id' => $taxId, 'sku' => $product['sku'], 'product_name' => $product['name'], 'product_type' => $product['product_type'] ?? 'simple', 'unit' => $product['unit'] ?? 'unidad', 'quantity' => $quantity, 'returned_quantity' => 0, 'available_stock_snapshot' => (float) ($item['available_stock_snapshot'] ?? 0), 'unit_price' => $unitPrice, 'unit_cost' => (float) ($product['cost_price'] ?? 0), 'discount_rate' => $discountRate, 'discount_amount' => $discountAmount, 'tax_rate' => $taxRate, 'subtotal' => $subtotal, 'tax_total' => $taxTotal, 'line_total' => round($subtotal + $taxTotal, 2)];
         }
+
+        $rows = $this->applyDiscountPolicies($companyId, $rows);
         return $rows;
+    }
+
+    private function applyDiscountPolicies(string $companyId, array $items): array
+    {
+        $policyModel = new SalesDiscountPolicyModel();
+        
+        // 1. Get quantity scale policies
+        $qtyPolicies = $policyModel->where('company_id', $companyId)
+            ->where('policy_type', 'quantity_scale')
+            ->where('active', 1)
+            ->findAll();
+            
+        // 2. Get buy_x_pay_y policies
+        $bogoPolicies = $policyModel->where('company_id', $companyId)
+            ->where('policy_type', 'buy_x_pay_y')
+            ->where('active', 1)
+            ->findAll();
+
+        foreach ($items as &$item) {
+            $qty = (float)($item['quantity'] ?? 0);
+            $unitPrice = (float)($item['unit_price'] ?? 0);
+            
+            $itemDiscountRate = 0.0;
+            $itemFixedDiscount = 0.0;
+
+            // Apply quantity scale policy if matches
+            foreach ($qtyPolicies as $policy) {
+                $minQty = (float)($policy['min_quantity'] ?? 0);
+                if ($qty >= $minQty) {
+                    $itemDiscountRate = max($itemDiscountRate, (float)($policy['discount_rate'] ?? 0));
+                }
+            }
+
+            // Apply Buy X Pay Y policy if matches
+            foreach ($bogoPolicies as $policy) {
+                $buyQty = (int)($policy['buy_quantity'] ?? 0);
+                $payQty = (int)($policy['pay_quantity'] ?? 0);
+                if ($buyQty > 0 && $payQty > 0 && $qty >= $buyQty) {
+                    $freeUnits = floor($qty / $buyQty) * ($buyQty - $payQty);
+                    $itemFixedDiscount += $freeUnits * $unitPrice;
+                }
+            }
+
+            // Apply discounts to item totals
+            $baseTotal = $qty * $unitPrice;
+            $percentDiscountAmt = $baseTotal * ($itemDiscountRate / 100);
+            
+            $item['discount_rate'] = max((float)($item['discount_rate'] ?? 0), $itemDiscountRate);
+            $item['discount_amount'] = (float)($item['discount_amount'] ?? 0) + $percentDiscountAmt + $itemFixedDiscount;
+            
+            $item['discount_amount'] = min($baseTotal, $item['discount_amount']);
+            $item['subtotal'] = max(0, round(($qty * $unitPrice) - $item['discount_amount'], 2));
+            
+            $taxRate = (float)($item['tax_rate'] ?? 0);
+            $item['tax_total'] = round($item['subtotal'] * ($taxRate / 100), 2);
+            $item['line_total'] = round($item['subtotal'] + $item['tax_total'], 2);
+        }
+        unset($item);
+
+        return $items;
     }
 
     private function parsePayments(array $payments): array
@@ -1970,9 +2032,30 @@ class SalesController extends BaseApiController
             return;
         }
 
+        // Calculate effective discount percentage
+        $grossTotal = (float)($sale['subtotal'] ?? 0) + (float)($sale['item_discount_total'] ?? 0) + (float)($sale['global_discount_total'] ?? 0);
+        $effectiveDiscountPercent = 0.0;
+        if ($grossTotal > 0) {
+            $effectiveDiscountPercent = (((float)($sale['item_discount_total'] ?? 0) + (float)($sale['global_discount_total'] ?? 0)) / $grossTotal) * 100;
+        }
+
+        // Apply a complex policy decreasing agent rate depending on discount granted
+        $factor = 1.0;
+        if ($effectiveDiscountPercent > 10.0) {
+            $factor = 0.0;
+        } elseif ($effectiveDiscountPercent > 5.0) {
+            $factor = 0.5;
+        } elseif ($effectiveDiscountPercent > 2.0) {
+            $factor = 0.8;
+        }
+
         $baseAmount = max(0, (float) ($sale['margin_total'] ?? $sale['total'] ?? 0));
-        $rate = (float) ($agent['commission_rate'] ?? 0);
+        $baseRate = (float) ($agent['commission_rate'] ?? 0);
+        $rate = $baseRate * $factor;
         $status = in_array(($sale['status'] ?? ''), ['cancelled', 'returned_total'], true) ? 'void' : 'pending';
+
+        $notes = 'Comisión sincronizada desde venta. Descuento aplicado: ' . number_format($effectiveDiscountPercent, 2, ',', '.') . '%. Factor comitente: ' . ($factor * 100) . '% (Tasa base: ' . number_format($baseRate, 2, ',', '.') . '%)';
+
         $payload = [
             'company_id' => $companyId,
             'sale_id' => $saleId,
@@ -1981,7 +2064,7 @@ class SalesController extends BaseApiController
             'rate' => $rate,
             'commission_amount' => round($baseAmount * ($rate / 100), 2),
             'status' => $status,
-            'notes' => 'Comision sincronizada desde venta',
+            'notes' => $notes,
             'liquidated_at' => $status === 'liquidated' ? date('Y-m-d H:i:s') : null,
         ];
 

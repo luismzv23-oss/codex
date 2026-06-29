@@ -1158,86 +1158,94 @@ class InventoryController extends BaseController
             default => (int) ($settings['allow_negative_stock'] ?? 0) === 1,
         };
 
-        $db = db_connect();
-        $db->transStart();
+        try {
+            $db = db_connect();
+            $db->transStart();
 
-        if ($movementType === 'ingreso') {
-            $this->applyStockDelta($companyId, $productId, $destinationWarehouseId, $quantity, $destinationLocationId);
-        }
-
-        if ($movementType === 'egreso') {
-            if (! $this->canWithdraw($companyId, $productId, $sourceWarehouseId, $quantity, $allowNegative, $sourceLocationId)) {
-                $db->transRollback();
-
-                return redirect()->back()->withInput()->with('error', 'No hay stock suficiente en el deposito origen.');
+            if ($movementType === 'ingreso') {
+                $this->applyStockDelta($companyId, $productId, $destinationWarehouseId, $quantity, $destinationLocationId);
             }
 
-            $this->applyStockDelta($companyId, $productId, $sourceWarehouseId, $quantity * -1, $sourceLocationId);
-        }
+            if ($movementType === 'egreso') {
+                if (! $this->canWithdraw($companyId, $productId, $sourceWarehouseId, $quantity, $allowNegative, $sourceLocationId)) {
+                    $db->transRollback();
 
-        if ($movementType === 'transferencia') {
-            if (! $this->canWithdraw($companyId, $productId, $sourceWarehouseId, $quantity, $allowNegative, $sourceLocationId)) {
-                $db->transRollback();
+                    return redirect()->back()->withInput()->with('error', 'No hay stock suficiente en el deposito origen.');
+                }
 
-                return redirect()->back()->withInput()->with('error', 'No hay stock suficiente en el deposito origen para transferir.');
+                $this->applyStockDelta($companyId, $productId, $sourceWarehouseId, $quantity * -1, $sourceLocationId);
             }
 
-            $this->applyStockDelta($companyId, $productId, $sourceWarehouseId, $quantity * -1, $sourceLocationId);
-            $this->applyStockDelta($companyId, $productId, $destinationWarehouseId, $quantity, $destinationLocationId);
-        }
+            if ($movementType === 'transferencia') {
+                if (! $this->canWithdraw($companyId, $productId, $sourceWarehouseId, $quantity, $allowNegative, $sourceLocationId)) {
+                    $db->transRollback();
 
-        if ($movementType === 'ajuste') {
-            if ($adjustmentMode === 'decrease' && ! $this->canWithdraw($companyId, $productId, $sourceWarehouseId, $quantity, $allowNegative, $sourceLocationId)) {
-                $db->transRollback();
+                    return redirect()->back()->withInput()->with('error', 'No hay stock suficiente en el deposito origen para transferir.');
+                }
 
-                return redirect()->back()->withInput()->with('error', 'No hay stock suficiente para ajustar a la baja.');
+                $this->applyStockDelta($companyId, $productId, $sourceWarehouseId, $quantity * -1, $sourceLocationId);
+                $this->applyStockDelta($companyId, $productId, $destinationWarehouseId, $quantity, $destinationLocationId);
             }
 
-            $this->applyStockDelta($companyId, $productId, $sourceWarehouseId, $adjustmentMode === 'increase' ? $quantity : $quantity * -1, $sourceLocationId);
-        }
+            if ($movementType === 'ajuste') {
+                if ($adjustmentMode === 'decrease' && ! $this->canWithdraw($companyId, $productId, $sourceWarehouseId, $quantity, $allowNegative, $sourceLocationId)) {
+                    $db->transRollback();
 
-        $movementId = (new InventoryMovementModel())->insert([
-            'company_id' => $companyId,
-            'product_id' => $productId,
-            'movement_type' => $movementType,
-            'quantity' => $quantity,
-            'unit_cost' => $unitCost,
-            'total_cost' => $totalCost,
-            'adjustment_mode' => $movementType === 'ajuste' ? $adjustmentMode : null,
-            'source_warehouse_id' => in_array($movementType, ['egreso', 'transferencia', 'ajuste'], true) ? $sourceWarehouseId : null,
-            'source_location_id' => in_array($movementType, ['egreso', 'transferencia', 'ajuste'], true) ? $sourceLocationId : null,
-            'destination_warehouse_id' => in_array($movementType, ['ingreso', 'transferencia'], true) ? $destinationWarehouseId : null,
-            'destination_location_id' => in_array($movementType, ['ingreso', 'transferencia'], true) ? $destinationLocationId : null,
-            'performed_by' => $this->currentUser()['id'],
-            'occurred_at' => trim((string) $this->request->getPost('occurred_at')) ?: date('Y-m-d H:i:s'),
-            'reason' => trim((string) $this->request->getPost('reason')),
-            'source_document' => trim((string) $this->request->getPost('source_document')),
-            'lot_number' => trim((string) $this->request->getPost('lot_number')),
-            'serial_number' => trim((string) $this->request->getPost('serial_number')),
-            'expiration_date' => trim((string) $this->request->getPost('expiration_date')) ?: null,
-            'notes' => trim((string) $this->request->getPost('notes')),
-        ], true);
+                    return redirect()->back()->withInput()->with('error', 'No hay stock suficiente para ajustar a la baja.');
+                }
 
-        $this->syncAdvancedInventoryArtifacts($companyId, $productId, $movementId, [
-            'movement_type' => $movementType,
-            'adjustment_mode' => $adjustmentMode,
-            'quantity' => $quantity,
-            'unit_cost' => $unitCost,
-            'total_cost' => $totalCost,
-            'source_warehouse_id' => $sourceWarehouseId,
-            'source_location_id' => $sourceLocationId,
-            'destination_warehouse_id' => $destinationWarehouseId,
-            'destination_location_id' => $destinationLocationId,
-            'lot_number' => trim((string) $this->request->getPost('lot_number')),
-            'serial_number' => trim((string) $this->request->getPost('serial_number')),
-            'expiration_date' => trim((string) $this->request->getPost('expiration_date')) ?: null,
-            'occurred_at' => trim((string) $this->request->getPost('occurred_at')) ?: date('Y-m-d H:i:s'),
-        ]);
+                $this->applyStockDelta($companyId, $productId, $sourceWarehouseId, $adjustmentMode === 'increase' ? $quantity : $quantity * -1, $sourceLocationId);
+            }
 
-        $db->transComplete();
+            $movementId = (new InventoryMovementModel())->insert([
+                'company_id' => $companyId,
+                'product_id' => $productId,
+                'movement_type' => $movementType,
+                'quantity' => $quantity,
+                'unit_cost' => $unitCost,
+                'total_cost' => $totalCost,
+                'adjustment_mode' => $movementType === 'ajuste' ? $adjustmentMode : null,
+                'source_warehouse_id' => in_array($movementType, ['egreso', 'transferencia', 'ajuste'], true) ? $sourceWarehouseId : null,
+                'source_location_id' => in_array($movementType, ['egreso', 'transferencia', 'ajuste'], true) ? $sourceLocationId : null,
+                'destination_warehouse_id' => in_array($movementType, ['ingreso', 'transferencia'], true) ? $destinationWarehouseId : null,
+                'destination_location_id' => in_array($movementType, ['ingreso', 'transferencia'], true) ? $destinationLocationId : null,
+                'performed_by' => $this->currentUser()['id'],
+                'occurred_at' => trim((string) $this->request->getPost('occurred_at')) ?: date('Y-m-d H:i:s'),
+                'reason' => trim((string) $this->request->getPost('reason')),
+                'source_document' => trim((string) $this->request->getPost('source_document')),
+                'lot_number' => trim((string) $this->request->getPost('lot_number')),
+                'serial_number' => trim((string) $this->request->getPost('serial_number')),
+                'expiration_date' => trim((string) $this->request->getPost('expiration_date')) ?: null,
+                'notes' => trim((string) $this->request->getPost('notes')),
+            ], true);
 
-        if (! $db->transStatus()) {
-            return redirect()->back()->withInput()->with('error', 'No se pudo registrar el movimiento.');
+            $this->syncAdvancedInventoryArtifacts($companyId, $productId, $movementId, [
+                'movement_type' => $movementType,
+                'adjustment_mode' => $adjustmentMode,
+                'quantity' => $quantity,
+                'unit_cost' => $unitCost,
+                'total_cost' => $totalCost,
+                'source_warehouse_id' => $sourceWarehouseId,
+                'source_location_id' => $sourceLocationId,
+                'destination_warehouse_id' => $destinationWarehouseId,
+                'destination_location_id' => $destinationLocationId,
+                'lot_number' => trim((string) $this->request->getPost('lot_number')),
+                'serial_number' => trim((string) $this->request->getPost('serial_number')),
+                'expiration_date' => trim((string) $this->request->getPost('expiration_date')) ?: null,
+                'occurred_at' => trim((string) $this->request->getPost('occurred_at')) ?: date('Y-m-d H:i:s'),
+            ]);
+
+            $db->transComplete();
+
+            if (! $db->transStatus()) {
+                return redirect()->back()->withInput()->with('error', 'No se pudo registrar el movimiento de inventario.');
+            }
+        } catch (\Exception $e) {
+            if (isset($db)) {
+                $db->transRollback();
+            }
+
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
         }
 
         return $this->popupOrRedirect($this->inventoryRoute('inventario', $companyId), 'Movimiento registrado correctamente.');
@@ -1394,134 +1402,141 @@ class InventoryController extends BaseController
         $allowNegative = $this->allowsNegativeFor('assembly', $settings);
         $issuedAt = trim((string) $this->request->getPost('issued_at')) ?: date('Y-m-d H:i:s');
         $assemblyNumber = 'ENS-' . date('YmdHis');
-        $db = db_connect();
-        $db->transStart();
+        try {
+            $db = db_connect();
+            $db->transStart();
 
-        $totalCost = 0.0;
-        foreach ($components as $component) {
-            $componentQty = (float) ($component['quantity'] ?? 0) * $quantity;
-            if ($assemblyType === 'assembly') {
-                if (! $this->canWithdraw($companyId, (string) $component['component_product_id'], $warehouseId, $componentQty, $allowNegative, null)) {
-                    $db->transRollback();
-                    return redirect()->back()->withInput()->with('error', 'No hay stock suficiente para consumir los componentes del ensamble.');
+            $totalCost = 0.0;
+            foreach ($components as $component) {
+                $componentQty = (float) ($component['quantity'] ?? 0) * $quantity;
+                if ($assemblyType === 'assembly') {
+                    if (! $this->canWithdraw($companyId, (string) $component['component_product_id'], $warehouseId, $componentQty, $allowNegative, null)) {
+                        $db->transRollback();
+                        return redirect()->back()->withInput()->with('error', 'No hay stock suficiente para consumir los componentes del ensamble.');
+                    }
+
+                    $this->applyStockDelta($companyId, (string) $component['component_product_id'], $warehouseId, $componentQty * -1);
+                    $movementId = (new InventoryMovementModel())->insert([
+                        'company_id' => $companyId,
+                        'product_id' => $component['component_product_id'],
+                        'movement_type' => 'egreso',
+                        'quantity' => $componentQty,
+                        'source_warehouse_id' => $warehouseId,
+                        'performed_by' => $this->currentUser()['id'],
+                        'occurred_at' => $issuedAt,
+                        'reason' => 'ensamble_componente',
+                        'source_document' => $assemblyNumber,
+                        'notes' => 'Consumo de componente por ensamble',
+                    ], true);
+
+                    $consumption = $this->consumeCostLayers($companyId, (string) $component['component_product_id'], $warehouseId, null, $componentQty, $issuedAt, $movementId, 'assembly_component');
+                    (new InventoryMovementModel())->update($movementId, [
+                        'unit_cost' => $consumption['unit_cost'],
+                        'total_cost' => $consumption['total_cost'],
+                    ]);
+                    $totalCost += (float) $consumption['total_cost'];
+                } else {
+                    $componentUnitCost = (float) ($component['unit_cost'] ?? 0);
+                    $componentTotal = $componentUnitCost * $componentQty;
+                    $this->applyStockDelta($companyId, (string) $component['component_product_id'], $warehouseId, $componentQty);
+                    $movementId = (new InventoryMovementModel())->insert([
+                        'company_id' => $companyId,
+                        'product_id' => $component['component_product_id'],
+                        'movement_type' => 'ingreso',
+                        'quantity' => $componentQty,
+                        'destination_warehouse_id' => $warehouseId,
+                        'performed_by' => $this->currentUser()['id'],
+                        'occurred_at' => $issuedAt,
+                        'reason' => 'desensamble_componente',
+                        'source_document' => $assemblyNumber,
+                        'notes' => 'Reingreso de componente por desensamble',
+                        'unit_cost' => $componentUnitCost,
+                        'total_cost' => $componentTotal,
+                    ], true);
+                    $this->createCostLayer($companyId, (string) $component['component_product_id'], $warehouseId, null, $movementId, 'disassembly_component', $componentQty, $componentUnitCost, $componentTotal, $issuedAt);
+                    $totalCost += $componentTotal;
                 }
+            }
 
-                $this->applyStockDelta($companyId, (string) $component['component_product_id'], $warehouseId, $componentQty * -1);
-                $movementId = (new InventoryMovementModel())->insert([
+            if ($assemblyType === 'assembly') {
+                $unitCost = $quantity > 0 ? $totalCost / $quantity : 0;
+                $this->applyStockDelta($companyId, $productId, $warehouseId, $quantity);
+                $productMovementId = (new InventoryMovementModel())->insert([
                     'company_id' => $companyId,
-                    'product_id' => $component['component_product_id'],
-                    'movement_type' => 'egreso',
-                    'quantity' => $componentQty,
-                    'source_warehouse_id' => $warehouseId,
-                    'performed_by' => $this->currentUser()['id'],
-                    'occurred_at' => $issuedAt,
-                    'reason' => 'ensamble_componente',
-                    'source_document' => $assemblyNumber,
-                    'notes' => 'Consumo de componente por ensamble',
-                ], true);
-
-                $consumption = $this->consumeCostLayers($companyId, (string) $component['component_product_id'], $warehouseId, null, $componentQty, $issuedAt, $movementId, 'assembly_component');
-                (new InventoryMovementModel())->update($movementId, [
-                    'unit_cost' => $consumption['unit_cost'],
-                    'total_cost' => $consumption['total_cost'],
-                ]);
-                $totalCost += (float) $consumption['total_cost'];
-            } else {
-                $componentUnitCost = (float) ($component['unit_cost'] ?? 0);
-                $componentTotal = $componentUnitCost * $componentQty;
-                $this->applyStockDelta($companyId, (string) $component['component_product_id'], $warehouseId, $componentQty);
-                $movementId = (new InventoryMovementModel())->insert([
-                    'company_id' => $companyId,
-                    'product_id' => $component['component_product_id'],
+                    'product_id' => $productId,
                     'movement_type' => 'ingreso',
-                    'quantity' => $componentQty,
+                    'quantity' => $quantity,
                     'destination_warehouse_id' => $warehouseId,
                     'performed_by' => $this->currentUser()['id'],
                     'occurred_at' => $issuedAt,
-                    'reason' => 'desensamble_componente',
+                    'reason' => 'ensamble_producto',
                     'source_document' => $assemblyNumber,
-                    'notes' => 'Reingreso de componente por desensamble',
-                    'unit_cost' => $componentUnitCost,
-                    'total_cost' => $componentTotal,
+                    'notes' => 'Ingreso por ensamble',
+                    'unit_cost' => $unitCost,
+                    'total_cost' => $totalCost,
                 ], true);
-                $this->createCostLayer($companyId, (string) $component['component_product_id'], $warehouseId, null, $movementId, 'disassembly_component', $componentQty, $componentUnitCost, $componentTotal, $issuedAt);
-                $totalCost += $componentTotal;
+                $this->createCostLayer($companyId, $productId, $warehouseId, null, $productMovementId, 'assembly_output', $quantity, $unitCost, $totalCost, $issuedAt);
+            } else {
+                if (! $this->canWithdraw($companyId, $productId, $warehouseId, $quantity, $allowNegative, null)) {
+                    $db->transRollback();
+                    return redirect()->back()->withInput()->with('error', 'No hay stock suficiente del producto principal para desensamblar.');
+                }
+                $this->applyStockDelta($companyId, $productId, $warehouseId, $quantity * -1);
+                $productMovementId = (new InventoryMovementModel())->insert([
+                    'company_id' => $companyId,
+                    'product_id' => $productId,
+                    'movement_type' => 'egreso',
+                    'quantity' => $quantity,
+                    'source_warehouse_id' => $warehouseId,
+                    'performed_by' => $this->currentUser()['id'],
+                    'occurred_at' => $issuedAt,
+                    'reason' => 'desensamble_producto',
+                    'source_document' => $assemblyNumber,
+                    'notes' => 'Egreso por desensamble',
+                ], true);
+                $consumption = $this->consumeCostLayers($companyId, $productId, $warehouseId, null, $quantity, $issuedAt, $productMovementId, 'disassembly_output');
+                $totalCost = (float) $consumption['total_cost'];
+                (new InventoryMovementModel())->update($productMovementId, [
+                    'unit_cost' => $consumption['unit_cost'],
+                    'total_cost' => $consumption['total_cost'],
+                ]);
             }
-        }
 
-        if ($assemblyType === 'assembly') {
-            $unitCost = $quantity > 0 ? $totalCost / $quantity : 0;
-            $this->applyStockDelta($companyId, $productId, $warehouseId, $quantity);
-            $productMovementId = (new InventoryMovementModel())->insert([
+            $assemblyId = (new InventoryAssemblyModel())->insert([
                 'company_id' => $companyId,
+                'warehouse_id' => $warehouseId,
                 'product_id' => $productId,
-                'movement_type' => 'ingreso',
+                'assembly_number' => $assemblyNumber,
+                'assembly_type' => $assemblyType,
                 'quantity' => $quantity,
-                'destination_warehouse_id' => $warehouseId,
-                'performed_by' => $this->currentUser()['id'],
-                'occurred_at' => $issuedAt,
-                'reason' => 'ensamble_producto',
-                'source_document' => $assemblyNumber,
-                'notes' => 'Ingreso por ensamble',
-                'unit_cost' => $unitCost,
+                'unit_cost' => $quantity > 0 ? $totalCost / $quantity : 0,
                 'total_cost' => $totalCost,
+                'issued_at' => $issuedAt,
+                'notes' => trim((string) $this->request->getPost('notes')),
+                'created_by' => $this->currentUser()['id'],
             ], true);
-            $this->createCostLayer($companyId, $productId, $warehouseId, null, $productMovementId, 'assembly_output', $quantity, $unitCost, $totalCost, $issuedAt);
-        } else {
-            if (! $this->canWithdraw($companyId, $productId, $warehouseId, $quantity, $allowNegative, null)) {
-                $db->transRollback();
-                return redirect()->back()->withInput()->with('error', 'No hay stock suficiente del producto principal para desensamblar.');
+
+            $itemModel = new InventoryAssemblyItemModel();
+            foreach ($components as $component) {
+                $componentQty = (float) ($component['quantity'] ?? 0) * $quantity;
+                $itemModel->insert([
+                    'inventory_assembly_id' => $assemblyId,
+                    'component_product_id' => $component['component_product_id'],
+                    'quantity' => $componentQty,
+                    'unit_cost' => (float) ($component['unit_cost'] ?? 0),
+                    'total_cost' => (float) ($component['unit_cost'] ?? 0) * $componentQty,
+                ]);
             }
-            $this->applyStockDelta($companyId, $productId, $warehouseId, $quantity * -1);
-            $productMovementId = (new InventoryMovementModel())->insert([
-                'company_id' => $companyId,
-                'product_id' => $productId,
-                'movement_type' => 'egreso',
-                'quantity' => $quantity,
-                'source_warehouse_id' => $warehouseId,
-                'performed_by' => $this->currentUser()['id'],
-                'occurred_at' => $issuedAt,
-                'reason' => 'desensamble_producto',
-                'source_document' => $assemblyNumber,
-                'notes' => 'Egreso por desensamble',
-            ], true);
-            $consumption = $this->consumeCostLayers($companyId, $productId, $warehouseId, null, $quantity, $issuedAt, $productMovementId, 'disassembly_output');
-            $totalCost = (float) $consumption['total_cost'];
-            (new InventoryMovementModel())->update($productMovementId, [
-                'unit_cost' => $consumption['unit_cost'],
-                'total_cost' => $consumption['total_cost'],
-            ]);
-        }
 
-        $assemblyId = (new InventoryAssemblyModel())->insert([
-            'company_id' => $companyId,
-            'warehouse_id' => $warehouseId,
-            'product_id' => $productId,
-            'assembly_number' => $assemblyNumber,
-            'assembly_type' => $assemblyType,
-            'quantity' => $quantity,
-            'unit_cost' => $quantity > 0 ? $totalCost / $quantity : 0,
-            'total_cost' => $totalCost,
-            'issued_at' => $issuedAt,
-            'notes' => trim((string) $this->request->getPost('notes')),
-            'created_by' => $this->currentUser()['id'],
-        ], true);
-
-        $itemModel = new InventoryAssemblyItemModel();
-        foreach ($components as $component) {
-            $componentQty = (float) ($component['quantity'] ?? 0) * $quantity;
-            $itemModel->insert([
-                'inventory_assembly_id' => $assemblyId,
-                'component_product_id' => $component['component_product_id'],
-                'quantity' => $componentQty,
-                'unit_cost' => (float) ($component['unit_cost'] ?? 0),
-                'total_cost' => (float) ($component['unit_cost'] ?? 0) * $componentQty,
-            ]);
-        }
-
-        $db->transComplete();
-        if (! $db->transStatus()) {
-            return redirect()->back()->withInput()->with('error', 'No se pudo registrar el ensamble.');
+            $db->transComplete();
+            if (! $db->transStatus()) {
+                return redirect()->back()->withInput()->with('error', 'No se pudo registrar el ensamble.');
+            }
+        } catch (\Exception $e) {
+            if (isset($db)) {
+                $db->transRollback();
+            }
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
         }
 
         return $this->popupOrRedirect($this->inventoryRoute('inventario/configuracion', $companyId), 'Proceso de ensamble registrado correctamente.');
@@ -1617,6 +1632,13 @@ class InventoryController extends BaseController
             return redirect()->back()->withInput()->with('error', 'Debes indicar producto, deposito y nuevo costo validos.');
         }
 
+        $issuedAt = trim((string) $this->request->getPost('issued_at')) ?: date('Y-m-d H:i:s');
+
+        // Check if date falls in a closed period
+        if (InventoryPeriodClosureModel::isPeriodClosed($companyId, $issuedAt, $warehouseId)) {
+            return redirect()->back()->withInput()->with('error', 'No se permiten registrar revalorizaciones de stock en un periodo cerrado.');
+        }
+
         $stockSnapshot = (new InventoryStockLevelModel())
             ->where('company_id', $companyId)
             ->where('product_id', $productId)
@@ -1646,26 +1668,48 @@ class InventoryController extends BaseController
 
         $previousUnitCost = $remainingTotal > 0 ? $previousTotal / $remainingTotal : 0;
         $differenceAmount = ($newUnitCost - $previousUnitCost) * $quantitySnapshot;
-        foreach ($layers as $layer) {
-            $remaining = (float) ($layer['remaining_quantity'] ?? 0);
-            $layerModel->update($layer['id'], [
-                'unit_cost' => $newUnitCost,
-                'total_cost' => $remaining * $newUnitCost,
-            ]);
-        }
 
-        (new InventoryRevaluationModel())->insert([
-            'company_id' => $companyId,
-            'product_id' => $productId,
-            'warehouse_id' => $warehouseId,
-            'previous_unit_cost' => $previousUnitCost,
-            'new_unit_cost' => $newUnitCost,
-            'quantity_snapshot' => $quantitySnapshot,
-            'difference_amount' => $differenceAmount,
-            'issued_at' => trim((string) $this->request->getPost('issued_at')) ?: date('Y-m-d H:i:s'),
-            'notes' => trim((string) $this->request->getPost('notes')),
-            'created_by' => $this->currentUser()['id'],
-        ]);
+        $db = db_connect();
+        try {
+            $db->transStart();
+
+            foreach ($layers as $layer) {
+                $remaining = (float) ($layer['remaining_quantity'] ?? 0);
+                $layerModel->update($layer['id'], [
+                    'unit_cost' => $newUnitCost,
+                    'total_cost' => $remaining * $newUnitCost,
+                ]);
+            }
+
+            $revalId = (new InventoryRevaluationModel())->insert([
+                'company_id' => $companyId,
+                'product_id' => $productId,
+                'warehouse_id' => $warehouseId,
+                'previous_unit_cost' => $previousUnitCost,
+                'new_unit_cost' => $newUnitCost,
+                'quantity_snapshot' => $quantitySnapshot,
+                'difference_amount' => $differenceAmount,
+                'issued_at' => $issuedAt,
+                'notes' => trim((string) $this->request->getPost('notes')),
+                'created_by' => $this->currentUser()['id'],
+            ], true);
+
+            // Sync accounting
+            $syncRes = (new AccountingService())->syncRevaluation($companyId, $revalId, $this->currentUser()['id']);
+            if (!$syncRes['ok']) {
+                throw new \RuntimeException("Error al sincronizar contabilidad: " . ($syncRes['error'] ?? 'desconocido'));
+            }
+
+            $db->transComplete();
+            if (! $db->transStatus()) {
+                return redirect()->back()->withInput()->with('error', 'No se pudo registrar la revalorizacion.');
+            }
+        } catch (\Exception $e) {
+            if (isset($db)) {
+                $db->transRollback();
+            }
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
+        }
 
         return $this->popupOrRedirect($this->inventoryRoute('inventario/configuracion', $companyId), 'Revalorizacion registrada correctamente.');
     }

@@ -1840,6 +1840,82 @@ class SalesController extends BaseController
         return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('message', 'Venta cancelada correctamente.');
     }
 
+    public function approveCommercialAuthorization(string $saleId)
+    {
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+
+        $sale = $this->ownedSale($context['company']['id'], $saleId);
+        if (!$sale) {
+            return redirect()->to($this->salesRoute('ventas/diarios', $context['company']['id']))->with('error', 'Venta no disponible.');
+        }
+
+        $db = db_connect();
+        $db->transStart();
+
+        // Update sale
+        (new SaleModel())->update($saleId, [
+            'authorization_status' => 'approved',
+        ]);
+
+        // Update authorization request
+        $authModel = new SalesAuthorizationModel();
+        $auth = $authModel->where('sale_id', $saleId)->where('status', 'pending')->first();
+        if ($auth) {
+            $authModel->update($auth['id'], [
+                'status' => 'approved',
+                'authorized_by' => $this->currentUser()['id'],
+                'authorized_at' => date('Y-m-d H:i:s'),
+            ]);
+        }
+
+        $db->transComplete();
+
+        $this->logAudit($context['company']['id'], 'sales', 'sale', $saleId, 'approve_authorization', $sale, (new SaleModel())->find($saleId));
+
+        return redirect()->to($this->salesRoute('ventas/diarios', $context['company']['id']))->with('message', 'Autorización comercial aprobada.');
+    }
+
+    public function rejectCommercialAuthorization(string $saleId)
+    {
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+
+        $sale = $this->ownedSale($context['company']['id'], $saleId);
+        if (!$sale) {
+            return redirect()->to($this->salesRoute('ventas/diarios', $context['company']['id']))->with('error', 'Venta no disponible.');
+        }
+
+        $db = db_connect();
+        $db->transStart();
+
+        // Update sale
+        (new SaleModel())->update($saleId, [
+            'authorization_status' => 'rejected',
+        ]);
+
+        // Update authorization request
+        $authModel = new SalesAuthorizationModel();
+        $auth = $authModel->where('sale_id', $saleId)->where('status', 'pending')->first();
+        if ($auth) {
+            $authModel->update($auth['id'], [
+                'status' => 'rejected',
+                'authorized_by' => $this->currentUser()['id'],
+                'authorized_at' => date('Y-m-d H:i:s'),
+            ]);
+        }
+
+        $db->transComplete();
+
+        $this->logAudit($context['company']['id'], 'sales', 'sale', $saleId, 'reject_authorization', $sale, (new SaleModel())->find($saleId));
+
+        return redirect()->to($this->salesRoute('ventas/diarios', $context['company']['id']))->with('message', 'Autorización comercial rechazada.');
+    }
+
     public function createReturnForm(string $id)
     {
         $context = $this->salesContext('manage');
@@ -3014,7 +3090,8 @@ class SalesController extends BaseController
         $salesZoneId = trim((string) ($input['sales_zone_id'] ?? ($customer['sales_zone_id'] ?? ''))) ?: null;
         $salesConditionId = trim((string) ($input['sales_condition_id'] ?? ($customer['sales_condition_id'] ?? ''))) ?: null;
         $promotionSnapshot = $this->promotionSnapshot($companyId, $items);
-        $paymentMethodDiscount = $this->paymentMethodDiscount($companyId, $payments);
+        $subtotal = array_sum(array_map(static fn(array $row): float => (float) $row['subtotal'], $items));
+        $paymentMethodDiscount = $this->paymentMethodDiscount($companyId, $payments, $subtotal);
         $totals = $this->calculateSaleTotals($items, (float) ($input['global_discount_total'] ?? 0) + $paymentMethodDiscount, $payments);
         $marginTotal = round(array_sum(array_map(static fn(array $row): float => ((float) ($row['line_total'] ?? 0)) - (((float) ($row['unit_cost'] ?? 0)) * ((float) ($row['quantity'] ?? 0))), $items)), 2);
         $creditSnapshot = $this->customerCreditSnapshot($companyId, $customerId, $totals['total']);
@@ -3155,7 +3232,70 @@ class SalesController extends BaseController
             ];
         }
 
+        // Apply discount policies (quantity_scale, buy_x_pay_y)
+        $rows = $this->applyDiscountPolicies($companyId, $rows);
+
         return $rows;
+    }
+
+    private function applyDiscountPolicies(string $companyId, array $items): array
+    {
+        $policyModel = new SalesDiscountPolicyModel();
+        
+        // 1. Get quantity scale policies
+        $qtyPolicies = $policyModel->where('company_id', $companyId)
+            ->where('policy_type', 'quantity_scale')
+            ->where('active', 1)
+            ->findAll();
+            
+        // 2. Get buy_x_pay_y policies
+        $bogoPolicies = $policyModel->where('company_id', $companyId)
+            ->where('policy_type', 'buy_x_pay_y')
+            ->where('active', 1)
+            ->findAll();
+
+        foreach ($items as &$item) {
+            $qty = (float)($item['quantity'] ?? 0);
+            $unitPrice = (float)($item['unit_price'] ?? 0);
+            
+            $itemDiscountRate = 0.0;
+            $itemFixedDiscount = 0.0;
+
+            // Apply quantity scale policy if matches
+            foreach ($qtyPolicies as $policy) {
+                $minQty = (float)($policy['min_quantity'] ?? 0);
+                if ($qty >= $minQty) {
+                    $itemDiscountRate = max($itemDiscountRate, (float)($policy['discount_rate'] ?? 0));
+                }
+            }
+
+            // Apply Buy X Pay Y policy if matches
+            foreach ($bogoPolicies as $policy) {
+                $buyQty = (int)($policy['buy_quantity'] ?? 0);
+                $payQty = (int)($policy['pay_quantity'] ?? 0);
+                if ($buyQty > 0 && $payQty > 0 && $qty >= $buyQty) {
+                    $freeUnits = floor($qty / $buyQty) * ($buyQty - $payQty);
+                    $itemFixedDiscount += $freeUnits * $unitPrice;
+                }
+            }
+
+            // Apply discounts to item totals
+            $baseTotal = $qty * $unitPrice;
+            $percentDiscountAmt = $baseTotal * ($itemDiscountRate / 100);
+            
+            $item['discount_rate'] = max((float)($item['discount_rate'] ?? 0), $itemDiscountRate);
+            $item['discount_amount'] = (float)($item['discount_amount'] ?? 0) + $percentDiscountAmt + $itemFixedDiscount;
+            
+            $item['discount_amount'] = min($baseTotal, $item['discount_amount']);
+            $item['subtotal'] = max(0, round(($qty * $unitPrice) - $item['discount_amount'], 2));
+            
+            $taxRate = (float)($item['tax_rate'] ?? 0);
+            $item['tax_total'] = round($item['subtotal'] * ($taxRate / 100), 2);
+            $item['line_total'] = round($item['subtotal'] + $item['tax_total'], 2);
+        }
+        unset($item);
+
+        return $items;
     }
 
     private function parseSalePayments(?array $input = null): array
@@ -3187,7 +3327,7 @@ class SalesController extends BaseController
         return $rows;
     }
 
-    private function paymentMethodDiscount(string $companyId, array $payments): float
+    private function paymentMethodDiscount(string $companyId, array $payments, float $subtotal = 0.0): float
     {
         $paymentMethods = array_values(array_filter(array_unique(array_map(
             static fn(array $row): string => (string) ($row['payment_method'] ?? ''),
@@ -3206,7 +3346,14 @@ class SalesController extends BaseController
             ->orderBy('discount_rate', 'DESC')
             ->first();
 
-        return $policy ? (float) ($policy['fixed_discount'] ?? 0) : 0.0;
+        if (!$policy) {
+            return 0.0;
+        }
+
+        $fixed = (float) ($policy['fixed_discount'] ?? 0);
+        $rate = (float) ($policy['discount_rate'] ?? 0);
+
+        return $fixed + ($subtotal * ($rate / 100));
     }
 
     private function customerCreditSnapshot(string $companyId, ?string $customerId, float $documentTotal): array
@@ -3606,9 +3753,29 @@ class SalesController extends BaseController
             return;
         }
 
+        // Calculate effective discount percentage
+        $grossTotal = (float)($sale['subtotal'] ?? 0) + (float)($sale['item_discount_total'] ?? 0) + (float)($sale['global_discount_total'] ?? 0);
+        $effectiveDiscountPercent = 0.0;
+        if ($grossTotal > 0) {
+            $effectiveDiscountPercent = (((float)($sale['item_discount_total'] ?? 0) + (float)($sale['global_discount_total'] ?? 0)) / $grossTotal) * 100;
+        }
+
+        // Apply a complex policy decreasing agent rate depending on discount granted
+        $factor = 1.0;
+        if ($effectiveDiscountPercent > 10.0) {
+            $factor = 0.0;
+        } elseif ($effectiveDiscountPercent > 5.0) {
+            $factor = 0.5;
+        } elseif ($effectiveDiscountPercent > 2.0) {
+            $factor = 0.8;
+        }
+
         $baseAmount = max(0, (float) ($sale['margin_total'] ?? $sale['total'] ?? 0));
-        $rate = (float) ($agent['commission_rate'] ?? 0);
+        $baseRate = (float) ($agent['commission_rate'] ?? 0);
+        $rate = $baseRate * $factor;
         $status = in_array(($sale['status'] ?? ''), ['cancelled', 'returned_total'], true) ? 'void' : 'pending';
+
+        $notes = 'Comisión sincronizada desde venta. Descuento aplicado: ' . number_format($effectiveDiscountPercent, 2, ',', '.') . '%. Factor comitente: ' . ($factor * 100) . '% (Tasa base: ' . number_format($baseRate, 2, ',', '.') . '%)';
 
         $payload = [
             'company_id' => $companyId,
@@ -3618,7 +3785,7 @@ class SalesController extends BaseController
             'rate' => $rate,
             'commission_amount' => round($baseAmount * ($rate / 100), 2),
             'status' => $status,
-            'notes' => 'Comision sincronizada desde venta',
+            'notes' => $notes,
             'liquidated_at' => $status === 'liquidated' ? date('Y-m-d H:i:s') : null,
         ];
 
@@ -3716,7 +3883,8 @@ class SalesController extends BaseController
 
         // 1. Credit Limit Check (Strict TANGO-like Control)
         $customerId = $sale['customer_id'] ?? null;
-        if ($customerId) {
+        $isApproved = ($sale['authorization_status'] ?? '') === 'approved';
+        if ($customerId && !$isApproved) {
             $customer = (new CustomerModel())->find($customerId);
             $creditLimit = (float) ($customer['credit_limit'] ?? 0);
             

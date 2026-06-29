@@ -29,4 +29,26 @@ class InventoryMovementModel extends BaseUuidModel
         'created_at',
         'updated_at',
     ];
+
+    protected $beforeInsert = ['checkPeriodClosure'];
+    protected $beforeUpdate = ['checkPeriodClosure'];
+
+    protected function checkPeriodClosure(array $data)
+    {
+        $row = $data['data'] ?? [];
+        $companyId = $row['company_id'] ?? null;
+        $occurredAt = $row['occurred_at'] ?? date('Y-m-d H:i:s');
+        
+        if ($companyId) {
+            $sourceW = $row['source_warehouse_id'] ?? null;
+            $destW = $row['destination_warehouse_id'] ?? null;
+            
+            if (InventoryPeriodClosureModel::isPeriodClosed($companyId, $occurredAt, $sourceW) ||
+                InventoryPeriodClosureModel::isPeriodClosed($companyId, $occurredAt, $destW)) {
+                throw new \RuntimeException('No se permiten registrar movimientos de stock en un periodo cerrado.');
+            }
+        }
+        
+        return $data;
+    }
 }

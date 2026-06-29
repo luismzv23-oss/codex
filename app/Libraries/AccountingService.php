@@ -464,6 +464,61 @@ class AccountingService
     }
 
     /**
+     * Sync accounting for an inventory revaluation.
+     */
+    public function syncRevaluation(string $companyId, string $revaluationId, string $userId): array
+    {
+        $db = db_connect();
+        $reval = $db->table('inventory_revaluations')->where('id', $revaluationId)->get()->getRowArray();
+        if (!$reval) return ['ok' => false, 'error' => 'Revaluation not found'];
+
+        // Check if already synced
+        $existing = $db->table('journal_entries')
+            ->where('company_id', $companyId)->where('reference_type', 'inventory_revaluation')->where('reference_id', $revaluationId)
+            ->countAllResults();
+        if ($existing > 0) return ['ok' => true, 'already_synced' => true];
+
+        $map = $this->getAccountMapping($companyId);
+        if (empty($map)) {
+            throw new \RuntimeException("Falta configuracion de mapeo de cuentas contables para la empresa.");
+        }
+
+        $invAccount = $map['inventory'] ?? null;
+        if (!$invAccount) {
+            throw new \RuntimeException("Falta configurar la cuenta contable de inventario (inventory) para registrar la revalorización.");
+        }
+
+        $difference = (float)($reval['difference_amount'] ?? 0);
+        if (abs($difference) < 0.01) {
+            return ['ok' => true, 'skipped' => 'no_difference'];
+        }
+
+        // Revaluation difference account: fallback to revaluation or holding_gain_loss or cash_difference or expense
+        $diffAccount = $map['revaluation'] ?? $map['holding_gain_loss'] ?? $map['cash_difference'] ?? $map['expense'] ?? $map['revenue'] ?? null;
+        if (!$diffAccount) {
+            throw new \RuntimeException("Falta configurar la cuenta de resultado por revalorización o diferencia de cambio/caja para registrar el ajuste.");
+        }
+
+        $lines = [];
+        if ($difference > 0) {
+            // Gain: Debit Inventory Asset, Credit Revaluation Gain
+            $lines[] = ['account_id' => $invAccount, 'debit' => abs($difference), 'credit' => 0, 'description' => 'Ajuste de valorización (Mercadería)'];
+            $lines[] = ['account_id' => $diffAccount, 'debit' => 0, 'credit' => abs($difference), 'description' => 'Ganancia por revalorización'];
+        } else {
+            // Loss: Debit Revaluation Loss, Credit Inventory Asset
+            $lines[] = ['account_id' => $diffAccount, 'debit' => abs($difference), 'credit' => 0, 'description' => 'Pérdida por revalorización'];
+            $lines[] = ['account_id' => $invAccount, 'debit' => 0, 'credit' => abs($difference), 'description' => 'Ajuste de valorización (Mercadería)'];
+        }
+
+        return $this->createJournalEntry($companyId, [
+            'description' => 'Revalorización de Inventario - Dif. $' . number_format(abs($difference), 2, '.', ''),
+            'entry_date' => $reval['issued_at'] ?? date('Y-m-d'),
+            'reference_type' => 'inventory_revaluation', 'reference_id' => $revaluationId,
+            'status' => 'posted', 'user_id' => $userId,
+        ], $lines);
+    }
+
+    /**
      * Get accounting mapping from company_settings.
      */
     private function getAccountMapping(string $companyId): array

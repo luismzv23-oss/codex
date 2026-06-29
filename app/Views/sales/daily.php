@@ -94,14 +94,27 @@
                             <td><?= esc($sale['customer_name'] ?: ($sale['customer_name_snapshot'] ?? 'Consumidor Final')) ?></td>
                             <td><?= esc($sale['point_of_sale_name'] ?: '-') ?></td>
                             <td><?= esc($sale['warehouse_name'] ?: '-') ?></td>
-                            <td><?= esc(match ($sale['status']) {
-                                'draft'            => 'Borrador',
-                                'confirmed'        => 'Confirmada',
-                                'cancelled'        => 'Cancelada',
-                                'returned_partial'  => 'Devuelta parcial',
-                                'returned_total'   => 'Devuelta total',
-                                default            => $sale['status'],
-                            }) ?></td>
+                            <td>
+                                <?= esc(match ($sale['status']) {
+                                    'draft'            => 'Borrador',
+                                    'confirmed'        => 'Confirmada',
+                                    'cancelled'        => 'Cancelada',
+                                    'returned_partial'  => 'Devuelta parcial',
+                                    'returned_total'   => 'Devuelta total',
+                                    default            => $sale['status'],
+                                }) ?>
+                                <?php if (! empty($sale['authorization_status']) && $sale['authorization_status'] !== 'not_required'): ?>
+                                    <div class="mt-1">
+                                        <?php if ($sale['authorization_status'] === 'pending'): ?>
+                                            <span class="badge bg-warning text-dark" style="font-size: 0.75rem;" title="<?= esc($sale['authorization_reason']) ?>">Pendiente Aut.</span>
+                                        <?php elseif ($sale['authorization_status'] === 'approved'): ?>
+                                            <span class="badge bg-success" style="font-size: 0.75rem;" title="Autorizada por Administración">Aut. Aprobada</span>
+                                        <?php elseif ($sale['authorization_status'] === 'rejected'): ?>
+                                            <span class="badge bg-danger" style="font-size: 0.75rem;" title="Rechazada por Administración">Aut. Rechazada</span>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </td>
                             <td><?= esc($sale['arca_status'] ?: '-') ?><div class="small text-secondary"><?= esc(strtoupper((string) ($sale['arca_service'] ?? '-'))) ?></div></td>
                             <td><?= esc(match ($sale['payment_status']) {
                                 'paid'    => 'Pagado',
@@ -128,6 +141,16 @@
                                         <a href="<?= site_url('ventas/' . $sale['id'] . '/convertir/' . $code . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-sm btn-outline-primary icon-btn" title="<?= esc($label) ?>" aria-label="<?= esc($label) ?>"><i class="bi bi-arrow-left-right"></i></a>
                                     <?php endif; ?>
                                 <?php endforeach; ?>
+                                <?php if (($sale['authorization_status'] ?? '') === 'pending' && $context['canManage']): ?>
+                                    <form method="post" action="<?= site_url('ventas/' . $sale['id'] . '/autorizar-comercial' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="d-inline">
+                                        <?= csrf_field() ?>
+                                        <button class="btn btn-sm btn-outline-success icon-btn" title="Aprobar Crédito" aria-label="Aprobar Crédito"><i class="bi bi-shield-check"></i></button>
+                                    </form>
+                                    <form method="post" action="<?= site_url('ventas/' . $sale['id'] . '/rechazar-comercial' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="d-inline">
+                                        <?= csrf_field() ?>
+                                        <button class="btn btn-sm btn-outline-danger icon-btn" title="Rechazar Crédito" aria-label="Rechazar Crédito"><i class="bi bi-shield-slash"></i></button>
+                                    </form>
+                                <?php endif; ?>
                                 <?php if ($sale['status'] === 'draft' && $context['canManage']): ?>
                                     <a href="<?= site_url('ventas/' . $sale['id'] . '/editar' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-sm btn-outline-dark icon-btn" data-popup="true" data-popup-title="Editar venta" data-popup-subtitle="Actualizar borrador de venta." title="Editar" aria-label="Editar"><i class="bi bi-pencil-square"></i></a>
                                     <form method="post" action="<?= site_url('ventas/' . $sale['id'] . '/confirmar' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="d-inline">

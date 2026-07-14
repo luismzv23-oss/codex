@@ -114,17 +114,21 @@ class CashController extends BaseController
             return $context;
         }
 
-        $closed = $this->cashService()->closeSession(
-            $context['company']['id'],
-            $id,
-            $this->currentUser()['id'],
-            (float) $this->request->getPost('actual_closing_amount'),
-            trim((string) $this->request->getPost('notes')),
-            $this->isSuperadmin()
-        );
+        try {
+            $closed = $this->cashService()->closeSession(
+                $context['company']['id'],
+                $id,
+                $this->currentUser()['id'],
+                (float) $this->request->getPost('actual_closing_amount'),
+                trim((string) $this->request->getPost('notes')),
+                $this->isSuperadmin()
+            );
 
-        if (! $closed) {
-            return redirect()->back()->withInput()->with('error', 'No se pudo cerrar la sesion seleccionada.');
+            if (! $closed) {
+                return redirect()->back()->withInput()->with('error', 'No se pudo cerrar la sesion seleccionada.');
+            }
+        } catch (\Throwable $e) {
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
         }
 
         return $this->popupOrRedirect($this->cashRoute('caja', $context['company']['id']), 'Caja cerrada correctamente.');

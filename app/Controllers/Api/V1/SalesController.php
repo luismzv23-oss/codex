@@ -459,7 +459,12 @@ class SalesController extends BaseApiController
             'created_by' => $this->apiUser()['id'],
         ]);
 
-        (new AccountingService())->syncSalesReceipt($companyId, (string) $receiptId, $this->apiUser()['id']);
+        try {
+            (new AccountingService())->syncSalesReceipt($companyId, (string) $receiptId, $this->apiUser()['id']);
+        } catch (\Throwable $e) {
+            $db->transRollback();
+            return $this->fail($e->getMessage(), 422);
+        }
 
         $db->transComplete();
         return $db->transStatus() ? $this->success((new SalesReceiptModel())->find($receiptId), 201) : $this->fail('No se pudo registrar el recibo.', 500);

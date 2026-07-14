@@ -430,7 +430,13 @@ class SalesController extends BaseController
             'created_by' => $this->currentUser()['id'],
         ]);
 
-        (new AccountingService())->syncSalesReceipt($companyId, (string) $receiptId, $this->currentUser()['id']);
+        try {
+            (new AccountingService())->syncSalesReceipt($companyId, (string) $receiptId, $this->currentUser()['id']);
+        } catch (\Throwable $e) {
+            $db->transRollback();
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
+        }
+
         EventBus::emit('sale.payment_received', ['company_id' => $companyId, 'payment' => ['amount' => $total], 'receipt_id' => $receiptId]);
 
         $db->transComplete();
@@ -3857,119 +3863,124 @@ class SalesController extends BaseController
 
     private function confirmSaleTransaction(string $companyId, string $saleId, ?array $sale = null)
     {
-        $sale ??= $this->ownedSale($companyId, $saleId);
-        if (!$sale) {
-            return 'Venta no disponible.';
-        }
+        try {
+            $sale ??= $this->ownedSale($companyId, $saleId);
+            if (!$sale) {
+                return 'Venta no disponible.';
+            }
 
-        $items = $this->saleItems($saleId);
-        if ($items === []) {
-            return 'La venta debe tener productos.';
-        }
+            $items = $this->saleItems($saleId);
+            if ($items === []) {
+                return 'La venta debe tener productos.';
+            }
 
-        $warehouseId = $sale['warehouse_id'] ?: null;
+            $warehouseId = $sale['warehouse_id'] ?: null;
 
-        $documentType = !empty($sale['document_type_id']) ? (new SalesDocumentTypeModel())->find($sale['document_type_id']) : null;
-        if (!$documentType) {
-            return 'El comprobante seleccionado ya no esta disponible.';
-        }
+            $documentType = !empty($sale['document_type_id']) ? (new SalesDocumentTypeModel())->find($sale['document_type_id']) : null;
+            if (!$documentType) {
+                return 'El comprobante seleccionado ya no esta disponible.';
+            }
 
-        $category = (string) ($documentType['category'] ?? 'invoice');
-        $impactsStock = (int) ($documentType['impacts_stock'] ?? 0) === 1;
+            $category = (string) ($documentType['category'] ?? 'invoice');
+            $impactsStock = (int) ($documentType['impacts_stock'] ?? 0) === 1;
 
-        if (!$warehouseId && $impactsStock) {
-            return 'La venta debe tener deposito origen.';
-        }
+            if (!$warehouseId && $impactsStock) {
+                return 'La venta debe tener deposito origen.';
+            }
 
-        // 1. Credit Limit Check (Strict TANGO-like Control)
-        $customerId = $sale['customer_id'] ?? null;
-        $isApproved = ($sale['authorization_status'] ?? '') === 'approved';
-        if ($customerId && !$isApproved) {
-            $customer = (new CustomerModel())->find($customerId);
-            $creditLimit = (float) ($customer['credit_limit'] ?? 0);
-            
-            if ($creditLimit > 0) {
-                $saleTotal = (float)($sale['total'] ?? 0);
-                $salePaid = (float)($sale['paid_total'] ?? 0);
-                $saleUnpaid = $saleTotal - $salePaid;
+            // 1. Credit Limit Check (Strict TANGO-like Control)
+            $customerId = $sale['customer_id'] ?? null;
+            $isApproved = ($sale['authorization_status'] ?? '') === 'approved';
+            if ($customerId && !$isApproved) {
+                $customer = (new CustomerModel())->find($customerId);
+                $creditLimit = (float) ($customer['credit_limit'] ?? 0);
                 
-                if ($saleUnpaid > 0) {
-                    $currentDebt = (float) db_connect()->table('sales_receivables')
-                        ->where('customer_id', $customerId)
-                        ->where('company_id', $companyId)
-                        ->whereIn('status', ['pending', 'partial'])
-                        ->selectSum('balance_amount', 'amount')
-                        ->get()->getRowArray()['amount'] ?? 0;
+                if ($creditLimit > 0) {
+                    $saleTotal = (float)($sale['total'] ?? 0);
+                    $salePaid = (float)($sale['paid_total'] ?? 0);
+                    $saleUnpaid = $saleTotal - $salePaid;
                     
-                    if (($currentDebt + $saleUnpaid) > $creditLimit) {
-                        return 'Límite de crédito excedido. El cliente tiene una deuda actual de $' . number_format($currentDebt, 2, ',', '.') . ' y su límite es $' . number_format($creditLimit, 2, ',', '.') . '. Solicite autorizacion gerencial.';
+                    if ($saleUnpaid > 0) {
+                        $currentDebt = (float) db_connect()->table('sales_receivables')
+                            ->where('customer_id', $customerId)
+                            ->where('company_id', $companyId)
+                            ->whereIn('status', ['pending', 'partial'])
+                            ->selectSum('balance_amount', 'amount')
+                            ->get()->getRowArray()['amount'] ?? 0;
+                        
+                        if (($currentDebt + $saleUnpaid) > $creditLimit) {
+                            return 'Límite de crédito excedido. El cliente tiene una deuda actual de $' . number_format($currentDebt, 2, ',', '.') . ' y su límite es $' . number_format($creditLimit, 2, ',', '.') . '. Solicite autorizacion gerencial.';
+                        }
                     }
                 }
             }
-        }
 
-        $authorizationCheck = $this->evaluateAuthorizationRequirement($companyId, $sale, $items);
-        if ($authorizationCheck !== true) {
-            return $authorizationCheck;
-        }
-
-        $allowNegative = (int) (($this->inventorySettings($companyId)['allow_negative_stock'] ?? 0)) === 1;
-        $db = db_connect();
-        $db->transStart();
-
-
-        if ($category === 'order') {
-            $result = $this->reserveStockForSale($companyId, $sale, $items);
-            if ($result !== true) {
-                $db->transRollback();
-                return $result;
+            $authorizationCheck = $this->evaluateAuthorizationRequirement($companyId, $sale, $items);
+            if ($authorizationCheck !== true) {
+                return $authorizationCheck;
             }
-        } elseif (in_array($category, ['delivery_note', 'invoice', 'ticket'], true) && (int) ($documentType['impacts_stock'] ?? 0) === 1) {
-            $result = $this->deliverSaleStock($companyId, $sale, $items, $allowNegative, $category === 'delivery_note' ? 'REMITO' : 'VENTA');
-            if ($result !== true) {
-                $db->transRollback();
-                return $result;
-            }
-        }
 
-        $updateData = [
-            'status' => 'confirmed',
-            'confirmed_by' => $this->currentUser()['id'],
-            'confirmed_at' => date('Y-m-d H:i:s'),
-        ];
-        if ($category === 'delivery_note') {
-            $updateData['delivered_by'] = $this->currentUser()['id'];
-            $updateData['delivered_at'] = date('Y-m-d H:i:s');
-        }
+            $allowNegative = (int) (($this->inventorySettings($companyId)['allow_negative_stock'] ?? 0)) === 1;
+            $db = db_connect();
+            $db->transStart();
 
-        (new SaleModel())->update($saleId, $updateData);
-
-        $this->refreshSalePaymentStatus($saleId);
-        $this->syncReceivableForSale($saleId);
-        $this->syncCashMovementsForSale($companyId, $saleId);
-        $this->syncSaleCommission($companyId, $saleId);
-        (new AccountingService())->syncSale($companyId, $saleId, $this->currentUser()['id']);
-        
-        // Link to converted order
-        $order = $db->table('sales_orders')->where('converted_to_sale_id', $saleId)->get()->getRowArray();
-        if ($order) {
-            foreach ($items as $item) {
-                if (!empty($item['product_id'])) {
-                    $db->query("UPDATE sales_order_items SET quantity_invoiced = quantity_invoiced + ? WHERE sales_order_id = ? AND product_id = ?", [$item['quantity'], $order['id'], $item['product_id']]);
+            if ($category === 'order') {
+                $result = $this->reserveStockForSale($companyId, $sale, $items);
+                if ($result !== true) {
+                    $db->transRollback();
+                    return $result;
+                }
+            } elseif (in_array($category, ['delivery_note', 'invoice', 'ticket'], true) && (int) ($documentType['impacts_stock'] ?? 0) === 1) {
+                $result = $this->deliverSaleStock($companyId, $sale, $items, $allowNegative, $category === 'delivery_note' ? 'REMITO' : 'VENTA');
+                if ($result !== true) {
+                    $db->transRollback();
+                    return $result;
                 }
             }
-            $pending = $db->table('sales_order_items')
-                ->where('sales_order_id', $order['id'])
-                ->where('quantity > quantity_invoiced', null, false)
-                ->countAllResults();
-            $newStatus = $pending === 0 ? 'fulfilled' : 'partial';
-            $db->table('sales_orders')->where('id', $order['id'])->update(['status' => $newStatus, 'updated_at' => date('Y-m-d H:i:s')]);
+
+            $updateData = [
+                'status' => 'confirmed',
+                'confirmed_by' => $this->currentUser()['id'],
+                'confirmed_at' => date('Y-m-d H:i:s'),
+            ];
+            if ($category === 'delivery_note') {
+                $updateData['delivered_by'] = $this->currentUser()['id'];
+                $updateData['delivered_at'] = date('Y-m-d H:i:s');
+            }
+
+            (new SaleModel())->update($saleId, $updateData);
+
+            $this->refreshSalePaymentStatus($saleId);
+            $this->syncReceivableForSale($saleId);
+            $this->syncCashMovementsForSale($companyId, $saleId);
+            $this->syncSaleCommission($companyId, $saleId);
+            (new AccountingService())->syncSale($companyId, $saleId, $this->currentUser()['id']);
+            
+            // Link to converted order
+            $order = $db->table('sales_orders')->where('converted_to_sale_id', $saleId)->get()->getRowArray();
+            if ($order) {
+                foreach ($items as $item) {
+                    if (!empty($item['product_id'])) {
+                        $db->query("UPDATE sales_order_items SET quantity_invoiced = quantity_invoiced + ? WHERE sales_order_id = ? AND product_id = ?", [$item['quantity'], $order['id'], $item['product_id']]);
+                    }
+                }
+                $pending = $db->table('sales_order_items')
+                    ->where('sales_order_id', $order['id'])
+                    ->where('quantity > quantity_invoiced', null, false)
+                    ->countAllResults();
+                $newStatus = $pending === 0 ? 'fulfilled' : 'partial';
+                $db->table('sales_orders')->where('id', $order['id'])->update(['status' => $newStatus, 'updated_at' => date('Y-m-d H:i:s')]);
+            }
+
+            EventBus::emit('sale.confirmed', ['company_id' => $companyId, 'sale' => (new SaleModel())->find($saleId), 'items' => (new SaleItemModel())->where('sale_id', $saleId)->findAll()]);
+            $db->transComplete();
+
+            return $db->transStatus() ? true : 'No se pudo confirmar la venta.';
+        } catch (\Throwable $e) {
+            $db = db_connect();
+            $db->transRollback();
+            return $e->getMessage();
         }
-
-        EventBus::emit('sale.confirmed', ['company_id' => $companyId, 'sale' => (new SaleModel())->find($saleId), 'items' => (new SaleItemModel())->where('sale_id', $saleId)->findAll()]);
-        $db->transComplete();
-
-        return $db->transStatus() ? true : 'No se pudo confirmar la venta.';
     }
 
     private function reserveStockForSale(string $companyId, array $sale, array $items)

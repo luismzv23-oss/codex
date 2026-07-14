@@ -91,18 +91,22 @@ class CashController extends BaseApiController
         }
 
         $payload = (array) ($this->request->getJSON(true) ?: $this->request->getPost());
-        $closed = $this->cashService()->closeSession(
-            $context['company']['id'],
-            $id,
-            $this->apiUser()['id'],
-            (float) ($payload['actual_closing_amount'] ?? 0),
-            trim((string) ($payload['notes'] ?? '')),
-            $this->apiIsSuperadmin()
-        );
+        try {
+            $closed = $this->cashService()->closeSession(
+                $context['company']['id'],
+                $id,
+                $this->apiUser()['id'],
+                (float) ($payload['actual_closing_amount'] ?? 0),
+                trim((string) ($payload['notes'] ?? '')),
+                $this->apiIsSuperadmin()
+            );
 
-        return $closed
-            ? $this->success(['session_id' => $id, 'status' => 'closed'])
-            : $this->fail('No se pudo cerrar la sesion seleccionada.', 422);
+            return $closed
+                ? $this->success(['session_id' => $id, 'status' => 'closed'])
+                : $this->fail('No se pudo cerrar la sesion seleccionada.', 422);
+        } catch (\Throwable $e) {
+            return $this->fail($e->getMessage(), 422);
+        }
     }
 
     public function storeMovement()

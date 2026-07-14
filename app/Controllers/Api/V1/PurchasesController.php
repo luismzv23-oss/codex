@@ -865,22 +865,20 @@ class PurchasesController extends BaseApiController
 
         $sequenceModel = new VoucherSequenceModel();
         
-        $sequence = $sequenceModel->db->table('voucher_sequences')
+        $builder = $sequenceModel->db->table('voucher_sequences')
             ->where('company_id', $companyId)
-            ->where('document_type', $documentType)
-            ->forUpdate()
-            ->get()
-            ->getRowArray();
+            ->where('document_type', $documentType);
+        $sql = $builder->getCompiledSelect() . ' FOR UPDATE';
+        $sequence = $sequenceModel->db->query($sql)->getRowArray();
 
         if (!$sequence) {
             $this->ensurePurchaseDefaults($companyId);
             
-            $sequence = $sequenceModel->db->table('voucher_sequences')
+            $builder = $sequenceModel->db->table('voucher_sequences')
                 ->where('company_id', $companyId)
-                ->where('document_type', $documentType)
-                ->forUpdate()
-                ->get()
-                ->getRowArray();
+                ->where('document_type', $documentType);
+            $sql = $builder->getCompiledSelect() . ' FOR UPDATE';
+            $sequence = $sequenceModel->db->query($sql)->getRowArray();
         }
 
         $current = (int) ($sequence['current_number'] ?? 1);

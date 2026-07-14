@@ -1061,4 +1061,143 @@ class ArcaService
             'path' => $target,
         ];
     }
+
+    private function buildPayloadPreview(
+        array $sale, array $documentType, array $company, array $settings, array $items, array $pointOfSale, array $service
+    ): array {
+        $ptoVta    = (int) ($pointOfSale['afip_pos_number'] ?? 1);
+        $cbteTipo  = (int) ($documentType['afip_code'] ?? 6);
+        $subtotal  = (float) ($sale['subtotal'] ?? 0);
+        $taxTotal  = (float) ($sale['tax_total'] ?? 0);
+        $total     = (float) ($sale['total'] ?? 0);
+        $taxProfile = $sale['customer_tax_profile'] ?? '';
+        $condicionIvaReceptorId = $this->resolveIvaConditionId($taxProfile);
+
+        if ($service['slug'] === 'wsmtxca') {
+            $mtxcaItems = [];
+            $ivaSubtotals = [];
+
+            foreach ($items as $item) {
+                $afipCode = (int) ($item['afip_iva_code'] ?? 5);
+                $qty      = (float) ($item['quantity'] ?? 1);
+                $price    = (float) ($item['unit_price'] ?? 0);
+                $lineTax  = (float) ($item['line_tax'] ?? 0);
+                $lineTotal = (float) ($item['line_total'] ?? 0);
+                $lineNet  = $lineTotal - $lineTax;
+
+                $mtxcaItems[] = [
+                    'codigo'          => $item['sku'] ?? '',
+                    'descripcion'     => $item['product_name'] ?? '',
+                    'cantidad'        => $qty,
+                    'unidad_medida'   => 7,
+                    'precio_unitario' => $price,
+                    'condicion_iva'   => $afipCode,
+                    'importe_iva'     => $lineTax,
+                    'importe_item'    => $lineTotal,
+                ];
+
+                if (! isset($ivaSubtotals[$afipCode])) {
+                    $ivaSubtotals[$afipCode] = ['codigo' => $afipCode, 'importe' => 0, 'base' => 0];
+                }
+                $ivaSubtotals[$afipCode]['importe'] += $lineTax;
+                $ivaSubtotals[$afipCode]['base']    += $lineNet;
+            }
+
+            if ($taxTotal == 0 && $subtotal > 0) {
+                $ivaSubtotals = [
+                    3 => ['codigo' => 3, 'importe' => 0, 'base' => round($subtotal, 2)],
+                ];
+            }
+
+            $ivaSubtotals = array_filter($ivaSubtotals, static fn($a) => round($a['base'], 2) > 0);
+            foreach ($ivaSubtotals as &$sub) {
+                $sub['importe'] = round($sub['importe'], 2);
+                $sub['base']    = round($sub['base'], 2);
+            }
+            unset($sub);
+
+            $docTipo = 80; // CUIT by default
+            $docNro  = $sale['customer_document_snapshot'] ?? '0';
+            if ($taxProfile === 'consumidor_final' || $cbteTipo === 6 || $cbteTipo === 11) {
+                $docTipo = 99; // Consumidor final
+                $docNro  = '0';
+                $condicionIvaReceptorId = 5;
+            }
+
+            return [
+                'cbte_tipo'     => $cbteTipo,
+                'punto_venta'   => $ptoVta,
+                'cbte_nro'      => (int) ($sale['sale_number'] ?? 0),
+                'fecha_emision' => $sale['sale_date'] ?? date('Y-m-d'),
+                'doc_tipo'      => $docTipo,
+                'doc_nro'       => $docNro,
+                'condicion_iva_receptor_id' => $condicionIvaReceptorId,
+                'imp_neto'      => $subtotal,
+                'imp_tot_conc'  => 0,
+                'imp_op_ex'     => 0,
+                'imp_subtotal'  => $subtotal,
+                'imp_trib'      => 0,
+                'imp_total'     => $total,
+                'mon_id'        => ($sale['currency_code'] ?? 'ARS') === 'ARS' ? 'PES' : ($sale['currency_code'] ?? 'PES'),
+                'mon_cotiz'     => (float) ($sale['exchange_rate'] ?? 1),
+                'items'         => $mtxcaItems,
+                'iva_subtotals' => array_values($ivaSubtotals),
+            ];
+        } else {
+            $ivaByRate = [];
+            foreach ($items as $item) {
+                $afipCode = (int) ($item['afip_iva_code'] ?? 5);
+                $lineNet  = (float) ($item['line_total'] ?? 0) - (float) ($item['line_tax'] ?? 0);
+                $lineTax  = (float) ($item['line_tax'] ?? 0);
+
+                if (! isset($ivaByRate[$afipCode])) {
+                    $ivaByRate[$afipCode] = ['Id' => $afipCode, 'BaseImp' => 0, 'Importe' => 0];
+                }
+                $ivaByRate[$afipCode]['BaseImp'] += $lineNet;
+                $ivaByRate[$afipCode]['Importe'] += $lineTax;
+            }
+
+            if ($taxTotal == 0 && $subtotal > 0) {
+                $ivaByRate = [
+                    3 => ['Id' => 3, 'BaseImp' => round($subtotal, 2), 'Importe' => 0],
+                ];
+            }
+
+            $ivaByRate = array_filter($ivaByRate, static fn($a) => round($a['BaseImp'], 2) > 0);
+            foreach ($ivaByRate as &$aliq) {
+                $aliq['BaseImp'] = round($aliq['BaseImp'], 2);
+                $aliq['Importe'] = round($aliq['Importe'], 2);
+            }
+            unset($aliq);
+
+            $docTipo = 80; // CUIT by default
+            $docNro  = $sale['customer_document_snapshot'] ?? '0';
+            if ($taxProfile === 'consumidor_final' || $cbteTipo === 6 || $cbteTipo === 11) {
+                $docTipo = 99; // Consumidor final
+                $docNro  = '0';
+                $condicionIvaReceptorId = 5;
+            }
+
+            return [
+                'punto_venta'  => $ptoVta,
+                'cbte_tipo'    => $cbteTipo,
+                'concepto'     => 1, // Productos
+                'doc_tipo'     => $docTipo,
+                'doc_nro'      => (int) preg_replace('/\D/', '', $docNro),
+                'cbte_desde'   => (int) ($sale['sale_number'] ?? 0),
+                'cbte_hasta'   => (int) ($sale['sale_number'] ?? 0),
+                'cbte_fch'     => date('Ymd', strtotime($sale['sale_date'] ?? 'now')),
+                'imp_total'    => $total,
+                'imp_tot_conc' => 0,
+                'imp_neto'     => $subtotal,
+                'imp_op_ex'    => 0,
+                'imp_iva'      => $taxTotal,
+                'imp_trib'     => 0,
+                'condicion_iva_receptor_id' => $condicionIvaReceptorId,
+                'mon_id'       => ($sale['currency_code'] ?? 'ARS') === 'ARS' ? 'PES' : ($sale['currency_code'] ?? 'PES'),
+                'mon_cotiz'    => (float) ($sale['exchange_rate'] ?? 1),
+                'iva'          => array_values($ivaByRate),
+            ];
+        }
+    }
 }

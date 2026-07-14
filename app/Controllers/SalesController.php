@@ -4966,7 +4966,7 @@ class SalesController extends BaseController
 
     public function testSequenceConcurrency()
     {
-        $companyId = $this->isSuperadmin() ? ((new \App\Models\CompanyModel())->first()['id'] ?? null) : $this->companyId();
+        $companyId = $this->isSuperadmin() ? ((new CompanyModel())->first()['id'] ?? null) : $this->companyId();
         if (!$companyId) {
             return $this->response->setJSON(['success' => false, 'message' => 'No active company found.']);
         }
@@ -4980,7 +4980,7 @@ class SalesController extends BaseController
 
     public function testStockConcurrency()
     {
-        $companyId = $this->isSuperadmin() ? ((new \App\Models\CompanyModel())->first()['id'] ?? null) : $this->companyId();
+        $companyId = $this->isSuperadmin() ? ((new CompanyModel())->first()['id'] ?? null) : $this->companyId();
         if (!$companyId) {
             return $this->response->setJSON(['success' => false, 'message' => 'No active company found.']);
         }
@@ -5002,7 +5002,7 @@ class SalesController extends BaseController
                 return $this->response->setJSON(['success' => false, 'message' => 'No warehouses found to run test.']);
             }
             $db->table('inventory_stock_levels')->insert([
-                'id' => \App\Libraries\UUID::v4(),
+                'id' => app_uuid(),
                 'company_id' => $companyId,
                 'product_id' => $product['id'],
                 'warehouse_id' => $warehouse['id'],

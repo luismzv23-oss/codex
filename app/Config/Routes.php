@@ -162,6 +162,13 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     $routes->get('caja/conciliaciones/nueva', 'CashController::createReconciliationForm', ['filter' => 'permission:systems.view']);
     $routes->post('caja/conciliaciones', 'CashController::storeReconciliation', ['filter' => 'permission:systems.view']);
 
+    // Cajas Registradoras CRUD
+    $routes->get('caja/cajas/nueva', 'CashController::createRegisterForm', ['filter' => 'permission:systems.view']);
+    $routes->post('caja/cajas', 'CashController::storeRegister', ['filter' => 'permission:systems.view']);
+    $routes->get('caja/cajas/(:segment)/editar', 'CashController::editRegisterForm/$1', ['filter' => 'permission:systems.view']);
+    $routes->post('caja/cajas/(:segment)', 'CashController::updateRegister/$1', ['filter' => 'permission:systems.view']);
+    $routes->post('caja/cajas/(:segment)/desactivar', 'CashController::deactivateRegister/$1', ['filter' => 'permission:systems.view']);
+
     $routes->get('usuarios', 'UsersController::index', ['filter' => 'permission:users.view']);
     $routes->get('usuarios/nuevo', 'UsersController::create', ['filter' => 'permission:users.manage']);
     $routes->post('usuarios', 'UsersController::store', ['filter' => 'permission:users.manage']);
@@ -342,6 +349,9 @@ $routes->group('api/v1', ['namespace' => 'App\Controllers\Api\V1'], static funct
     $routes->post('purchases/payments', 'PurchasesController::storePayment', ['filter' => 'apipermission:systems.view']);
     $routes->get('cash', 'CashController::index', ['filter' => 'apipermission:systems.view']);
     $routes->get('cash/registers', 'CashController::registers', ['filter' => 'apipermission:systems.view']);
+    $routes->post('cash/registers', 'CashController::storeRegister', ['filter' => 'apipermission:systems.view']);
+    $routes->put('cash/registers/(:segment)', 'CashController::updateRegister/$1', ['filter' => 'apipermission:systems.view']);
+    $routes->delete('cash/registers/(:segment)', 'CashController::deactivateRegister/$1', ['filter' => 'apipermission:systems.view']);
     $routes->get('cash/sessions', 'CashController::sessions', ['filter' => 'apipermission:systems.view']);
     $routes->post('cash/sessions/open', 'CashController::openSession', ['filter' => 'apipermission:systems.view']);
     $routes->post('cash/sessions/(:segment)/close', 'CashController::closeSession/$1', ['filter' => 'apipermission:systems.view']);

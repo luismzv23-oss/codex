@@ -1980,12 +1980,17 @@ class SalesController extends BaseApiController
         }
     }
 
-    private function resolveCashSession(string $companyId, string $channel): ?array
+    private function resolveCashSession(string $companyId, string $channel, ?string $cashRegisterId = null): ?array
     {
         $service = new CashService();
         $service->ensureDefaults($companyId, $this->apiUser()['branch_id'] ?? null);
 
-        $session = $service->activeSessionForChannel($companyId, $channel);
+        $session = $service->resolveActiveSession(
+            $companyId,
+            $channel,
+            $this->apiUser()['id'] ?? null,
+            $cashRegisterId
+        );
 
         // Auto-open kiosk cash session if none is active
         if (! $session && $channel === 'kiosk') {

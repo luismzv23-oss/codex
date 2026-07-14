@@ -34,6 +34,13 @@ class SettingsController extends BaseController
         $taxModel = new TaxModel();
         $voucherModel = new VoucherSequenceModel();
 
+        $db = db_connect();
+        $row = $db->table('company_settings')
+            ->where('company_id', $companyId)
+            ->where('key', 'max_cash_registers')
+            ->get()->getRowArray();
+        $maxCashRegisters = $row ? (int) $row['value'] : 10;
+
         return view('settings/index', [
             'pageTitle' => 'Configuracion',
             'company' => $companyModel->find($companyId),
@@ -42,6 +49,7 @@ class SettingsController extends BaseController
             'currencies' => $currencyModel->where('company_id', $companyId)->orderBy('code', 'ASC')->findAll(),
             'taxes' => $taxModel->where('company_id', $companyId)->orderBy('name', 'ASC')->findAll(),
             'voucherSequences' => $voucherModel->where('company_id', $companyId)->orderBy('document_type', 'ASC')->findAll(),
+            'maxCashRegisters' => $maxCashRegisters,
         ]);
     }
 
@@ -69,6 +77,35 @@ class SettingsController extends BaseController
             'address' => trim((string) $this->request->getPost('address')),
             'currency_code' => trim((string) $this->request->getPost('currency_code')),
         ]);
+
+        $maxCashRegisters = (int) $this->request->getPost('max_cash_registers');
+        if ($maxCashRegisters <= 0) {
+            $maxCashRegisters = 10;
+        }
+
+        $db = db_connect();
+        $existingSetting = $db->table('company_settings')
+            ->where('company_id', $companyId)
+            ->where('key', 'max_cash_registers')
+            ->get()->getRowArray();
+
+        if ($existingSetting) {
+            $db->table('company_settings')
+                ->where('id', $existingSetting['id'])
+                ->update([
+                    'value' => (string) $maxCashRegisters,
+                    'updated_at' => date('Y-m-d H:i:s'),
+                ]);
+        } else {
+            $db->table('company_settings')->insert([
+                'id' => app_uuid(),
+                'company_id' => $companyId,
+                'key' => 'max_cash_registers',
+                'value' => (string) $maxCashRegisters,
+                'created_at' => date('Y-m-d H:i:s'),
+                'updated_at' => date('Y-m-d H:i:s'),
+            ]);
+        }
 
         return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Datos de la empresa actualizados.');
     }
@@ -137,10 +174,18 @@ class SettingsController extends BaseController
         $companyId = $this->resolveCompanyId();
         $company = (new CompanyModel())->find($companyId);
 
+        $db = db_connect();
+        $row = $db->table('company_settings')
+            ->where('company_id', $companyId)
+            ->where('key', 'max_cash_registers')
+            ->get()->getRowArray();
+        $maxCashRegisters = $row ? (int) $row['value'] : 10;
+
         return view('settings/forms/company', [
             'pageTitle' => 'Editar datos de empresa',
             'company' => $company,
             'currencyOptions' => $this->companyCurrencyOptions($companyId, $company['currency_code'] ?? null),
+            'maxCashRegisters' => $maxCashRegisters,
             'formAction' => site_url('configuracion/empresa'),
             'isPopup' => $this->isPopupRequest(),
         ]);

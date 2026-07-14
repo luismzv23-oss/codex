@@ -23,6 +23,10 @@
                     <?php endforeach; ?>
                 </select>
             </div>
+            <div class="col-md-6">
+                <label class="form-label">Cajas permitidas</label>
+                <input type="number" class="form-control" name="max_cash_registers" value="<?= esc((string) ($maxCashRegisters ?? 10)) ?>" min="1" required>
+            </div>
             <div class="col-12"><label class="form-label">Direccion</label><textarea class="form-control" name="address" rows="3"><?= esc($company['address'] ?? '') ?></textarea></div>
             <div class="col-12 d-flex gap-2 pt-2">
                 <button class="btn btn-dark icon-btn" title="Guardar" aria-label="Guardar"><i class="bi bi-check-lg"></i></button>

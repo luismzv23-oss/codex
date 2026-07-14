@@ -51,9 +51,113 @@ class CashService
         }
     }
 
+    // ── Multi-register: limits & CRUD ──────────────────────────────────
+
+    public function getMaxRegisters(string $companyId): int
+    {
+        $row = db_connect()->table('company_settings')
+            ->where('company_id', $companyId)
+            ->where('key', 'max_cash_registers')
+            ->get()->getRowArray();
+
+        return (int) ($row['value'] ?? 10);
+    }
+
+    public function canCreateRegister(string $companyId): bool
+    {
+        $current = (new CashRegisterModel())->where('company_id', $companyId)->where('active', 1)->countAllResults();
+        return $current < $this->getMaxRegisters($companyId);
+    }
+
+    public function createRegister(array $data): ?string
+    {
+        $companyId = (string) $data['company_id'];
+
+        if (! $this->canCreateRegister($companyId)) {
+            return null; // limit reached
+        }
+
+        $model = new CashRegisterModel();
+        $code  = trim((string) ($data['code'] ?? ''));
+        if ($code !== '' && $model->where('company_id', $companyId)->where('code', $code)->first()) {
+            return null; // duplicate code
+        }
+
+        return $model->insert([
+            'company_id'              => $companyId,
+            'branch_id'               => $data['branch_id'] ?? null,
+            'name'                    => trim((string) ($data['name'] ?? 'Caja')),
+            'code'                    => $code,
+            'register_type'           => $data['register_type'] ?? 'general',
+            'is_default'              => (int) ($data['is_default'] ?? 0),
+            'active'                  => 1,
+            'account_id'              => $data['account_id'] ?? null,
+            'sales_point_of_sale_id'  => $data['sales_point_of_sale_id'] ?? null,
+        ], true);
+    }
+
+    public function updateRegister(string $companyId, string $registerId, array $data): bool
+    {
+        $model    = new CashRegisterModel();
+        $register = $model->where('company_id', $companyId)->find($registerId);
+        if (! $register) {
+            return false;
+        }
+
+        $code = trim((string) ($data['code'] ?? $register['code']));
+        if ($code !== $register['code']) {
+            $dup = $model->where('company_id', $companyId)->where('code', $code)->where('id !=', $registerId)->first();
+            if ($dup) {
+                return false;
+            }
+        }
+
+        return (bool) $model->update($registerId, [
+            'name'                    => trim((string) ($data['name'] ?? $register['name'])),
+            'code'                    => $code,
+            'register_type'           => $data['register_type'] ?? $register['register_type'],
+            'branch_id'               => array_key_exists('branch_id', $data) ? $data['branch_id'] : $register['branch_id'],
+            'account_id'              => array_key_exists('account_id', $data) ? $data['account_id'] : $register['account_id'],
+            'sales_point_of_sale_id'  => array_key_exists('sales_point_of_sale_id', $data) ? $data['sales_point_of_sale_id'] : $register['sales_point_of_sale_id'],
+            'active'                  => (int) ($data['active'] ?? $register['active']),
+        ]);
+    }
+
+    public function deactivateRegister(string $companyId, string $registerId): bool
+    {
+        $model = new CashRegisterModel();
+        $register = $model->where('company_id', $companyId)->find($registerId);
+        if (! $register) {
+            return false;
+        }
+
+        // Cannot deactivate if there's an open session
+        $openSession = (new CashSessionModel())
+            ->where('company_id', $companyId)
+            ->where('cash_register_id', $registerId)
+            ->where('status', 'open')
+            ->first();
+        if ($openSession) {
+            return false;
+        }
+
+        return (bool) $model->update($registerId, ['active' => 0]);
+    }
+
+    // ── End CRUD ───────────────────────────────────────────────────────
+
     public function registerRows(string $companyId): array
     {
-        return (new CashRegisterModel())->where('company_id', $companyId)->where('active', 1)->orderBy('register_type', 'ASC')->orderBy('name', 'ASC')->findAll();
+        return db_connect()->table('cash_registers cr')
+            ->select('cr.*, a.name AS account_name, a.code AS account_code, pos.name AS pos_name')
+            ->join('accounting_accounts a', 'a.id = cr.account_id', 'left')
+            ->join('sales_points_of_sale pos', 'pos.id = cr.sales_point_of_sale_id', 'left')
+            ->where('cr.company_id', $companyId)
+            ->where('cr.active', 1)
+            ->orderBy('cr.register_type', 'ASC')
+            ->orderBy('cr.name', 'ASC')
+            ->get()
+            ->getResultArray();
     }
 
     public function activeSessions(string $companyId): array
@@ -184,9 +288,57 @@ class CashService
         ], true);
     }
 
-    public function activeSessionForChannel(string $companyId, string $channel = 'general'): ?array
-    {
-        $rows = db_connect()->table('cash_sessions cs')
+    /**
+     * Resolve the active cash session with priority:
+     *  1. Explicit cash_register_id if provided.
+     *  2. Session opened by the given userId on the requested channel.
+     *  3. Legacy fallback: first open session matching channel, then general.
+     */
+    public function resolveActiveSession(
+        string  $companyId,
+        string  $channel = 'general',
+        ?string $userId = null,
+        ?string $cashRegisterId = null
+    ): ?array {
+        $db = db_connect();
+
+        // 1. Explicit register requested
+        if ($cashRegisterId) {
+            $row = $db->table('cash_sessions cs')
+                ->select('cs.*, cr.name AS register_name, cr.code AS register_code, cr.register_type')
+                ->join('cash_registers cr', 'cr.id = cs.cash_register_id')
+                ->where('cs.company_id', $companyId)
+                ->where('cs.cash_register_id', $cashRegisterId)
+                ->where('cs.status', 'open')
+                ->where('cr.active', 1)
+                ->orderBy('cs.opened_at', 'DESC')
+                ->get()
+                ->getRowArray();
+            if ($row) {
+                return $row;
+            }
+        }
+
+        // 2. Session opened by this specific user on the channel
+        if ($userId) {
+            $row = $db->table('cash_sessions cs')
+                ->select('cs.*, cr.name AS register_name, cr.code AS register_code, cr.register_type')
+                ->join('cash_registers cr', 'cr.id = cs.cash_register_id')
+                ->where('cs.company_id', $companyId)
+                ->where('cs.opened_by', $userId)
+                ->where('cs.status', 'open')
+                ->where('cr.active', 1)
+                ->where('cr.register_type', $channel)
+                ->orderBy('cs.opened_at', 'DESC')
+                ->get()
+                ->getRowArray();
+            if ($row) {
+                return $row;
+            }
+        }
+
+        // 3. Legacy fallback: any open session matching channel, then general
+        $rows = $db->table('cash_sessions cs')
             ->select('cs.*, cr.name AS register_name, cr.code AS register_code, cr.register_type')
             ->join('cash_registers cr', 'cr.id = cs.cash_register_id')
             ->where('cs.company_id', $companyId)
@@ -208,6 +360,15 @@ class CashService
         }
 
         return $rows[0] ?? null;
+    }
+
+    /**
+     * Backward-compatible wrapper. Existing callers that only pass
+     * (companyId, channel) continue working without changes.
+     */
+    public function activeSessionForChannel(string $companyId, string $channel = 'general'): ?array
+    {
+        return $this->resolveActiveSession($companyId, $channel);
     }
 
     public function openSession(string $companyId, string $registerId, string $userId, float $openingAmount, ?string $notes = null): ?string
@@ -342,18 +503,29 @@ class CashService
      * Ensures CAJA-KIOSCO register exists, then opens a new session with
      * $0 initial amount. Returns the session array ready for use.
      */
+    /**
+     * Auto-open a kiosk cash session if none exists.
+     *
+     * Multi-register aware: tries to find any active kiosk register,
+     * prioritising one already opened by this user, then one without
+     * an open session. Falls back to creating a default CAJA-KIOSCO.
+     */
     public function autoOpenKioskSession(string $companyId, string $userId, ?string $branchId = null): ?array
     {
         $registerModel = new CashRegisterModel();
+        $sessionModel  = new CashSessionModel();
 
-        // 1. Find or create the CAJA-KIOSCO register
-        $register = $registerModel
+        // 1. Find kiosk registers
+        $registers = $registerModel
             ->where('company_id', $companyId)
-            ->where('code', 'CAJA-KIOSCO')
+            ->where('register_type', 'kiosk')
             ->where('active', 1)
-            ->first();
+            ->orderBy('is_default', 'DESC')
+            ->orderBy('name', 'ASC')
+            ->findAll();
 
-        if (! $register) {
+        // 1b. No kiosk register at all? Create the default one
+        if (empty($registers)) {
             $branchId ??= (new BranchModel())
                 ->where('company_id', $companyId)
                 ->where('active', 1)
@@ -371,40 +543,54 @@ class CashService
             ], true);
 
             $register = $registerModel->find($registerId);
+            if (! $register) {
+                return null;
+            }
+            $registers = [$register];
         }
 
-        if (! $register) {
-            return null;
+        // 2. Try to find a session already opened by this user
+        foreach ($registers as $reg) {
+            $existing = $sessionModel
+                ->where('company_id', $companyId)
+                ->where('cash_register_id', $reg['id'])
+                ->where('opened_by', $userId)
+                ->where('status', 'open')
+                ->first();
+            if ($existing) {
+                return array_merge($existing, [
+                    'register_name' => $reg['name'],
+                    'register_code' => $reg['code'],
+                    'register_type' => $reg['register_type'],
+                ]);
+            }
         }
 
-        $registerId = $register['id'];
-
-        // 2. Check if there's already an open session on this register
-        $sessionModel = new CashSessionModel();
-        $existing = $sessionModel
-            ->where('company_id', $companyId)
-            ->where('cash_register_id', $registerId)
-            ->where('status', 'open')
-            ->first();
-
-        if ($existing) {
-            // Already open — return it enriched with register data
-            return array_merge($existing, [
-                'register_name' => $register['name'],
-                'register_code' => $register['code'],
-                'register_type' => $register['register_type'],
-            ]);
+        // 3. Try to find any open kiosk session on any register
+        foreach ($registers as $reg) {
+            $existing = $sessionModel
+                ->where('company_id', $companyId)
+                ->where('cash_register_id', $reg['id'])
+                ->where('status', 'open')
+                ->first();
+            if ($existing) {
+                return array_merge($existing, [
+                    'register_name' => $reg['name'],
+                    'register_code' => $reg['code'],
+                    'register_type' => $reg['register_type'],
+                ]);
+            }
         }
 
-        // 3. Open a new session with $0 initial amount
-        $sessionId = $this->openSession($companyId, $registerId, $userId, 0.00, 'Apertura automatica desde Kiosco');
+        // 4. Open a new session on the first available register
+        $register  = $registers[0];
+        $sessionId = $this->openSession($companyId, $register['id'], $userId, 0.00, 'Apertura automatica desde Kiosco');
 
         if (! $sessionId) {
             return null;
         }
 
         $session = $sessionModel->find($sessionId);
-
         if (! $session) {
             return null;
         }

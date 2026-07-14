@@ -63,20 +63,50 @@
     <div class="col-lg-5">
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body p-4">
-                <h2 class="h4 mb-3">Cajas configuradas</h2>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2 class="h4 mb-0">Cajas configuradas</h2>
+                    <?php if (! empty($context['canManage'])): ?>
+                        <a href="<?= site_url('caja/cajas/nueva' . (! empty($selectedCompanyId) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-dark btn-sm icon-btn" data-popup="true" data-popup-title="Nueva caja" data-popup-subtitle="Configurar una nueva caja registradora." title="Nueva caja" aria-label="Nueva caja"><i class="bi bi-plus-lg"></i></a>
+                    <?php endif; ?>
+                </div>
                 <div class="table-responsive">
                     <table class="table align-middle mb-0" id="registers-table">
-                        <thead><tr><th>Caja</th><th>Tipo</th><th>Estado</th></tr></thead>
+                        <thead><tr><th>Caja</th><th>Tipo/Punto de Venta</th><th>Contabilidad</th><th class="text-end"></th></tr></thead>
                         <tbody>
                         <?php foreach ($registers as $register): ?>
                             <tr class="data-row">
-                                <td><?= esc($register['name']) ?><div class="small text-secondary"><?= esc($register['code']) ?></div></td>
-                                <td><?= esc(ucfirst($register['register_type'])) ?></td>
-                                <td><?= (int) ($register['active'] ?? 0) === 1 ? 'Activa' : 'Inactiva' ?></td>
+                                <td>
+                                    <?= esc($register['name']) ?>
+                                    <div class="small text-secondary"><?= esc($register['code']) ?></div>
+                                </td>
+                                <td>
+                                    <?= esc(ucfirst($register['register_type'])) ?>
+                                    <?php if (! empty($register['pos_name'])): ?>
+                                        <div class="small text-secondary"><i class="bi bi-display me-1"></i><?= esc($register['pos_name']) ?></div>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <?php if (! empty($register['account_name'])): ?>
+                                        <span class="text-dark small"><i class="bi bi-journal-text me-1"></i><?= esc($register['account_name']) ?></span>
+                                    <?php else: ?>
+                                        <span class="text-secondary small">Cuenta global</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="text-end">
+                                    <?php if (! empty($context['canManage'])): ?>
+                                        <div class="d-inline-flex gap-1">
+                                            <a href="<?= site_url('caja/cajas/' . $register['id'] . '/editar' . (! empty($selectedCompanyId) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-link text-dark p-1" data-popup="true" data-popup-title="Editar caja" data-popup-subtitle="Actualizar configuracion de caja." title="Editar caja" aria-label="Editar caja"><i class="bi bi-pencil"></i></a>
+                                            <form method="post" action="<?= site_url('caja/cajas/' . $register['id'] . '/desactivar' . (! empty($selectedCompanyId) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="d-inline" onsubmit="return confirm('¿Estás seguro de que deseas desactivar esta caja?');">
+                                                <?= csrf_field() ?>
+                                                <button type="submit" class="btn btn-link text-danger p-1" title="Desactivar caja" aria-label="Desactivar caja"><i class="bi bi-trash"></i></button>
+                                            </form>
+                                        </div>
+                                    <?php endif; ?>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
-                        <tr class="no-results-row" style="display: none;"><td colspan="3" class="text-secondary text-center py-3">No se encontraron cajas.</td></tr>
-                        <?php if ($registers === []): ?><tr class="no-data-row"><td colspan="3" class="text-secondary">No hay cajas registradas.</td></tr><?php endif; ?>
+                        <tr class="no-results-row" style="display: none;"><td colspan="4" class="text-secondary text-center py-3">No se encontraron cajas.</td></tr>
+                        <?php if ($registers === []): ?><tr class="no-data-row"><td colspan="4" class="text-secondary">No hay cajas registradas.</td></tr><?php endif; ?>
                         </tbody>
                     </table>
                 </div>

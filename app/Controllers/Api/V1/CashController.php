@@ -368,4 +368,86 @@ class CashController extends BaseApiController
             ? $this->success(['check_id' => $id, 'status' => 'rejected'])
             : $this->fail('No se pudo registrar el rechazo del cheque. Verifica el ID y el estado del cheque.', 422);
     }
+
+    public function storeRegister()
+    {
+        $context = $this->cashContext('manage');
+        if (isset($context['error'])) {
+            return $this->fail($context['error'], $context['status']);
+        }
+
+        $payload = $this->payload();
+        $companyId = $context['company']['id'];
+        $service = $this->cashService();
+
+        if (!$service->canCreateRegister($companyId)) {
+            return $this->fail('Se ha alcanzado el límite máximo de cajas permitidas para esta empresa.', 422);
+        }
+
+        $data = [
+            'company_id' => $companyId,
+            'branch_id' => trim((string) ($payload['branch_id'] ?? '')) ?: null,
+            'name' => trim((string) ($payload['name'] ?? '')),
+            'code' => trim((string) ($payload['code'] ?? '')),
+            'register_type' => trim((string) ($payload['register_type'] ?? 'general')),
+            'is_default' => (int) ($payload['is_default'] ?? 0),
+            'account_id' => trim((string) ($payload['account_id'] ?? '')) ?: null,
+            'sales_point_of_sale_id' => trim((string) ($payload['sales_point_of_sale_id'] ?? '')) ?: null,
+        ];
+
+        if (empty($data['name']) || empty($data['code'])) {
+            return $this->fail('Nombre y código de caja son obligatorios.', 422);
+        }
+
+        $registerId = $service->createRegister($data);
+        if (!$registerId) {
+            return $this->fail('No se pudo crear la caja. Verifique el límite máximo y que el código no esté duplicado.', 422);
+        }
+
+        return $this->success(['id' => $registerId, 'message' => 'Caja creada correctamente.']);
+    }
+
+    public function updateRegister(string $id)
+    {
+        $context = $this->cashContext('manage');
+        if (isset($context['error'])) {
+            return $this->fail($context['error'], $context['status']);
+        }
+
+        $payload = $this->payload();
+        $companyId = $context['company']['id'];
+        $service = $this->cashService();
+
+        $data = [];
+        if (isset($payload['name'])) $data['name'] = trim((string) $payload['name']);
+        if (isset($payload['code'])) $data['code'] = trim((string) $payload['code']);
+        if (isset($payload['register_type'])) $data['register_type'] = trim((string) $payload['register_type']);
+        if (isset($payload['branch_id'])) $data['branch_id'] = trim((string) $payload['branch_id']) ?: null;
+        if (isset($payload['account_id'])) $data['account_id'] = trim((string) $payload['account_id']) ?: null;
+        if (isset($payload['sales_point_of_sale_id'])) $data['sales_point_of_sale_id'] = trim((string) $payload['sales_point_of_sale_id']) ?: null;
+        if (isset($payload['active'])) $data['active'] = (int) $payload['active'];
+
+        $success = $service->updateRegister($companyId, $id, $data);
+        if (!$success) {
+            return $this->fail('No se pudo actualizar la caja. Verifique que el código no esté duplicado.', 422);
+        }
+
+        return $this->success(['id' => $id, 'message' => 'Caja actualizada correctamente.']);
+    }
+
+    public function deactivateRegister(string $id)
+    {
+        $context = $this->cashContext('manage');
+        if (isset($context['error'])) {
+            return $this->fail($context['error'], $context['status']);
+        }
+
+        $companyId = $context['company']['id'];
+        $success = $this->cashService()->deactivateRegister($companyId, $id);
+        if (!$success) {
+            return $this->fail('No se pudo desactivar la caja. Asegúrese de que no tenga una sesión de caja abierta.', 422);
+        }
+
+        return $this->success(['id' => $id, 'message' => 'Caja desactivada correctamente.']);
+    }
 }

@@ -436,7 +436,18 @@ class AccountingService
         }
 
         $lines = [];
-        $cashAccount = $map['cash'] ?? $map['bank'] ?? null;
+
+        // Try to get account_id from the specific cash register first
+        $registerAccount = null;
+        if (!empty($closure['cash_session_id'])) {
+            $session = $db->table('cash_sessions')->where('id', $closure['cash_session_id'])->get()->getRowArray();
+            if ($session && !empty($session['cash_register_id'])) {
+                $register = $db->table('cash_registers')->where('id', $session['cash_register_id'])->get()->getRowArray();
+                $registerAccount = $register['account_id'] ?? null;
+            }
+        }
+
+        $cashAccount = $registerAccount ?: ($map['cash'] ?? $map['bank'] ?? null);
         $differenceAccount = $map['cash_difference'] ?? $map['expense'] ?? null;
 
         if (!$cashAccount || !$differenceAccount) {

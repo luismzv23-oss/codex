@@ -10,6 +10,8 @@ use App\Models\CustomerModel;
 use App\Models\SupplierModel;
 use App\Models\SystemModel;
 use App\Models\UserSystemModel;
+use App\Models\AccountingAccountModel;
+use App\Models\SalesPointOfSaleModel;
 use CodeIgniter\HTTP\RedirectResponse;
 
 class CashController extends BaseController
@@ -524,5 +526,132 @@ class CashController extends BaseController
         }
 
         return $this->popupOrRedirect($this->cashRoute('caja', $context['company']['id']), 'Cheque rechazado correctamente.');
+    }
+
+    public function createRegisterForm()
+    {
+        $context = $this->cashContext('manage');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+
+        $branchModel = new \App\Models\BranchModel();
+        $accountModel = new AccountingAccountModel();
+        $posModel = new SalesPointOfSaleModel();
+
+        return view('cash/forms/register', [
+            'pageTitle' => 'Nueva caja',
+            'companyId' => $context['company']['id'],
+            'register' => null,
+            'branches' => $branchModel->where('company_id', $context['company']['id'])->where('active', 1)->orderBy('name', 'ASC')->findAll(),
+            'accounts' => $accountModel->where('company_id', $context['company']['id'])->where('active', 1)->orderBy('name', 'ASC')->findAll(),
+            'pointsOfSale' => $posModel->where('company_id', $context['company']['id'])->where('active', 1)->orderBy('name', 'ASC')->findAll(),
+            'formAction' => site_url('caja/cajas'),
+            'isPopup' => $this->isPopupRequest(),
+        ]);
+    }
+
+    public function storeRegister()
+    {
+        $context = $this->cashContext('manage');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+
+        $companyId = $context['company']['id'];
+        $service = $this->cashService();
+
+        if (!$service->canCreateRegister($companyId)) {
+            return redirect()->back()->withInput()->with('error', 'Se ha alcanzado el límite máximo de cajas permitidas para esta empresa.');
+        }
+
+        $data = [
+            'company_id' => $companyId,
+            'branch_id' => trim((string) $this->request->getPost('branch_id')) ?: null,
+            'name' => trim((string) $this->request->getPost('name')),
+            'code' => trim((string) $this->request->getPost('code')),
+            'register_type' => trim((string) $this->request->getPost('register_type')),
+            'is_default' => (int) $this->request->getPost('is_default'),
+            'account_id' => trim((string) $this->request->getPost('account_id')) ?: null,
+            'sales_point_of_sale_id' => trim((string) $this->request->getPost('sales_point_of_sale_id')) ?: null,
+        ];
+
+        $registerId = $service->createRegister($data);
+        if (!$registerId) {
+            return redirect()->back()->withInput()->with('error', 'No se pudo crear la caja. Verifique que el código no esté duplicado.');
+        }
+
+        return $this->popupOrRedirect($this->cashRoute('caja', $companyId), 'Caja creada correctamente.');
+    }
+
+    public function editRegisterForm(string $id)
+    {
+        $context = $this->cashContext('manage');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+
+        $companyId = $context['company']['id'];
+        $register = (new CashRegisterModel())->where('company_id', $companyId)->find($id);
+        if (!$register) {
+            return redirect()->to($this->cashRoute('caja', $companyId))->with('error', 'La caja no existe o no pertenece a esta empresa.');
+        }
+
+        $branchModel = new \App\Models\BranchModel();
+        $accountModel = new AccountingAccountModel();
+        $posModel = new SalesPointOfSaleModel();
+
+        return view('cash/forms/register', [
+            'pageTitle' => 'Editar caja',
+            'companyId' => $companyId,
+            'register' => $register,
+            'branches' => $branchModel->where('company_id', $companyId)->where('active', 1)->orderBy('name', 'ASC')->findAll(),
+            'accounts' => $accountModel->where('company_id', $companyId)->where('active', 1)->orderBy('name', 'ASC')->findAll(),
+            'pointsOfSale' => $posModel->where('company_id', $companyId)->where('active', 1)->orderBy('name', 'ASC')->findAll(),
+            'formAction' => site_url('caja/cajas/' . $id),
+            'isPopup' => $this->isPopupRequest(),
+        ]);
+    }
+
+    public function updateRegister(string $id)
+    {
+        $context = $this->cashContext('manage');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+
+        $companyId = $context['company']['id'];
+        $data = [
+            'name' => trim((string) $this->request->getPost('name')),
+            'code' => trim((string) $this->request->getPost('code')),
+            'register_type' => trim((string) $this->request->getPost('register_type')),
+            'branch_id' => trim((string) $this->request->getPost('branch_id')) ?: null,
+            'account_id' => trim((string) $this->request->getPost('account_id')) ?: null,
+            'sales_point_of_sale_id' => trim((string) $this->request->getPost('sales_point_of_sale_id')) ?: null,
+            'active' => (int) $this->request->getPost('active'),
+        ];
+
+        $success = $this->cashService()->updateRegister($companyId, $id, $data);
+        if (!$success) {
+            return redirect()->back()->withInput()->with('error', 'No se pudo actualizar la caja. Verifique que el código no esté duplicado.');
+        }
+
+        return $this->popupOrRedirect($this->cashRoute('caja', $companyId), 'Caja actualizada correctamente.');
+    }
+
+    public function deactivateRegister(string $id)
+    {
+        $context = $this->cashContext('manage');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+
+        $companyId = $context['company']['id'];
+        $success = $this->cashService()->deactivateRegister($companyId, $id);
+        if (!$success) {
+            return redirect()->to($this->cashRoute('caja', $companyId))->with('error', 'No se pudo desactivar la caja. Asegúrese de que no tenga una sesión de caja abierta.');
+        }
+
+        return redirect()->to($this->cashRoute('caja', $companyId))->with('message', 'Caja desactivada correctamente.');
     }
 }

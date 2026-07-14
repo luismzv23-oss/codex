@@ -91,6 +91,7 @@
                     <dt class="col-md-3">Razon social</dt><dd class="col-md-9"><?= esc($company['legal_name'] ?? '-') ?></dd>
                     <dt class="col-md-3">Cuit</dt><dd class="col-md-9"><?= esc($company['tax_id'] ?? '-') ?></dd>
                     <dt class="col-md-3">Moneda base</dt><dd class="col-md-9"><?= esc($company['currency_code'] ?? '-') ?></dd>
+                    <dt class="col-md-3">Cajas permitidas</dt><dd class="col-md-9"><?= esc((string) ($maxCashRegisters ?? 10)) ?></dd>
                 </dl>
             </div>
         </div>

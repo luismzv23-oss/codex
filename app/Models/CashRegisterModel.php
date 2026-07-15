@@ -12,6 +12,8 @@ class CashRegisterModel extends BaseUuidModel
         'name',
         'code',
         'register_type',
+        'account_id',
+        'sales_point_of_sale_id',
         'is_default',
         'active',
         'created_at',

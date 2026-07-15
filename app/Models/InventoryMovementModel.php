@@ -30,7 +30,7 @@ class InventoryMovementModel extends BaseUuidModel
         'updated_at',
     ];
 
-    protected $beforeInsert = ['checkPeriodClosure'];
+    protected $beforeInsert = ['assignUuid', 'checkPeriodClosure'];
     protected $beforeUpdate = ['checkPeriodClosure'];
 
     protected function checkPeriodClosure(array $data)

@@ -42,6 +42,9 @@ class CompaniesController extends BaseApiController
         $this->ensureBaseCurrency((string) $id, $currencyCode);
         (new BranchModel())->ensureMainBranch((string) $id);
 
+        // Auto-configure accounting plan, fiscal period, and integration mappings
+        (new \App\Libraries\AccountingService())->setupCompanyAccounting((string) $id);
+
         return $this->success($model->find($id), 201);
     }
 

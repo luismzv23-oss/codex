@@ -61,6 +61,9 @@ class CompaniesController extends BaseController
         $this->ensureBaseCurrency((string) $companyId, $currencyCode);
         $this->ensureMainBranch((string) $companyId);
 
+        // Auto-configure accounting plan, fiscal period, and integration mappings
+        (new \App\Libraries\AccountingService())->setupCompanyAccounting((string) $companyId);
+
         return $this->popupOrRedirect('/empresas', 'Empresa creada correctamente.');
     }
 

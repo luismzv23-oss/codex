@@ -519,6 +519,180 @@ class AccountingService
     }
 
     /**
+     * Standard Argentine chart of accounts template.
+     */
+    public function standardArgentineChart(): array
+    {
+        return [
+            // ── ACTIVO ──
+            ['code' => '1',     'name' => 'ACTIVO',                        'account_type' => 'asset',     'is_group' => 1, 'level' => 1, 'accepts_entries' => 0, 'parent_id' => null],
+            ['code' => '1.1',   'name' => 'Activo Corriente',              'account_type' => 'asset',     'is_group' => 1, 'level' => 2, 'accepts_entries' => 0, 'parent_id' => null],
+            ['code' => '1.1.01','name' => 'Caja',                          'account_type' => 'asset',     'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '1.1.02','name' => 'Banco Cuenta Corriente',        'account_type' => 'asset',     'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '1.1.03','name' => 'Valores a Depositar',           'account_type' => 'asset',     'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '1.1.04','name' => 'Deudores por Ventas',           'account_type' => 'asset',     'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '1.1.05','name' => 'Documentos a Cobrar',           'account_type' => 'asset',     'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '1.1.06','name' => 'IVA Credito Fiscal',            'account_type' => 'asset',     'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '1.1.07','name' => 'Anticipos a Proveedores',       'account_type' => 'asset',     'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '1.1.08','name' => 'Bienes de Cambio',              'account_type' => 'asset',     'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '1.2',   'name' => 'Activo No Corriente',           'account_type' => 'asset',     'is_group' => 1, 'level' => 2, 'accepts_entries' => 0, 'parent_id' => null],
+            ['code' => '1.2.01','name' => 'Rodados',                       'account_type' => 'asset',     'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '1.2.02','name' => 'Muebles y Utiles',             'account_type' => 'asset',     'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '1.2.03','name' => 'Equipos de Computacion',        'account_type' => 'asset',     'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '1.2.04','name' => 'Inmuebles',                     'account_type' => 'asset',     'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '1.2.05','name' => 'Depreciacion Acumulada',        'account_type' => 'asset',     'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+
+            // ── PASIVO ──
+            ['code' => '2',     'name' => 'PASIVO',                        'account_type' => 'liability', 'is_group' => 1, 'level' => 1, 'accepts_entries' => 0, 'parent_id' => null],
+            ['code' => '2.1',   'name' => 'Pasivo Corriente',              'account_type' => 'liability', 'is_group' => 1, 'level' => 2, 'accepts_entries' => 0, 'parent_id' => null],
+            ['code' => '2.1.01','name' => 'Proveedores',                   'account_type' => 'liability', 'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '2.1.02','name' => 'Documentos a Pagar',            'account_type' => 'liability', 'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '2.1.03','name' => 'IVA Debito Fiscal',             'account_type' => 'liability', 'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '2.1.04','name' => 'Cargas Sociales a Pagar',       'account_type' => 'liability', 'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '2.1.05','name' => 'Sueldos a Pagar',               'account_type' => 'liability', 'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '2.1.06','name' => 'Impuestos a Pagar',             'account_type' => 'liability', 'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '2.1.07','name' => 'Retenciones a Depositar',       'account_type' => 'liability', 'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '2.1.08','name' => 'Percepciones a Depositar',      'account_type' => 'liability', 'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '2.1.09','name' => 'Anticipos de Clientes',         'account_type' => 'liability', 'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '2.2',   'name' => 'Pasivo No Corriente',           'account_type' => 'liability', 'is_group' => 1, 'level' => 2, 'accepts_entries' => 0, 'parent_id' => null],
+            ['code' => '2.2.01','name' => 'Prestamos Bancarios',           'account_type' => 'liability', 'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+
+            // ── PATRIMONIO NETO ──
+            ['code' => '3',     'name' => 'PATRIMONIO NETO',               'account_type' => 'equity',    'is_group' => 1, 'level' => 1, 'accepts_entries' => 0, 'parent_id' => null],
+            ['code' => '3.1.01','name' => 'Capital Social',                'account_type' => 'equity',    'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '3.1.02','name' => 'Reserva Legal',                 'account_type' => 'equity',    'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '3.1.03','name' => 'Resultados Acumulados',         'account_type' => 'equity',    'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '3.1.04','name' => 'Resultado del Ejercicio',       'account_type' => 'equity',    'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+
+            // ── INGRESOS ──
+            ['code' => '4',     'name' => 'INGRESOS',                      'account_type' => 'revenue',   'is_group' => 1, 'level' => 1, 'accepts_entries' => 0, 'parent_id' => null],
+            ['code' => '4.1.01','name' => 'Ventas',                        'account_type' => 'revenue',   'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '4.1.02','name' => 'Intereses Ganados',             'account_type' => 'revenue',   'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '4.1.03','name' => 'Descuentos Obtenidos',          'account_type' => 'revenue',   'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '4.1.04','name' => 'Resultado por Tenencia',        'account_type' => 'revenue',   'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+
+            // ── EGRESOS ──
+            ['code' => '5',     'name' => 'EGRESOS',                       'account_type' => 'expense',   'is_group' => 1, 'level' => 1, 'accepts_entries' => 0, 'parent_id' => null],
+            ['code' => '5.1',   'name' => 'Costo de Ventas',               'account_type' => 'expense',   'is_group' => 1, 'level' => 2, 'accepts_entries' => 0, 'parent_id' => null],
+            ['code' => '5.1.01','name' => 'Costo Mercaderias Vendidas',    'account_type' => 'expense',   'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '5.2',   'name' => 'Gastos de Administracion',      'account_type' => 'expense',   'is_group' => 1, 'level' => 2, 'accepts_entries' => 0, 'parent_id' => null],
+            ['code' => '5.2.01','name' => 'Sueldos y Jornales',            'account_type' => 'expense',   'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '5.2.02','name' => 'Cargas Sociales',               'account_type' => 'expense',   'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '5.2.03','name' => 'Alquileres',                    'account_type' => 'expense',   'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '5.2.04','name' => 'Servicios (Luz, Gas, Tel)',      'account_type' => 'expense',   'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '5.2.05','name' => 'Depreciaciones',                'account_type' => 'expense',   'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '5.2.06','name' => 'Honorarios Profesionales',      'account_type' => 'expense',   'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '5.2.07','name' => 'Gastos Bancarios',              'account_type' => 'expense',   'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '5.2.08','name' => 'Impuesto Ingresos Brutos',      'account_type' => 'expense',   'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '5.3',   'name' => 'Gastos de Comercializacion',    'account_type' => 'expense',   'is_group' => 1, 'level' => 2, 'accepts_entries' => 0, 'parent_id' => null],
+            ['code' => '5.3.01','name' => 'Comisiones por Ventas',         'account_type' => 'expense',   'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '5.3.02','name' => 'Publicidad y Propaganda',       'account_type' => 'expense',   'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '5.3.03','name' => 'Fletes y Acarreos',            'account_type' => 'expense',   'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '5.3.04','name' => 'Descuentos Otorgados',          'account_type' => 'expense',   'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '5.4',   'name' => 'Gastos Financieros',            'account_type' => 'expense',   'is_group' => 1, 'level' => 2, 'accepts_entries' => 0, 'parent_id' => null],
+            ['code' => '5.4.01','name' => 'Intereses Pagados',             'account_type' => 'expense',   'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '5.4.02','name' => 'Diferencia de Cambio',          'account_type' => 'expense',   'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+        ];
+    }
+
+    /**
+     * Set up standard accounting plan, fiscal period, and integration mappings for a company.
+     */
+    public function setupCompanyAccounting(string $companyId): void
+    {
+        $db = db_connect();
+
+        // 1. Seed accounts if none exist
+        $existingAccounts = $db->table('accounts')->where('company_id', $companyId)->countAllResults();
+        if ($existingAccounts === 0) {
+            $accounts = $this->standardArgentineChart();
+            $now = date('Y-m-d H:i:s');
+            foreach ($accounts as $account) {
+                $db->table('accounts')->insert(array_merge($account, [
+                    'id'            => app_uuid(),
+                    'company_id'    => $companyId,
+                    'active'        => 1,
+                    'currency_code' => 'ARS',
+                    'created_at'    => $now,
+                ]));
+            }
+        }
+
+        // 2. Seed default open fiscal period for current year if none exists
+        $year = date('Y');
+        $existingPeriods = $db->table('fiscal_periods')
+            ->where('company_id', $companyId)
+            ->where('start_date', "{$year}-01-01")
+            ->countAllResults();
+        if ($existingPeriods === 0) {
+            $db->table('fiscal_periods')->insert([
+                'id'         => app_uuid(),
+                'company_id' => $companyId,
+                'name'       => "Ejercicio {$year}",
+                'start_date' => "{$year}-01-01",
+                'end_date'   => "{$year}-12-31",
+                'status'     => 'open',
+                'created_at' => date('Y-m-d H:i:s'),
+            ]);
+        }
+
+        // 3. Auto-map integration accounts in company_settings
+        $accounts = $db->table('accounts')->where('company_id', $companyId)->get()->getResultArray();
+        $mappingsToFind = [
+            'cash'            => 'Caja',
+            'bank'            => 'Banco Cuenta Corriente',
+            'receivable'      => 'Deudores por Ventas',
+            'payable'         => 'Proveedores',
+            'revenue'         => 'Ventas',
+            'expense'         => 'Costo Mercaderias Vendidas',
+            'iva_debito'      => 'IVA Debito Fiscal',
+            'iva_credito'     => 'IVA Credito Fiscal',
+            'goods_received'  => 'Bienes de Cambio',
+            'inventory'       => 'Bienes de Cambio', // Map both goods_received and inventory to 'Bienes de Cambio'
+            'cash_difference' => 'Diferencia de Cambio',
+            'revaluation'     => 'Resultado por Tenencia'
+        ];
+
+        foreach ($mappingsToFind as $mapKey => $accountName) {
+            $matchedAccount = null;
+            foreach ($accounts as $acc) {
+                if (strcasecmp($acc['name'], $accountName) === 0) {
+                    $matchedAccount = $acc;
+                    break;
+                }
+            }
+
+            if ($matchedAccount) {
+                $settingKey = 'account_' . $mapKey;
+                $accountId = $matchedAccount['id'];
+
+                $existing = $db->table('company_settings')
+                    ->where('company_id', $companyId)
+                    ->where('key', $settingKey)
+                    ->get()->getRowArray();
+
+                if ($existing) {
+                    $db->table('company_settings')
+                        ->where('id', $existing['id'])
+                        ->update([
+                            'value' => $accountId,
+                            'updated_at' => date('Y-m-d H:i:s'),
+                        ]);
+                } else {
+                    $db->table('company_settings')->insert([
+                        'id'         => app_uuid(),
+                        'company_id' => $companyId,
+                        'key'        => $settingKey,
+                        'value'      => $accountId,
+                        'created_at' => date('Y-m-d H:i:s'),
+                        'updated_at' => date('Y-m-d H:i:s'),
+                    ]);
+                }
+            }
+        }
+    }
+
+    /**
      * Get accounting mapping from company_settings.
      */
     private function getAccountMapping(string $companyId): array

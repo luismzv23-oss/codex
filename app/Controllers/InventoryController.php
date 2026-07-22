@@ -751,8 +751,11 @@ class InventoryController extends BaseController
             'formAction' => site_url('inventario/productos'),
             'companyId' => $context['company']['id'],
             'isPopup' => $this->isPopupRequest(),
+            'warehouses' => $this->activeWarehouses($context['company']['id']),
+            'redirectTo' => $this->request->getGet('redirect_to') ?? '',
         ]);
     }
+
 
     public function storeProduct()
     {
@@ -814,8 +817,36 @@ class InventoryController extends BaseController
 
         $this->syncKitItems($productId, $this->requestKitItems($context['company']['id'], $productId));
 
-        return $this->popupOrRedirect($this->inventoryRoute('inventario/configuracion', $context['company']['id']), 'Producto registrado correctamente.');
+        $initialWarehouseId = trim((string) $this->request->getPost('initial_warehouse_id'));
+        $initialStock = (float) $this->request->getPost('initial_stock');
+        if ($initialWarehouseId !== '' && $initialStock > 0) {
+            $costPrice = (float) $this->request->getPost('cost_price');
+            $db = db_connect();
+            $db->transStart();
+            $this->applyStockDelta($context['company']['id'], $productId, $initialWarehouseId, $initialStock);
+            (new InventoryMovementModel())->insert([
+                'company_id' => $context['company']['id'],
+                'product_id' => $productId,
+                'movement_type' => 'ingreso',
+                'quantity' => $initialStock,
+                'unit_cost' => $costPrice,
+                'total_cost' => round($costPrice * $initialStock, 2),
+                'destination_warehouse_id' => $initialWarehouseId,
+                'performed_by' => $this->currentUser()['id'],
+                'occurred_at' => date('Y-m-d H:i:s'),
+                'reason' => 'Stock inicial al registrar producto',
+                'notes' => 'Registro automático de stock inicial al crear producto',
+            ]);
+            $db->transComplete();
+        }
+
+        $redirectTo = trim((string) ($this->request->getPost('redirect_to') ?? ''));
+        $redirectUrl = $redirectTo !== '' ? $redirectTo : $this->inventoryRoute('inventario/configuracion', $context['company']['id']);
+
+        return $this->popupOrRedirect($redirectUrl, 'Producto registrado correctamente.');
     }
+
+
 
     public function editProductForm(string $id)
     {

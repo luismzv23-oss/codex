@@ -11,6 +11,7 @@
             <?= csrf_field() ?>
             <?php if ($isPopup): ?><input type="hidden" name="popup" value="1"><?php endif; ?>
             <?php if (! empty($companyId)): ?><input type="hidden" name="company_id" value="<?= esc($companyId) ?>"><?php endif; ?>
+            <?php if (! empty($redirectTo)): ?><input type="hidden" name="redirect_to" value="<?= esc($redirectTo) ?>"><?php endif; ?>
             <div class="col-md-4">
                 <label class="form-label">SKU</label>
                 <input type="text" name="sku" class="form-control text-uppercase" value="<?= esc(old('sku', $product['sku'] ?? '')) ?>" required>
@@ -58,6 +59,23 @@
                 <label class="form-label">Precio unitario de venta</label>
                 <input type="number" step="0.01" min="0" name="sale_price" class="form-control" value="<?= esc(old('sale_price', $product['sale_price'] ?? '0')) ?>">
             </div>
+
+            <?php if (empty($product)): ?>
+                <div class="col-md-4">
+                    <label class="form-label">Depósito para stock inicial</label>
+                    <select name="initial_warehouse_id" class="form-select">
+                        <option value="">Ninguno (sin stock inicial)</option>
+                        <?php foreach ($warehouses ?? [] as $w): ?>
+                            <option value="<?= esc($w['id']) ?>"><?= esc($w['name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Stock inicial</label>
+                    <input type="number" step="0.01" min="0" name="initial_stock" class="form-control" value="0.00">
+                </div>
+            <?php endif; ?>
+
             <div class="col-md-4">
                 <label class="form-label">Control de lote</label>
                 <select name="lot_control" class="form-select">

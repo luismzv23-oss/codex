@@ -213,11 +213,12 @@
                         </p>
                     </div>
                     <?php if ($context['canConfigure']): ?>
-                        <a href="<?= site_url('inventario/productos/nuevo' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
+                        <a href="<?= site_url('inventario/productos/nuevo' . (!empty($companies) ? '?company_id=' . $selectedCompanyId . '&redirect_to=' . urlencode(site_url('inventario?company_id=' . $selectedCompanyId)) : '')) ?>"
                             class="btn btn-dark icon-btn" data-popup="true" data-popup-title="Producto"
                             data-popup-subtitle="Registrar productos inventariables para la empresa." title="Nuevo producto"
                             aria-label="Nuevo producto"><i class="bi bi-plus-lg"></i></a>
                     <?php endif; ?>
+
                 </div>
 
                 <!-- Modern Toolbar: Search Input + Status Filter Pills -->

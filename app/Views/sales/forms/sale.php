@@ -53,8 +53,9 @@ $productCatalog = array_values(array_map(static function (array $product): array
     ];
 }, $products ?? []));
 $taxCatalog = array_values(array_map(static function (array $tax): array {
-    return ['id' => $tax['id'], 'name' => $tax['name'], 'rate' => (float) ($tax['rate'] ?? 0)];
+    return ['id' => $tax['id'], 'name' => $tax['name'], 'rate' => (float) ($tax['rate'] ?? 0), 'is_default' => (int) ($tax['is_default'] ?? 0)];
 }, $taxes ?? []));
+
 ?>
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body p-4">
@@ -141,10 +142,23 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
                     <div class="col-md-4">
                         <label class="form-label">Comprobante</label>
                         <select name="document_type_id" class="form-select">
+                            <?php
+                            $defaultDocTypeId = '';
+                            foreach (($documentTypes ?? []) as $dt) {
+                                if (! empty($dt['is_default'])) {
+                                    $defaultDocTypeId = $dt['id'];
+                                    break;
+                                }
+                            }
+                            if ($defaultDocTypeId === '' && ! empty($documentTypes[0]['id'])) {
+                                $defaultDocTypeId = $documentTypes[0]['id'];
+                            }
+                            ?>
                             <?php foreach (($documentTypes ?? []) as $documentType): ?>
-                                <option value="<?= esc($documentType['id']) ?>" data-category="<?= esc($documentType['category']) ?>" <?= old('document_type_id', $sale['document_type_id'] ?? (($documentTypes[0]['id'] ?? ''))) === $documentType['id'] ? 'selected' : '' ?>><?= esc($documentType['name']) ?></option>
+                                <option value="<?= esc($documentType['id']) ?>" data-category="<?= esc($documentType['category']) ?>" <?= old('document_type_id', $sale['document_type_id'] ?? $defaultDocTypeId) === $documentType['id'] ? 'selected' : '' ?>><?= esc($documentType['name']) ?></option>
                             <?php endforeach; ?>
                         </select>
+
                     </div>
                     <div class="col-12">
                         <div class="form-check">
@@ -388,12 +402,18 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
     };
     const productMap = Object.fromEntries(products.map((p) => [p.id, p]));
     const taxMap = Object.fromEntries(taxes.map((t) => [t.id, t]));
+    const defaultTaxObj = taxes.find((t) => Number(t.is_default) === 1) || null;
+    const defaultTaxId = defaultTaxObj ? defaultTaxObj.id : '';
     const formatMoney = (value) => new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value || 0));
     let itemIndex = 0;
     let paymentIndex = 0;
     const selectedProducts = new Map();
 
-    const taxOptions = (selected = '') => ['<option value="">Sin impuesto</option>', ...taxes.map((t) => `<option value="${t.id}" ${selected === t.id ? 'selected' : ''}>${t.name} (${Number(t.rate).toFixed(2)}%)</option>`)].join('');
+    const taxOptions = (selected = '') => {
+        const targetSelected = selected !== '' ? selected : defaultTaxId;
+        return ['<option value="">Sin impuesto</option>', ...taxes.map((t) => `<option value="${t.id}" ${targetSelected === t.id ? 'selected' : ''}>${t.name} (${Number(t.rate).toFixed(2)}%)</option>`)].join('');
+    };
+
     const paymentOptions = (selected = '') => [['cash', 'Efectivo'], ['card', 'Tarjeta'], ['transfer', 'Transferencia'], ['mixed', 'Mixto']].map(([value, label]) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${label}</option>`).join('');
 
     const availableStock = (productId) => {
@@ -410,9 +430,12 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
             const price = Number(row.querySelector('.sale-unit-price')?.value || 0);
             const discount = Number(row.querySelector('.sale-discount-rate')?.value || 0);
             const taxId = row.querySelector('.sale-tax-id')?.value || '';
-            const base = Math.max(0, (qty * price) * (1 - (discount / 100)));
-            subtotal += base;
-            taxTotal += base * (Number((taxMap[taxId] || {}).rate || 0) / 100);
+            const lineGross = Math.max(0, (qty * price) * (1 - (discount / 100)));
+            const taxRate = Number((taxMap[taxId] || {}).rate || 0);
+            const net = taxRate > 0 ? (lineGross / (1 + (taxRate / 100))) : lineGross;
+            const tax = lineGross - net;
+            subtotal += net;
+            taxTotal += tax;
         });
         paymentsBody.querySelectorAll('.sale-payment-amount').forEach((field) => { paidTotal += Number(field.value || 0); });
         const total = Math.max(0, subtotal + taxTotal - Number(globalDiscount.value || 0));
@@ -442,9 +465,8 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
             const qty = Number(qtyField.value || 0);
             const price = Number(priceField.value || 0);
             const discount = Number(discountField.value || 0);
-            const base = Math.max(0, (qty * price) * (1 - (discount / 100)));
-            const lineTotal = base + (base * (Number((taxMap[taxField.value] || {}).rate || 0) / 100));
-            totalLabel.textContent = formatMoney(lineTotal);
+            const lineGross = Math.max(0, (qty * price) * (1 - (discount / 100)));
+            totalLabel.textContent = formatMoney(lineGross);
             qtyField.classList.toggle('is-invalid', Boolean(productId) && qty > available && warehouseField.value !== '');
             syncTotals();
         };

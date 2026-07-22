@@ -92,16 +92,123 @@ class SettingsController extends BaseController
 
     public function storeTax()
     {
-        (new TaxModel())->insert([
-            'company_id' => $this->resolveCompanyId(),
-            'name' => trim((string) $this->request->getPost('name')),
-            'code' => trim((string) $this->request->getPost('code')),
-            'rate' => (float) $this->request->getPost('rate'),
-            'active' => $this->request->getPost('active') === '0' ? 0 : 1,
+        $companyId = $this->resolveCompanyId();
+        $isDefault = $this->request->getPost('is_default') === '1' ? 1 : 0;
+        $afipCode  = $this->request->getPost('afip_code');
+
+        $taxModel = new TaxModel();
+
+        if ($isDefault) {
+            $taxModel->where('company_id', $companyId)->set(['is_default' => 0])->update();
+        }
+
+        $taxModel->insert([
+            'company_id' => $companyId,
+            'name'       => trim((string) $this->request->getPost('name')),
+            'code'       => trim((string) $this->request->getPost('code')),
+            'rate'       => (float) $this->request->getPost('rate'),
+            'afip_code'  => ($afipCode !== '' && $afipCode !== null) ? (int) $afipCode : null,
+            'is_default' => $isDefault,
+            'active'     => $this->request->getPost('active') === '0' ? 0 : 1,
         ]);
 
-        return $this->popupOrRedirect('/configuracion?company_id=' . $this->resolveCompanyId(), 'Impuesto registrado.');
+        return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Impuesto registrado.');
     }
+
+    public function editTaxForm(string $id)
+    {
+        $companyId = $this->resolveCompanyId();
+        $taxModel  = new TaxModel();
+        $tax       = $taxModel->where('company_id', $companyId)->find($id);
+
+        if (! $tax) {
+            return redirect()->to('/configuracion?company_id=' . $companyId)->with('error', 'Impuesto no encontrado.');
+        }
+
+        return view('settings/forms/tax', [
+            'pageTitle'  => 'Editar impuesto',
+            'companyId'  => $companyId,
+            'tax'        => $tax,
+            'formAction' => site_url('configuracion/impuestos/' . $id . '/actualizar'),
+            'isPopup'    => $this->isPopupRequest(),
+        ]);
+    }
+
+    public function updateTax(string $id)
+    {
+        $companyId = $this->resolveCompanyId();
+        $taxModel  = new TaxModel();
+        $tax       = $taxModel->where('company_id', $companyId)->find($id);
+
+        if (! $tax) {
+            return redirect()->to('/configuracion?company_id=' . $companyId)->with('error', 'Impuesto no encontrado.');
+        }
+
+        $isDefault = $this->request->getPost('is_default') === '1' ? 1 : 0;
+        $afipCode  = $this->request->getPost('afip_code');
+
+        if ($isDefault) {
+            $taxModel->where('company_id', $companyId)->set(['is_default' => 0])->update();
+        }
+
+        $taxModel->update($id, [
+            'name'       => trim((string) $this->request->getPost('name')),
+            'code'       => trim((string) $this->request->getPost('code')),
+            'rate'       => (float) $this->request->getPost('rate'),
+            'afip_code'  => ($afipCode !== '' && $afipCode !== null) ? (int) $afipCode : null,
+            'is_default' => $isDefault,
+            'active'     => $this->request->getPost('active') === '0' ? 0 : 1,
+        ]);
+
+        return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Impuesto actualizado.');
+    }
+
+    public function setDefaultTax(string $id)
+    {
+        $companyId = $this->resolveCompanyId();
+        $taxModel  = new TaxModel();
+        $tax       = $taxModel->where('company_id', $companyId)->find($id);
+
+        if (! $tax) {
+            return redirect()->to('/configuracion?company_id=' . $companyId)->with('error', 'Impuesto no encontrado.');
+        }
+
+        $taxModel->setDefault($id, $companyId);
+
+        return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Impuesto predeterminado actualizado.');
+    }
+
+    public function deleteTax(string $id)
+    {
+        $companyId = $this->resolveCompanyId();
+        $taxModel  = new TaxModel();
+        $tax       = $taxModel->where('company_id', $companyId)->find($id);
+
+        if (! $tax) {
+            return redirect()->to('/configuracion?company_id=' . $companyId)->with('error', 'Impuesto no encontrado.');
+        }
+
+        $taxModel->delete($id);
+
+        return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Impuesto eliminado.');
+    }
+
+    public function toggleTax(string $id)
+    {
+        $companyId = $this->resolveCompanyId();
+        $taxModel  = new TaxModel();
+        $tax       = $taxModel->where('company_id', $companyId)->find($id);
+
+        if (! $tax) {
+            return redirect()->to('/configuracion?company_id=' . $companyId)->with('error', 'Impuesto no encontrado.');
+        }
+
+        $newActive = $tax['active'] ? 0 : 1;
+        $taxModel->update($id, ['active' => $newActive]);
+
+        return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Estado del impuesto actualizado.');
+    }
+
 
     public function storeCurrency()
     {

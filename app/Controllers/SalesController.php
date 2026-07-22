@@ -1036,6 +1036,11 @@ class SalesController extends BaseController
             }
         }
 
+        $sequences = [];
+        foreach ($this->documentTypeOptions($companyId) as $dt) {
+            $sequences[$dt['id']] = $this->previewSequenceNumber($companyId, $dt['sequence_key'], $dt['default_prefix'] ?: 'DOC');
+        }
+
         return view('sales/forms/kiosk', [
             'pageTitle' => 'Ticket Kiosco',
             'company' => $context['company'],
@@ -1052,12 +1057,17 @@ class SalesController extends BaseController
             'documentType' => $this->defaultDocumentType($companyId, 'kiosk'),
             'pointOfSale' => $this->defaultPointOfSale($companyId, 'kiosk'),
             'cashSession' => $cashSession,
+            'taxes' => $this->taxOptions($companyId),
+            'defaultTax' => (new TaxModel())->getDefaultTax($companyId),
+            'sequences' => $sequences,
             'invoiceDocumentTypes' => array_values(array_filter(
                 $this->documentTypeOptions($companyId, 'standard'),
                 fn($dt) => ($dt['category'] ?? '') === 'invoice'
             )),
         ]);
     }
+
+
 
     public function storeKiosk()
     {
@@ -2200,18 +2210,43 @@ class SalesController extends BaseController
 
     private function resolveSalesCompanyId(): ?string
     {
-        if ($this->isSuperadmin()) {
-            $companyId = trim((string) ($this->request->getGet('company_id') ?: $this->request->getPost('company_id')));
-            if ($companyId !== '') {
-                return $companyId;
+        $fromReq = trim((string) ($this->request->getGet('company_id') ?: $this->request->getPost('company_id')));
+        if ($fromReq !== '') {
+            $comp = (new CompanyModel())->find($fromReq);
+            if ($comp) {
+                session()->set('active_company_id', $fromReq);
+                return $fromReq;
             }
-
-            $company = (new CompanyModel())->orderBy('name', 'ASC')->first();
-            return $company['id'] ?? null;
         }
 
-        return $this->companyId();
+        $sessionCompanyId = session('active_company_id');
+        if ($sessionCompanyId !== null && $sessionCompanyId !== '') {
+            $comp = (new CompanyModel())->find($sessionCompanyId);
+            if ($comp) {
+                return $sessionCompanyId;
+            }
+        }
+
+        $userCompanyId = $this->companyId();
+        if ($userCompanyId !== null && $userCompanyId !== '') {
+            $comp = (new CompanyModel())->find($userCompanyId);
+            if ($comp) {
+                session()->set('active_company_id', $userCompanyId);
+                return $userCompanyId;
+            }
+        }
+
+        if ($this->isSuperadmin()) {
+            $first = (new CompanyModel())->orderBy('name', 'ASC')->first();
+            if ($first) {
+                session()->set('active_company_id', $first['id']);
+                return $first['id'];
+            }
+        }
+
+        return null;
     }
+
 
     private function salesCompanies(): array
     {
@@ -2365,8 +2400,171 @@ class SalesController extends BaseController
         return $builder->findAll();
     }
 
-    private function defaultDocumentType(string $companyId, string $channel = 'standard'): ?array
+    public function createDocumentTypeForm()
     {
+        $companyId = $this->resolveSalesCompanyId();
+        return view('sales/forms/document_type', [
+            'pageTitle'  => 'Nuevo comprobante',
+            'companyId'  => $companyId,
+            'formAction' => site_url('ventas/comprobantes' . ($this->isSuperadmin() ? '?company_id=' . $companyId : '')),
+            'isPopup'    => $this->isPopupRequest(),
+        ]);
+    }
+
+    public function storeDocumentType()
+    {
+        $companyId = $this->resolveSalesCompanyId();
+        $isDefault = $this->request->getPost('is_default') === '1' ? 1 : 0;
+        $model     = new SalesDocumentTypeModel();
+
+        if ($isDefault) {
+            $model->where('company_id', $companyId)->set(['is_default' => 0])->update();
+        }
+
+        $model->insert([
+            'company_id'         => $companyId,
+            'code'               => strtoupper(trim((string) $this->request->getPost('code'))),
+            'name'               => trim((string) $this->request->getPost('name')),
+            'category'           => trim((string) $this->request->getPost('category')),
+            'letter'             => strtoupper(trim((string) $this->request->getPost('letter'))),
+            'sequence_key'       => strtoupper(trim((string) $this->request->getPost('sequence_key'))),
+            'default_prefix'     => strtoupper(trim((string) $this->request->getPost('default_prefix'))),
+            'channel'            => trim((string) $this->request->getPost('channel')) ?: 'standard',
+            'impacts_stock'      => $this->request->getPost('impacts_stock') === '0' ? 0 : 1,
+            'impacts_receivable' => $this->request->getPost('impacts_receivable') === '0' ? 0 : 1,
+            'requires_customer'   => $this->request->getPost('requires_customer') === '1' ? 1 : 0,
+            'sort_order'         => (int) ($this->request->getPost('sort_order') ?: 1),
+            'is_default'         => $isDefault,
+            'active'             => $this->request->getPost('active') === '0' ? 0 : 1,
+        ]);
+
+        return $this->popupOrRedirect('/ventas/configuracion?company_id=' . $companyId, 'Comprobante registrado.');
+    }
+
+    public function editDocumentTypeForm(string $id)
+    {
+        $model   = new SalesDocumentTypeModel();
+        $docType = $model->find($id);
+
+        if (! $docType) {
+            $companyId = $this->resolveSalesCompanyId();
+            return redirect()->to('/ventas/configuracion?company_id=' . $companyId)->with('error', 'Comprobante no encontrado.');
+        }
+
+        $companyId = $docType['company_id'];
+        session()->set('active_company_id', $companyId);
+
+        return view('sales/forms/document_type', [
+            'pageTitle'    => 'Editar comprobante',
+            'companyId'    => $companyId,
+            'documentType' => $docType,
+            'formAction'   => site_url('ventas/comprobantes/' . $id . '/actualizar' . ($this->isSuperadmin() ? '?company_id=' . $companyId : '')),
+            'isPopup'      => $this->isPopupRequest(),
+        ]);
+    }
+
+    public function updateDocumentType(string $id)
+    {
+        $model   = new SalesDocumentTypeModel();
+        $docType = $model->find($id);
+
+        if (! $docType) {
+            $companyId = $this->resolveSalesCompanyId();
+            return redirect()->to('/ventas/configuracion?company_id=' . $companyId)->with('error', 'Comprobante no encontrado.');
+        }
+
+        $companyId = $docType['company_id'];
+        session()->set('active_company_id', $companyId);
+        $isDefault = $this->request->getPost('is_default') === '1' ? 1 : 0;
+
+        if ($isDefault) {
+            $model->where('company_id', $companyId)->set(['is_default' => 0])->update();
+        }
+
+        $model->update($id, [
+            'code'               => strtoupper(trim((string) $this->request->getPost('code'))),
+            'name'               => trim((string) $this->request->getPost('name')),
+            'category'           => trim((string) $this->request->getPost('category')),
+            'letter'             => strtoupper(trim((string) $this->request->getPost('letter'))),
+            'sequence_key'       => strtoupper(trim((string) $this->request->getPost('sequence_key'))),
+            'default_prefix'     => strtoupper(trim((string) $this->request->getPost('default_prefix'))),
+            'channel'            => trim((string) $this->request->getPost('channel')) ?: 'standard',
+            'impacts_stock'      => $this->request->getPost('impacts_stock') === '0' ? 0 : 1,
+            'impacts_receivable' => $this->request->getPost('impacts_receivable') === '0' ? 0 : 1,
+            'requires_customer'   => $this->request->getPost('requires_customer') === '1' ? 1 : 0,
+            'sort_order'         => (int) ($this->request->getPost('sort_order') ?: 1),
+            'is_default'         => $isDefault,
+            'active'             => $this->request->getPost('active') === '0' ? 0 : 1,
+        ]);
+
+        return $this->popupOrRedirect('/ventas/configuracion?company_id=' . $companyId, 'Comprobante actualizado.');
+    }
+
+    public function setDefaultDocumentType(string $id)
+    {
+        $model   = new SalesDocumentTypeModel();
+        $docType = $model->find($id);
+
+        if (! $docType) {
+            $companyId = $this->resolveSalesCompanyId();
+            return redirect()->to('/ventas/configuracion?company_id=' . $companyId)->with('error', 'Comprobante no encontrado.');
+        }
+
+        $companyId = $docType['company_id'];
+        session()->set('active_company_id', $companyId);
+        $model->setDefault($id, $companyId);
+
+        return $this->popupOrRedirect('/ventas/configuracion?company_id=' . $companyId, 'Comprobante predeterminado actualizado.');
+    }
+
+    public function deleteDocumentType(string $id)
+    {
+        $model   = new SalesDocumentTypeModel();
+        $docType = $model->find($id);
+
+        if (! $docType) {
+            $companyId = $this->resolveSalesCompanyId();
+            return redirect()->to('/ventas/configuracion?company_id=' . $companyId)->with('error', 'Comprobante no encontrado.');
+        }
+
+        $companyId = $docType['company_id'];
+        session()->set('active_company_id', $companyId);
+        $model->delete($id);
+
+        return $this->popupOrRedirect('/ventas/configuracion?company_id=' . $companyId, 'Comprobante eliminado.');
+    }
+
+    public function toggleDocumentType(string $id)
+    {
+        $model   = new SalesDocumentTypeModel();
+        $docType = $model->find($id);
+
+        if (! $docType) {
+            $companyId = $this->resolveSalesCompanyId();
+            return redirect()->to('/ventas/configuracion?company_id=' . $companyId)->with('error', 'Comprobante no encontrado.');
+        }
+
+        $companyId = $docType['company_id'];
+        session()->set('active_company_id', $companyId);
+        $newActive = $docType['active'] ? 0 : 1;
+        $model->update($id, ['active' => $newActive]);
+
+        return $this->popupOrRedirect('/ventas/configuracion?company_id=' . $companyId, 'Estado del comprobante actualizado.');
+    }
+
+    private function defaultDocumentType(string $companyId, string $channel = 'standard'): ?array
+
+    {
+        $customDefault = (new SalesDocumentTypeModel())
+            ->where('company_id', $companyId)
+            ->where('is_default', 1)
+            ->where('active', 1)
+            ->first();
+
+        if ($customDefault) {
+            return $customDefault;
+        }
+
         $defaults = [
             'kiosk' => 'TICKET',
             'standard' => 'FACTURA_B',
@@ -2385,6 +2583,7 @@ class SalesController extends BaseController
 
         return $this->documentTypeOptions($companyId, $channel)[0] ?? null;
     }
+
 
     private function defaultPointOfSale(string $companyId, string $channel = 'standard'): ?array
     {
@@ -3183,6 +3382,9 @@ class SalesController extends BaseController
         $items = (array) ($input['items'] ?? []);
         $priceListId = trim((string) ($input['price_list_id'] ?? '')) ?: null;
         $promotions = $this->promotionMap($companyId);
+        $defaultTax = (new TaxModel())->getDefaultTax($companyId);
+        $defaultTaxId = $defaultTax['id'] ?? null;
+
         $taxMap = [];
         foreach ($this->taxOptions($companyId) as $tax) {
             $taxMap[$tax['id']] = (float) $tax['rate'];
@@ -3211,10 +3413,17 @@ class SalesController extends BaseController
                 $discountRate = $resolvedPrice['promotion_discount_rate'];
             }
             $discountAmount = round(($quantity * $unitPrice) * ($discountRate / 100), 2);
-            $taxId = trim((string) ($item['tax_id'] ?? '')) ?: null;
+            $taxId = trim((string) ($item['tax_id'] ?? '')) ?: $defaultTaxId;
             $taxRate = $taxId && isset($taxMap[$taxId]) ? $taxMap[$taxId] : 0.0;
-            $lineSubtotal = round(($quantity * $unitPrice) - $discountAmount, 2);
-            $taxTotal = round($lineSubtotal * ($taxRate / 100), 2);
+
+            $lineGross = round(($quantity * $unitPrice) - $discountAmount, 2);
+            if ($taxRate > 0) {
+                $lineSubtotal = round($lineGross / (1 + ($taxRate / 100)), 2);
+                $taxTotal = round($lineGross - $lineSubtotal, 2);
+            } else {
+                $lineSubtotal = $lineGross;
+                $taxTotal = 0.0;
+            }
 
             $rows[] = [
                 'line_number' => count($rows) + 1,
@@ -3234,7 +3443,7 @@ class SalesController extends BaseController
                 'tax_rate' => $taxRate,
                 'subtotal' => $lineSubtotal,
                 'tax_total' => $taxTotal,
-                'line_total' => round($lineSubtotal + $taxTotal, 2),
+                'line_total' => $lineGross,
             ];
         }
 
@@ -3293,15 +3502,22 @@ class SalesController extends BaseController
             $item['discount_amount'] = (float)($item['discount_amount'] ?? 0) + $percentDiscountAmt + $itemFixedDiscount;
             
             $item['discount_amount'] = min($baseTotal, $item['discount_amount']);
-            $item['subtotal'] = max(0, round(($qty * $unitPrice) - $item['discount_amount'], 2));
+            $lineGross = max(0, round(($qty * $unitPrice) - $item['discount_amount'], 2));
             
             $taxRate = (float)($item['tax_rate'] ?? 0);
-            $item['tax_total'] = round($item['subtotal'] * ($taxRate / 100), 2);
-            $item['line_total'] = round($item['subtotal'] + $item['tax_total'], 2);
+            if ($taxRate > 0) {
+                $item['subtotal'] = round($lineGross / (1 + ($taxRate / 100)), 2);
+                $item['tax_total'] = round($lineGross - $item['subtotal'], 2);
+            } else {
+                $item['subtotal'] = $lineGross;
+                $item['tax_total'] = 0.0;
+            }
+            $item['line_total'] = $lineGross;
         }
         unset($item);
 
         return $items;
+
     }
 
     private function parseSalePayments(?array $input = null): array

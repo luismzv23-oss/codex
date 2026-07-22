@@ -129,16 +129,43 @@
     </div>
     <div class="col-lg-6">
         <div class="card border-0 shadow-sm rounded-4 h-100"><div class="card-body p-4">
-            <h2 class="h4 mb-3">Comprobantes</h2>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2 class="h4 mb-0">Comprobantes</h2>
+                <a href="<?= site_url('ventas/comprobantes/nuevo' . (! empty($selectedCompanyId) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-dark btn-sm icon-btn" data-popup="true" data-popup-title="Nuevo comprobante" data-popup-subtitle="Registrar un tipo de comprobante para la empresa activa." title="Nuevo comprobante" aria-label="Nuevo comprobante"><i class="bi bi-plus-lg"></i></a>
+            </div>
             <div id="document-types-list">
                 <?php foreach ($documentTypes as $documentType): ?>
+                    <?php $docCompanyId = esc($documentType['company_id'] ?? $selectedCompanyId ?? ''); ?>
                     <div class="border rounded-3 p-3 mb-2 data-item">
-                        <div class="d-flex justify-content-between gap-2">
+                        <div class="d-flex justify-content-between align-items-center gap-2">
                             <div>
                                 <strong><?= esc($documentType['name']) ?></strong>
+                                <?php if (! empty($documentType['is_default'])): ?>
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill ms-1" style="font-size:0.75rem;">Predeterminado</span>
+                                <?php endif; ?>
+                                <?php if (isset($documentType['active']) && (int) $documentType['active'] === 0): ?>
+                                    <span class="badge bg-secondary-subtle text-secondary rounded-pill ms-1" style="font-size:0.75rem;">Inactivo</span>
+                                <?php endif; ?>
                                 <div class="small text-secondary"><?= esc($documentType['code']) ?> / <?= esc($documentType['sequence_key']) ?> / <?= esc($documentType['channel']) ?></div>
                             </div>
-                            <span class="small <?= (int) ($documentType['impacts_stock'] ?? 0) === 1 ? 'text-success' : 'text-secondary' ?>"><?= (int) ($documentType['impacts_stock'] ?? 0) === 1 ? 'Impacta stock' : 'Sin stock' ?></span>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="small <?= (int) ($documentType['impacts_stock'] ?? 0) === 1 ? 'text-success' : 'text-secondary' ?>"><?= (int) ($documentType['impacts_stock'] ?? 0) === 1 ? 'Impacta stock' : 'Sin stock' ?></span>
+                                <?php if (empty($documentType['is_default'])): ?>
+                                    <form method="post" action="<?= site_url('ventas/comprobantes/' . $documentType['id'] . '/predeterminada?company_id=' . $docCompanyId) ?>" class="d-inline">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="company_id" value="<?= $docCompanyId ?>">
+                                        <button type="submit" class="btn btn-sm btn-outline-warning icon-btn" title="Establecer como predeterminado" aria-label="Predeterminado"><i class="bi bi-star"></i></button>
+                                    </form>
+                                <?php else: ?>
+                                    <button type="button" class="btn btn-sm btn-warning icon-btn" title="Comprobante predeterminado" disabled><i class="bi bi-star-fill text-dark"></i></button>
+                                <?php endif; ?>
+                                <a href="<?= site_url('ventas/comprobantes/' . $documentType['id'] . '/editar?company_id=' . $docCompanyId) ?>" class="btn btn-sm btn-outline-dark icon-btn" data-popup="true" data-popup-title="Editar comprobante" data-popup-subtitle="Modificar parámetros del comprobante." title="Editar" aria-label="Editar"><i class="bi bi-pencil"></i></a>
+                                <form method="post" action="<?= site_url('ventas/comprobantes/' . $documentType['id'] . '/eliminar?company_id=' . $docCompanyId) ?>" class="d-inline" onsubmit="return confirm('¿Seguro que deseas eliminar este comprobante?')">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="company_id" value="<?= $docCompanyId ?>">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger icon-btn" title="Eliminar" aria-label="Eliminar"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </div>
                         </div>
                     </div>
                 <?php endforeach; ?>
@@ -147,6 +174,7 @@
             </div>
         </div></div>
     </div>
+
     <div class="col-lg-6">
         <div class="card border-0 shadow-sm rounded-4 h-100"><div class="card-body p-4">
             <h2 class="h4 mb-3">Puntos de venta y cuenta corriente</h2>

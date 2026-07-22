@@ -125,9 +125,41 @@
                 </div>
                 <ul class="list-group list-group-flush">
                     <?php foreach ($taxes as $tax): ?>
-                        <li class="list-group-item px-0 d-flex justify-content-between"><span><?= esc($tax['name']) ?> <span class="text-secondary">(<?= esc($tax['code']) ?>)</span></span><span><?= esc((string) $tax['rate']) ?>%</span></li>
+                        <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="fw-medium"><?= esc($tax['name']) ?></span>
+                                <span class="text-secondary small">(<?= esc($tax['code']) ?>)</span>
+                                <?php if (! empty($tax['is_default'])): ?>
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill ms-1" style="font-size:0.75rem;">Predeterminado</span>
+                                <?php endif; ?>
+                                <?php if (isset($tax['active']) && (int) $tax['active'] === 0): ?>
+                                    <span class="badge bg-secondary-subtle text-secondary rounded-pill ms-1" style="font-size:0.75rem;">Inactivo</span>
+                                <?php endif; ?>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="fw-semibold me-2"><?= esc(number_format((float) $tax['rate'], 2, ',', '.')) ?>%</span>
+                                <?php if (auth_can('taxes.manage')): ?>
+                                    <?php if (empty($tax['is_default'])): ?>
+                                        <form method="post" action="<?= site_url('configuracion/impuestos/' . $tax['id'] . '/predeterminada') ?>" class="d-inline">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="company_id" value="<?= esc($company['id'] ?? '') ?>">
+                                            <button type="submit" class="btn btn-sm btn-outline-warning icon-btn" title="Establecer como predeterminado" aria-label="Predeterminado"><i class="bi bi-star"></i></button>
+                                        </form>
+                                    <?php else: ?>
+                                        <button type="button" class="btn btn-sm btn-warning icon-btn" title="Impuesto predeterminado" disabled><i class="bi bi-star-fill text-dark"></i></button>
+                                    <?php endif; ?>
+                                    <a href="<?= site_url('configuracion/impuestos/' . $tax['id'] . '/editar?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-sm btn-outline-dark icon-btn" data-popup="true" data-popup-title="Editar impuesto" data-popup-subtitle="Modificar parametria del impuesto." title="Editar" aria-label="Editar"><i class="bi bi-pencil"></i></a>
+                                    <form method="post" action="<?= site_url('configuracion/impuestos/' . $tax['id'] . '/eliminar') ?>" class="d-inline" onsubmit="return confirm('¿Seguro que deseas eliminar este impuesto?')">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="company_id" value="<?= esc($company['id'] ?? '') ?>">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger icon-btn" title="Eliminar" aria-label="Eliminar"><i class="bi bi-trash"></i></button>
+                                    </form>
+                                <?php endif; ?>
+                            </div>
+                        </li>
                     <?php endforeach; ?>
                 </ul>
+
             </div>
         </div>
     </div>

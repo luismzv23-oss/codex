@@ -92,6 +92,14 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     $routes->get('ventas/configuracion', 'SalesController::configuration', ['filter' => 'permission:systems.view']);
     $routes->get('ventas/configuracion/editar', 'SalesController::editSettingsForm', ['filter' => 'permission:systems.view']);
     $routes->post('ventas/configuracion', 'SalesController::updateSettings', ['filter' => 'permission:systems.view']);
+    $routes->get('ventas/comprobantes/nuevo', 'SalesController::createDocumentTypeForm', ['filter' => 'permission:systems.view']);
+    $routes->post('ventas/comprobantes', 'SalesController::storeDocumentType', ['filter' => 'permission:systems.view']);
+    $routes->get('ventas/comprobantes/(:segment)/editar', 'SalesController::editDocumentTypeForm/$1', ['filter' => 'permission:systems.view']);
+    $routes->post('ventas/comprobantes/(:segment)/actualizar', 'SalesController::updateDocumentType/$1', ['filter' => 'permission:systems.view']);
+    $routes->post('ventas/comprobantes/(:segment)/predeterminada', 'SalesController::setDefaultDocumentType/$1', ['filter' => 'permission:systems.view']);
+    $routes->post('ventas/comprobantes/(:segment)/eliminar', 'SalesController::deleteDocumentType/$1', ['filter' => 'permission:systems.view']);
+    $routes->post('ventas/comprobantes/(:segment)/toggle', 'SalesController::toggleDocumentType/$1', ['filter' => 'permission:systems.view']);
+
     $routes->get('ventas/dispositivos/nuevo', 'SalesController::createDeviceForm', ['filter' => 'permission:systems.view']);
     $routes->post('ventas/dispositivos', 'SalesController::storeDevice', ['filter' => 'permission:systems.view']);
     $routes->post('ventas/arca/diagnostico', 'SalesController::diagnoseArca', ['filter' => 'permission:systems.view']);
@@ -182,15 +190,22 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     $routes->get('configuracion/empresa/editar', 'SettingsController::editCompanyForm', ['filter' => 'permission:settings.manage']);
     $routes->get('configuracion/sucursales/nueva', 'SettingsController::createBranchForm', ['filter' => 'permission:branches.manage']);
     $routes->get('configuracion/impuestos/nuevo', 'SettingsController::createTaxForm', ['filter' => 'permission:taxes.manage']);
+    $routes->post('configuracion/impuestos', 'SettingsController::storeTax', ['filter' => 'permission:taxes.manage']);
+    $routes->get('configuracion/impuestos/(:segment)/editar', 'SettingsController::editTaxForm/$1', ['filter' => 'permission:taxes.manage']);
+    $routes->post('configuracion/impuestos/(:segment)/actualizar', 'SettingsController::updateTax/$1', ['filter' => 'permission:taxes.manage']);
+    $routes->post('configuracion/impuestos/(:segment)/predeterminada', 'SettingsController::setDefaultTax/$1', ['filter' => 'permission:taxes.manage']);
+    $routes->post('configuracion/impuestos/(:segment)/eliminar', 'SettingsController::deleteTax/$1', ['filter' => 'permission:taxes.manage']);
+    $routes->post('configuracion/impuestos/(:segment)/toggle', 'SettingsController::toggleTax/$1', ['filter' => 'permission:taxes.manage']);
+
     $routes->get('configuracion/monedas/nueva', 'SettingsController::createCurrencyForm', ['filter' => 'permission:currencies.manage']);
     $routes->get('configuracion/numeraciones/nueva', 'SettingsController::createVoucherSequenceForm', ['filter' => 'permission:voucher_sequences.manage']);
     $routes->post('configuracion/empresa', 'SettingsController::updateCompany', ['filter' => 'permission:settings.manage']);
     $routes->post('configuracion/sucursales', 'SettingsController::storeBranch', ['filter' => 'permission:branches.manage']);
-    $routes->post('configuracion/impuestos', 'SettingsController::storeTax', ['filter' => 'permission:taxes.manage']);
     $routes->post('configuracion/monedas', 'SettingsController::storeCurrency', ['filter' => 'permission:currencies.manage']);
     $routes->post('configuracion/numeraciones', 'SettingsController::storeVoucherSequence', ['filter' => 'permission:voucher_sequences.manage']);
     $routes->get('configuracion/tickets', 'SettingsController::ticketSettingsForm', ['filter' => 'permission:settings.manage']);
     $routes->post('configuracion/tickets', 'SettingsController::updateTicketSettings', ['filter' => 'permission:settings.manage']);
+
 
     // ── Contabilidad (Web) ──────────────────────────────
     $routes->get('contabilidad', 'AccountingController::index', ['filter' => 'permission:systems.view']);

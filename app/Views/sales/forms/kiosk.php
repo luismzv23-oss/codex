@@ -23,13 +23,9 @@ $productCatalog = array_values(array_map(static function (array $product): array
 ?>
 <div id="codex-kiosk-toast" class="codex-kiosk-toast"><i class="bi bi-check-circle-fill"></i><span></span></div>
 
-<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
-    <div>
-        <h1 class="h2 mb-1">Facturacion kiosco</h1>
-        <p class="text-secondary mb-0">Pantalla continua de emision rapida · Escanea codigo de barras o busca por nombre
-            · <kbd>F2</kbd> Cobrar · <kbd>F4</kbd> Cancelar · <kbd>F5</kbd> Imprimir</p>
-    </div>
-    <div class="d-flex align-items-center gap-2">
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-2">
+    <div class="d-flex align-items-center gap-3">
+        <h1 class="h2 mb-0">Facturacion kiosco</h1>
         <?php if (!empty($cashSession)): ?>
             <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle rounded-pill px-3 py-2">
                 <i class="bi bi-unlock-fill me-1"></i>
@@ -42,11 +38,24 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 <i class="bi bi-lock-fill me-1"></i> Sin caja activa
             </span>
         <?php endif; ?>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <a href="<?= site_url('ventas/pos' . (!empty($companyId) ? '?company_id=' . $companyId : '')) ?>"
+            class="btn btn-outline-dark icon-btn" title="Venta POS" aria-label="Venta POS"><i
+                class="bi bi-display"></i></a>
+        <a href="<?= site_url('ventas/kiosco' . (!empty($companyId) ? '?company_id=' . $companyId : '')) ?>"
+            class="btn btn-dark icon-btn" title="Venta kiosco" aria-label="Venta kiosco"><i class="bi bi-shop"></i></a>
         <a href="<?= site_url('ventas' . (!empty($companyId) ? '?company_id=' . $companyId : '')) ?>"
             class="btn btn-outline-dark icon-btn" title="Volver a Ventas" aria-label="Volver a Ventas"><i
                 class="bi bi-arrow-left"></i></a>
+
     </div>
 </div>
+<p class="text-secondary mb-4">Pantalla continua de emision rapida · Escanea codigo de barras o busca por nombre
+    · <kbd>F2</kbd> Cobrar · <kbd>F4</kbd> Cancelar · <kbd>F5</kbd> Imprimir</p>
+
+
+
 
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body p-4 p-lg-5">
@@ -132,10 +141,13 @@ $productCatalog = array_values(array_map(static function (array $product): array
                                         venta.</p>
                                 </div>
                                 <div class="text-end">
+                                    <div class="small text-secondary" id="kiosk-tax-breakdown-label"
+                                        style="display:none;"></div>
                                     <div class="small text-secondary">Total</div>
                                     <div class="fs-4 fw-semibold" id="kiosk-total">0,00</div>
                                 </div>
                             </div>
+
 
                             <div class="border rounded-4 overflow-hidden">
                                 <div class="table-responsive">
@@ -205,9 +217,10 @@ $productCatalog = array_values(array_map(static function (array $product): array
                                         <select id="kiosk-factura-doc-type" class="form-select form-select-sm"
                                             style="min-width:160px;">
                                             <?php foreach (($invoiceDocumentTypes ?? []) as $dt): ?>
-                                                <option value="<?= esc($dt['id']) ?>"><?= esc($dt['name']) ?></option>
+                                                <option value="<?= esc($dt['id']) ?>" <?= !empty($dt['is_default']) ? 'selected' : '' ?>><?= esc($dt['name']) ?></option>
                                             <?php endforeach; ?>
                                         </select>
+
                                     </div>
                                 </div>
                                 <input type="hidden" name="authorize_arca" id="kiosk-authorize-arca" value="0">
@@ -274,6 +287,10 @@ $productCatalog = array_values(array_map(static function (array $product): array
         const companyLegalName = <?= json_encode($company['legal_name'] ?? '') ?>;
         const companyTaxId = <?= json_encode($company['tax_id'] ?? '') ?>;
         const userName = <?= json_encode(auth_user()['name'] ?? '') ?>;
+        const defaultTax = <?= json_encode($defaultTax ?? null, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+        const sequences = <?= json_encode($sequences ?? []) ?>;
+        const kioskDocType = <?= json_encode($documentType) ?>;
+
 
         const searchField = document.getElementById('kiosk-search');
         const resultsContainer = document.getElementById('kiosk-search-results');
@@ -282,7 +299,9 @@ $productCatalog = array_values(array_map(static function (array $product): array
         const ticketBody = document.getElementById('kiosk-ticket-body');
         const emptyRow = document.getElementById('kiosk-empty-row');
         const totalLabel = document.getElementById('kiosk-total');
+        const taxBreakdownLabel = document.getElementById('kiosk-tax-breakdown-label');
         const hiddenItems = document.getElementById('kiosk-hidden-items');
+
         const paidAmount = document.getElementById('kiosk-paid-amount');
         const changeLabel = document.getElementById('kiosk-change');
         const paymentMethod = document.getElementById('kiosk-payment-method');
@@ -296,9 +315,21 @@ $productCatalog = array_values(array_map(static function (array $product): array
         const facturaDocTypeSelect = document.getElementById('kiosk-factura-doc-type');
         const facturaOptions = document.getElementById('kiosk-factura-options');
 
+        const updateReferenceField = () => {
+            const emitType = document.querySelector('input[name="kiosk_emit_type"]:checked')?.value || 'ticket';
+            if (emitType === 'factura') {
+                const docTypeId = facturaDocTypeSelect ? facturaDocTypeSelect.value : '';
+                referenceField.value = sequences[docTypeId] || '';
+            } else {
+                referenceField.value = kioskDocType ? (sequences[kioskDocType.id] || '') : '';
+            }
+        };
+
         const syncFacturaDocType = () => {
             facturaDocTypeHidden.value = facturaDocTypeSelect ? facturaDocTypeSelect.value : '';
+            updateReferenceField();
         };
+
         if (facturaDocTypeSelect) {
             facturaDocTypeSelect.addEventListener('change', syncFacturaDocType);
         }
@@ -313,9 +344,11 @@ $productCatalog = array_values(array_map(static function (array $product): array
                     facturaOptions.classList.add('d-none');
                     authorizeArcaField.value = '0';
                     facturaDocTypeHidden.value = '';
+                    updateReferenceField();
                 }
             });
         });
+
         const cancelButton = document.getElementById('kiosk-cancel-button');
         const submitBtn = document.getElementById('kiosk-submit-btn');
         const toastEl = document.getElementById('codex-kiosk-toast');
@@ -418,7 +451,13 @@ $productCatalog = array_values(array_map(static function (array $product): array
             hiddenItems.innerHTML = '';
             let index = 0;
             items.forEach((item) => {
-                const fields = { product_id: item.product_id || item.id, quantity: item.quantity, unit_price: item.unit_price, discount_rate: item.discount_rate || 0 };
+                const fields = {
+                    product_id: item.product_id || item.id,
+                    quantity: item.quantity,
+                    unit_price: item.unit_price,
+                    discount_rate: item.discount_rate || 0,
+                    tax_id: item.tax_id || (defaultTax ? defaultTax.id : '')
+                };
                 Object.entries(fields).forEach(([key, value]) => {
                     const input = document.createElement('input');
                     input.type = 'hidden';
@@ -435,11 +474,26 @@ $productCatalog = array_values(array_map(static function (array $product): array
             });
         };
 
-        const totalAmount = () => Array.from(items.values()).reduce((carry, item) => {
+        const lineGrossAmount = (item) => {
             const base = Number(item.quantity) * Number(item.unit_price);
             const discount = base * (Number(item.discount_rate || 0) / 100);
-            return carry + (base - discount);
+            return Math.max(0, base - discount);
+        };
+
+        const totalAmount = () => Array.from(items.values()).reduce((carry, item) => {
+            return carry + lineGrossAmount(item);
         }, 0);
+
+        const subtotalAmount = () => Array.from(items.values()).reduce((carry, item) => {
+            const gross = lineGrossAmount(item);
+            const taxRate = item.tax_rate !== undefined ? Number(item.tax_rate) : (defaultTax ? Number(defaultTax.rate || 0) : 0);
+            const net = taxRate > 0 ? gross / (1 + (taxRate / 100)) : gross;
+            return carry + net;
+        }, 0);
+
+        const taxTotalAmount = () => totalAmount() - subtotalAmount();
+
+
 
         const availableStockForWarehouse = (product) => {
             const warehouseId = warehouseField?.value || '';
@@ -519,8 +573,21 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 ticketBody.appendChild(row);
             });
 
+            const subtotal = subtotalAmount();
+            const taxTotal = taxTotalAmount();
             const total = totalAmount();
+
             totalLabel.textContent = formatMoney(total);
+
+            if (taxBreakdownLabel) {
+                if (taxTotal > 0 && defaultTax) {
+                    taxBreakdownLabel.textContent = `Neto: $${formatMoney(subtotal)} | ${defaultTax.name} (${Number(defaultTax.rate).toFixed(0)}%): $${formatMoney(taxTotal)}`;
+                    taxBreakdownLabel.style.display = 'block';
+                } else {
+                    taxBreakdownLabel.style.display = 'none';
+                }
+            }
+
             paidAmount.value = Number(total).toFixed(2);
             updateChange();
             syncHiddenInputs();
@@ -566,6 +633,8 @@ $productCatalog = array_values(array_map(static function (array $product): array
                     quantity: 1,
                     unit_price: Number(product.price || 0),
                     discount_rate: 0,
+                    tax_id: defaultTax ? defaultTax.id : '',
+                    tax_rate: defaultTax ? Number(defaultTax.rate || 0) : 0,
                 });
             }
             renderTicket();
@@ -573,6 +642,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
             renderResults([]);
             searchField.focus();
         };
+
 
         const matchingProducts = (term) => {
             const normalized = term.trim().toLowerCase();
@@ -846,10 +916,17 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 
                 ${rows}
                 
+                ${taxTotalAmount() > 0 ? `
+                <div class="ticket-small" style="margin-top:6px; text-align:right; border-top:1px dashed #000; padding-top:4px;">
+                    <span>Neto: $${formatMoney(subtotalAmount())}</span><br>
+                    <span>${defaultTax ? defaultTax.name : 'IVA'} (${defaultTax ? Number(defaultTax.rate).toFixed(0) : 21}%): $${formatMoney(taxTotalAmount())}</span>
+                </div>
+                ` : ''}
                 <div class="ticket-total">
                     <span>TOTAL</span>
                     <span>${totalLabel.textContent}</span>
                 </div>
+
                 
                 <div class="ticket-small" style="margin-top:8px; text-align:left;"><strong>Pago:</strong> ${paymentMethod.options[paymentMethod.selectedIndex].text}</div>
                 <div class="ticket-small" style="text-align:left;"><strong>Cobrado:</strong> ${formatMoney(paidAmount.value || 0)}</div>
@@ -1121,6 +1198,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
             }
         });
 
+        updateReferenceField();
         renderTicket();
         searchField.focus();
     })();

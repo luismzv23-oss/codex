@@ -16,25 +16,37 @@
     <?php endif; ?>
 </div>
 
-<?php if (! empty($companies)): ?>
     <div class="card border-0 shadow-sm rounded-4 mb-4">
         <div class="card-body">
             <form method="get" action="<?= site_url('caja') ?>" class="row g-3 align-items-end">
-                <div class="col-md-6">
-                    <label class="form-label">Empresa activa</label>
-                    <select name="company_id" class="form-select">
-                        <?php foreach ($companies as $company): ?>
-                            <option value="<?= esc($company['id']) ?>" <?= $selectedCompanyId === $company['id'] ? 'selected' : '' ?>><?= esc($company['name']) ?></option>
+                <?php if (! empty($companies)): ?>
+                    <div class="col-md-5">
+                        <label class="form-label">Empresa activa</label>
+                        <select name="company_id" class="form-select">
+                            <?php foreach ($companies as $company): ?>
+                                <option value="<?= esc($company['id']) ?>" <?= $selectedCompanyId === $company['id'] ? 'selected' : '' ?>><?= esc($company['name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                <?php else: ?>
+                    <div class="col-md-10">
+                <?php endif; ?>
+                    <label class="form-label">Filtrar por caja</label>
+                    <select name="cash_register_id" class="form-select">
+                        <option value="">Todas las cajas (Consolidado)</option>
+                        <?php foreach ($registers as $r): ?>
+                            <option value="<?= esc($r['id']) ?>" <?= ($selectedRegisterId ?? '') === $r['id'] ? 'selected' : '' ?>><?= esc($r['name']) ?> (<?= esc($r['register_type']) ?>)</option>
                         <?php endforeach; ?>
                     </select>
                 </div>
                 <div class="col-md-2">
-                    <button class="btn btn-dark icon-btn" title="Cambiar empresa" aria-label="Cambiar empresa"><i class="bi bi-arrow-repeat"></i></button>
+                    <button class="btn btn-dark icon-btn" title="Filtrar" aria-label="Filtrar"><i class="bi bi-arrow-repeat"></i></button>
                 </div>
             </form>
         </div>
     </div>
-<?php endif; ?>
+
 
 <div class="row g-4 mb-4">
     <div class="col-md-6 col-xl-3"><div class="card border-0 shadow-sm rounded-4 h-100"><div class="card-body"><div class="text-secondary small mb-2">Cajas activas</div><div class="display-6 fw-semibold"><?= esc((string) ($summary['registers'] ?? 0)) ?></div></div></div></div>
@@ -63,20 +75,54 @@
     <div class="col-lg-5">
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body p-4">
-                <h2 class="h4 mb-3">Cajas configuradas</h2>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2 class="h4 mb-0">Cajas configuradas</h2>
+                    <?php if (! empty($context['canManage']) && (auth_user()['role_slug'] ?? '') !== 'vendedor'): ?>
+                        <a href="<?= site_url('caja/cajas/nueva' . (! empty($selectedCompanyId) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-sm btn-outline-dark icon-btn" data-popup="true" data-popup-title="Nueva caja" data-popup-subtitle="Crear una nueva caja operativa." title="Nueva caja" aria-label="Nueva caja"><i class="bi bi-plus-lg"></i></a>
+                    <?php endif; ?>
+                </div>
+
                 <div class="table-responsive">
                     <table class="table align-middle mb-0" id="registers-table">
-                        <thead><tr><th>Caja</th><th>Tipo</th><th>Estado</th></tr></thead>
+                        <thead><tr><th>Caja</th><th>Tipo</th><th>Estado</th><th class="text-end"></th></tr></thead>
                         <tbody>
                         <?php foreach ($registers as $register): ?>
+                            <?php $activeSession = $activeSessionsMap[$register['id']] ?? null; ?>
                             <tr class="data-row">
                                 <td><?= esc($register['name']) ?><div class="small text-secondary"><?= esc($register['code']) ?></div></td>
                                 <td><?= esc(ucfirst($register['register_type'])) ?></td>
-                                <td><?= (int) ($register['active'] ?? 0) === 1 ? 'Activa' : 'Inactiva' ?></td>
+                                <td>
+                                    <?php if ((int) ($register['active'] ?? 0) === 0): ?>
+                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill" style="font-size:0.75rem;">Inactiva</span>
+                                    <?php elseif ($activeSession): ?>
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill" style="font-size:0.75rem;">Abierta</span>
+                                    <?php else: ?>
+                                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill" style="font-size:0.75rem;">Cerrada</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="text-end">
+                                    <?php if (! empty($context['canManage'])): ?>
+                                        <?php if ((int) ($register['active'] ?? 0) === 1): ?>
+                                            <?php if ($activeSession): ?>
+                                                <a href="<?= site_url('caja/sesiones/' . $activeSession['id'] . '/cierre' . (! empty($selectedCompanyId) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-sm btn-outline-dark icon-btn" data-popup="true" data-popup-title="Cierre de caja" data-popup-subtitle="Registrar arqueo y cierre de la sesion." title="Cerrar caja" aria-label="Cerrar caja"><i class="bi bi-box-arrow-down"></i></a>
+                                            <?php else: ?>
+                                                <?php if (empty($hasAnyOpenSessionByMe)): ?>
+                                                    <a href="<?= site_url('caja/sesiones/apertura/nueva?cash_register_id=' . $register['id'] . (! empty($selectedCompanyId) ? '&company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-sm btn-outline-success icon-btn" title="Abrir caja" aria-label="Abrir caja"><i class="bi bi-box-arrow-up"></i></a>
+                                                <?php endif; ?>
+                                            <?php endif; ?>
+                                        <?php endif; ?>
+                                        <?php if ((auth_user()['role_slug'] ?? '') !== 'vendedor'): ?>
+                                             <a href="<?= site_url('caja/cajas/' . $register['id'] . '/editar' . (! empty($selectedCompanyId) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-sm btn-outline-secondary icon-btn ms-1" data-popup="true" data-popup-title="Editar caja" data-popup-subtitle="Modificar datos de la caja." title="Editar caja" aria-label="Editar caja"><i class="bi bi-pencil"></i></a>
+                                             <a href="<?= site_url('caja/cajas/' . $register['id'] . '/eliminar' . (! empty($selectedCompanyId) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-sm btn-outline-danger icon-btn ms-1" onclick="return confirm('¿Está seguro de eliminar o desactivar esta caja?')" title="Eliminar caja" aria-label="Eliminar caja"><i class="bi bi-trash"></i></a>
+                                         <?php endif; ?>
+                                    <?php endif; ?>
+                                </td>
+
+
                             </tr>
                         <?php endforeach; ?>
-                        <tr class="no-results-row" style="display: none;"><td colspan="3" class="text-secondary text-center py-3">No se encontraron cajas.</td></tr>
-                        <?php if ($registers === []): ?><tr class="no-data-row"><td colspan="3" class="text-secondary">No hay cajas registradas.</td></tr><?php endif; ?>
+                        <tr class="no-results-row" style="display: none;"><td colspan="4" class="text-secondary text-center py-3">No se encontraron cajas.</td></tr>
+                        <?php if ($registers === []): ?><tr class="no-data-row"><td colspan="4" class="text-secondary">No hay cajas registradas.</td></tr><?php endif; ?>
                         </tbody>
                     </table>
                 </div>
@@ -86,31 +132,52 @@
     <div class="col-lg-7">
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body p-4">
-                <h2 class="h4 mb-3">Sesiones abiertas</h2>
+                <h2 class="h4 mb-3">Sesiones y cierres recientes</h2>
                 <div class="table-responsive">
                     <table class="table align-middle mb-0" id="sessions-table">
-                        <thead><tr><th>Caja</th><th>Apertura</th><th>Esperado</th><th></th></tr></thead>
+                        <thead><tr><th>Caja</th><th>Apertura / Cierre</th><th>Estado</th><th>Esperado / Real</th><th class="text-end"></th></tr></thead>
                         <tbody>
                         <?php foreach ($sessions as $session): ?>
                             <tr class="data-row">
-                                <td><?= esc($session['register_name']) ?><div class="small text-secondary"><?= esc($session['register_type']) ?></div></td>
-                                <td><?= esc(date('d/m/Y H:i', strtotime($session['opened_at']))) ?><div class="small text-secondary">Inicial: <?= number_format((float) ($session['opening_amount'] ?? 0), 2, ',', '.') ?></div></td>
-                                <td><?= number_format((float) ($session['expected_closing_amount'] ?? 0), 2, ',', '.') ?></td>
-                                <td class="text-end">
-                                    <?php if (! empty($context['canManage'])): ?>
-                                        <a href="<?= site_url('caja/sesiones/' . $session['id'] . '/cierre' . (! empty($selectedCompanyId) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-sm btn-outline-dark icon-btn" data-popup="true" data-popup-title="Cierre de caja" data-popup-subtitle="Registrar arqueo y cierre de la sesion." title="Cerrar caja" aria-label="Cerrar caja"><i class="bi bi-box-arrow-down"></i></a>
+                                <td><?= esc($session['register_name']) ?><div class="small text-secondary"><?= esc(ucfirst($session['register_type'])) ?></div></td>
+                                <td>
+                                    <div>Ap.: <?= esc(date('d/m/Y H:i', strtotime($session['opened_at']))) ?></div>
+                                    <?php if ($session['status'] === 'closed'): ?>
+                                        <div class="small text-secondary">Cie.: <?= esc(date('d/m/Y H:i', strtotime($session['closed_at']))) ?></div>
                                     <?php endif; ?>
+                                </td>
+                                <td>
+                                    <?php if ($session['status'] === 'open'): ?>
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle rounded-pill" style="font-size:0.75rem;">Abierta</span>
+                                    <?php else: ?>
+                                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle rounded-pill" style="font-size:0.75rem;">Cerrada</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <div>Esp: $<?= number_format((float) ($session['expected_closing_amount'] ?? 0), 2, ',', '.') ?></div>
+                                    <?php if ($session['status'] === 'closed'): ?>
+                                        <div class="small text-secondary">Real: $<?= number_format((float) ($session['actual_closing_amount'] ?? 0), 2, ',', '.') ?></div>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="text-end">
+                                    <div class="d-flex align-items-center justify-content-end gap-2">
+                                        <a href="<?= site_url('caja/sesiones/' . $session['id'] . '/pdf') ?>" target="_blank" class="btn btn-sm btn-outline-dark icon-btn" title="Imprimir reporte de caja (PDF)" aria-label="Imprimir"><i class="bi bi-printer"></i></a>
+                                        <?php if ($session['status'] === 'open' && ! empty($context['canManage'])): ?>
+                                            <a href="<?= site_url('caja/sesiones/' . $session['id'] . '/cierre' . (! empty($selectedCompanyId) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-sm btn-outline-dark icon-btn" data-popup="true" data-popup-title="Cierre de caja" data-popup-subtitle="Registrar arqueo y cierre de la sesion." title="Cerrar caja" aria-label="Cerrar caja"><i class="bi bi-box-arrow-down"></i></a>
+                                        <?php endif; ?>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
-                        <tr class="no-results-row" style="display: none;"><td colspan="4" class="text-secondary text-center py-3">No se encontraron sesiones abiertas.</td></tr>
-                        <?php if ($sessions === []): ?><tr class="no-data-row"><td colspan="4" class="text-secondary">No hay sesiones abiertas.</td></tr><?php endif; ?>
+                        <tr class="no-results-row" style="display: none;"><td colspan="5" class="text-secondary text-center py-3">No se encontraron sesiones.</td></tr>
+                        <?php if ($sessions === []): ?><tr class="no-data-row"><td colspan="5" class="text-secondary">No hay sesiones registradas.</td></tr><?php endif; ?>
                         </tbody>
                     </table>
                 </div>
             </div>
         </div>
     </div>
+
 
     <div class="col-12">
         <div class="card border-0 shadow-sm rounded-4 mb-4">
@@ -122,7 +189,17 @@
                         <tbody>
                         <?php foreach ($paymentMethods as $row): ?>
                             <tr class="data-row">
-                                <td><?= esc($row['payment_method'] ?: 'Sin medio') ?></td>
+                                <?php 
+                                $pmName = $row['payment_method'] ?: 'Sin medio';
+                                if (strtolower($pmName) === 'cash') {
+                                    $pmDisplayName = 'Efectivo';
+                                } elseif (strtolower($pmName) === 'card') {
+                                    $pmDisplayName = 'Tarjeta';
+                                } else {
+                                    $pmDisplayName = ucfirst($pmName);
+                                }
+                                ?>
+                                <td><?= esc($pmDisplayName) ?></td>
                                 <td class="<?= (float) ($row['total'] ?? 0) >= 0 ? 'text-success' : 'text-danger' ?>"><?= number_format((float) ($row['total'] ?? 0), 2, ',', '.') ?></td>
                             </tr>
                         <?php endforeach; ?>

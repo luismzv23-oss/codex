@@ -23,6 +23,12 @@
                     <?php endforeach; ?>
                 </select>
             </div>
+            <div class="col-md-6">
+                <label class="form-label">Límite de cajas activas</label>
+                <input type="number" min="0" step="1" class="form-control" name="max_cash_registers" value="<?= esc($settings['max_cash_registers'] ?? '0') ?>">
+                <div class="form-text">Usa 0 para indicar sin límite (ilimitado).</div>
+            </div>
+
             <div class="col-12"><label class="form-label">Direccion</label><textarea class="form-control" name="address" rows="3"><?= esc($company['address'] ?? '') ?></textarea></div>
             <div class="col-12 d-flex gap-2 pt-2">
                 <button class="btn btn-dark icon-btn" title="Guardar" aria-label="Guardar"><i class="bi bi-check-lg"></i></button>

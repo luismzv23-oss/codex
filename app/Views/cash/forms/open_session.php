@@ -13,7 +13,7 @@
                 <label class="form-label">Caja</label>
                 <select name="cash_register_id" class="form-select" required>
                     <?php foreach ($registers as $register): ?>
-                        <option value="<?= esc($register['id']) ?>"><?= esc($register['name']) ?> (<?= esc($register['register_type']) ?>)</option>
+                        <option value="<?= esc($register['id']) ?>" <?= (string) ($selectedRegisterId ?? '') === (string) $register['id'] ? 'selected' : '' ?>><?= esc($register['name']) ?> (<?= esc($register['register_type']) ?>)</option>
                     <?php endforeach; ?>
                 </select>
             </div>

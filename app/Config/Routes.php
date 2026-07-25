@@ -157,6 +157,15 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     $routes->post('caja/sesiones/apertura', 'CashController::storeOpenSession', ['filter' => 'permission:systems.view']);
     $routes->get('caja/sesiones/(:segment)/cierre', 'CashController::closeSessionForm/$1', ['filter' => 'permission:systems.view']);
     $routes->post('caja/sesiones/(:segment)/cierre', 'CashController::storeCloseSession/$1', ['filter' => 'permission:systems.view']);
+    $routes->get('caja/sesiones/(:segment)/pdf', 'CashController::sessionPdf/$1', ['filter' => 'permission:systems.view']);
+    $routes->get('caja/cajas/nueva', 'CashController::createRegisterForm', ['filter' => 'permission:systems.view']);
+    $routes->post('caja/cajas', 'CashController::storeRegister', ['filter' => 'permission:systems.view']);
+    $routes->get('caja/cajas/(:segment)/editar', 'CashController::editRegisterForm/$1', ['filter' => 'permission:systems.view']);
+    $routes->post('caja/cajas/(:segment)/actualizar', 'CashController::updateRegister/$1', ['filter' => 'permission:systems.view']);
+    $routes->get('caja/cajas/(:segment)/eliminar', 'CashController::deleteRegister/$1', ['filter' => 'permission:systems.view']);
+
+
+
     $routes->get('caja/movimientos/nuevo', 'CashController::createMovementForm', ['filter' => 'permission:systems.view']);
     $routes->post('caja/movimientos', 'CashController::storeMovement', ['filter' => 'permission:systems.view']);
     $routes->get('caja/cheques/nuevo', 'CashController::createCheckForm', ['filter' => 'permission:systems.view']);

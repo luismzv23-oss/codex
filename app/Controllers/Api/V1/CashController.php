@@ -98,7 +98,7 @@ class CashController extends BaseApiController
                 $this->apiUser()['id'],
                 (float) ($payload['actual_closing_amount'] ?? 0),
                 trim((string) ($payload['notes'] ?? '')),
-                $this->apiIsSuperadmin()
+                true
             );
 
             return $closed
@@ -118,7 +118,7 @@ class CashController extends BaseApiController
 
         $payload = (array) ($this->request->getJSON(true) ?: $this->request->getPost());
         $sessionId = trim((string) ($payload['cash_session_id'] ?? ''));
-        $userId = $this->apiIsSuperadmin() ? null : $this->apiUser()['id'];
+        $userId = null;
         $session = $this->cashService()->ownedSession($context['company']['id'], $sessionId, $userId);
         if (! $session) {
             return $this->fail('Debes seleccionar una sesion abierta valida o que te pertenezca.', 422);

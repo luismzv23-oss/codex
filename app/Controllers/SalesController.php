@@ -122,6 +122,17 @@ class SalesController extends BaseController
 
         $companyId = $context['company']['id'];
 
+        if ($this->roleSlug() === 'vendedor') {
+            $hasOpen = (new \App\Models\CashSessionModel())
+                ->where('company_id', $companyId)
+                ->where('status', 'open')
+                ->where('opened_by', $this->currentUser()['id'] ?? '')
+                ->countAllResults() > 0;
+            if (!$hasOpen) {
+                return redirect()->to(site_url('caja'))->with('error', 'No tienes ninguna caja abierta. Por favor, selecciona y abre una caja para poder vender.');
+            }
+        }
+
         // Verify a POS cash session is open before allowing access
         $cashSession = $this->resolveCashSession($companyId, 'pos');
         if (!$cashSession) {
@@ -154,7 +165,10 @@ class SalesController extends BaseController
             'companyId' => $companyId,
             'isPopup' => false,
             'cashSession' => $cashSession,
+            'activeSessions' => (new CashService())->activeSessions($companyId),
+            'selectedRegisterId' => session()->get('active_cash_register_id') ?? '',
         ]);
+
     }
 
     public function storePos()
@@ -166,7 +180,16 @@ class SalesController extends BaseController
         }
 
         $companyId = $context['company']['id'];
+        $isAdmin = in_array($this->roleSlug(), ['superadmin', 'admin'], true);
+        if ($isAdmin) {
+            $formRegisterId = trim((string) $this->request->getPost('cash_register_id'));
+            if ($formRegisterId !== '') {
+                session()->set('active_cash_register_id', $formRegisterId);
+            }
+        }
         $cashSession = $this->resolveCashSession($companyId, 'pos');
+
+
         if (!$cashSession) {
             return redirect()->back()->withInput()->with('error', 'No se puede registrar la venta. Debes abrir primero la caja CAJA-POS desde el modulo de Caja.');
         }
@@ -989,6 +1012,17 @@ class SalesController extends BaseController
 
         $companyId = $context['company']['id'];
 
+        if ($this->roleSlug() === 'vendedor') {
+            $hasOpen = (new \App\Models\CashSessionModel())
+                ->where('company_id', $companyId)
+                ->where('status', 'open')
+                ->where('opened_by', $this->currentUser()['id'] ?? '')
+                ->countAllResults() > 0;
+            if (!$hasOpen) {
+                return redirect()->to(site_url('caja'))->with('error', 'No tienes ninguna caja abierta. Por favor, selecciona y abre una caja para poder vender.');
+            }
+        }
+
         // Auto-open CAJA-KIOSCO session when entering the kiosk screen
         $cashSession = $this->resolveCashSession($companyId, 'kiosk');
 
@@ -1554,6 +1588,17 @@ class SalesController extends BaseController
 
         $companyId = $context['company']['id'];
 
+        if ($this->roleSlug() === 'vendedor') {
+            $hasOpen = (new \App\Models\CashSessionModel())
+                ->where('company_id', $companyId)
+                ->where('status', 'open')
+                ->where('opened_by', $this->currentUser()['id'] ?? '')
+                ->countAllResults() > 0;
+            if (!$hasOpen) {
+                return redirect()->to(site_url('caja'))->with('error', 'No tienes ninguna caja abierta. Por favor, selecciona y abre una caja para poder vender.');
+            }
+        }
+
         $sourceSale = null;
         $sourceSaleId = trim((string) $this->request->getGet('source_sale_id'));
         if ($sourceSaleId !== '') {
@@ -1623,7 +1668,10 @@ class SalesController extends BaseController
             'sourceSale' => $sourceSale,
             'fromOrder' => $fromOrder,
             'fromOrderItems' => $fromOrderItems,
+            'activeSessions' => (new CashService())->activeSessions($companyId),
+            'selectedRegisterId' => session()->get('active_cash_register_id') ?? '',
         ]);
+
     }
 
     public function store()
@@ -1635,7 +1683,16 @@ class SalesController extends BaseController
         }
 
         $companyId = $context['company']['id'];
+        $isAdmin = in_array($this->roleSlug(), ['superadmin', 'admin'], true);
+        if ($isAdmin) {
+            $formRegisterId = trim((string) $this->request->getPost('cash_register_id'));
+            if ($formRegisterId !== '') {
+                session()->set('active_cash_register_id', $formRegisterId);
+            }
+        }
         $payload = $this->salePayload($companyId, [], $context['access_level'] ?? 'manage');
+
+
 
         if ($payload instanceof RedirectResponse) {
             return $payload;
@@ -1707,7 +1764,10 @@ class SalesController extends BaseController
             'companyId' => $context['company']['id'],
             'isPopup' => $this->isPopupRequest(),
             'sourceSale' => !empty($sale['source_sale_id']) ? $this->ownedSale($context['company']['id'], (string) $sale['source_sale_id']) : null,
+            'activeSessions' => (new CashService())->activeSessions($context['company']['id']),
+            'selectedRegisterId' => session()->get('active_cash_register_id') ?? '',
         ]);
+
     }
 
     public function convert(string $id, string $targetCode)
@@ -3317,10 +3377,26 @@ class SalesController extends BaseController
             }
         }
 
+        $cashRegisterId = trim((string) ($input['cash_register_id'] ?? ''));
+        if ($cashRegisterId === '') {
+            $cashRegisterId = session()->get('active_cash_register_id') ?? '';
+        }
+
+        $cashSession = null;
+        if ($cashRegisterId !== '') {
+            $cashSession = (new CashService())->activeSessions($companyId, $cashRegisterId)[0] ?? null;
+        }
+        if (!$cashSession) {
+            $cashSession = (new CashService())->activeSessionForChannel($companyId, $channel);
+        }
+
         return [
             'sale' => [
                 'customer_id' => $customerId,
                 'warehouse_id' => $warehouseId,
+                'cash_register_id' => $cashSession['cash_register_id'] ?? null,
+                'cash_session_id' => $cashSession['id'] ?? null,
+
                 'document_type_id' => $documentContext['documentType']['id'],
                 'point_of_sale_id' => $documentContext['pointOfSale']['id'] ?? null,
                 'sales_agent_id' => $salesAgentId,
@@ -4036,8 +4112,8 @@ class SalesController extends BaseController
 
         $session = $service->activeSessionForChannel($companyId, $channel);
 
-        // Auto-open kiosk cash session if none is active
-        if (!$session && $channel === 'kiosk') {
+        // Auto-open kiosk cash session if none is active (not for vendedor)
+        if (!$session && $channel === 'kiosk' && $this->roleSlug() !== 'vendedor') {
             $session = $service->autoOpenKioskSession(
                 $companyId,
                 $this->currentUser()['id'],
@@ -4153,8 +4229,40 @@ class SalesController extends BaseController
                     return $result;
                 }
             }
+            // Ensure sale is linked to a valid open cash session before confirmation
+            $sessionModel = new \App\Models\CashSessionModel();
+
+            $session = null;
+            if (!empty($sale['cash_session_id'])) {
+                $session = $sessionModel->where('status', 'open')->find($sale['cash_session_id']);
+            }
+            
+            if (!$session) {
+                $service = new CashService();
+                $regId = $sale['cash_register_id'] ?: session()->get('active_cash_register_id');
+                if ($regId) {
+                    $session = $service->activeSessions($companyId, $regId)[0] ?? null;
+                }
+                if (!$session) {
+                    $channel = (string) ($sale['pos_mode'] ?? '') === '1' ? 'kiosk' : 'standard';
+                    $session = $service->activeSessionForChannel($companyId, $channel);
+                }
+                if ($session) {
+                    $sale['cash_register_id'] = $session['cash_register_id'];
+                    $sale['cash_session_id'] = $session['id'];
+                    
+                    (new SaleModel())->update($saleId, [
+                        'cash_register_id' => $session['cash_register_id'],
+                        'cash_session_id' => $session['id'],
+                    ]);
+                } else {
+                    $db->transRollback();
+                    return 'No se puede confirmar la venta. Debes abrir primero una sesión de caja operativa.';
+                }
+            }
 
             $updateData = [
+
                 'status' => 'confirmed',
                 'confirmed_by' => $this->currentUser()['id'],
                 'confirmed_at' => date('Y-m-d H:i:s'),

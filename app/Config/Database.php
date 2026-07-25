@@ -44,7 +44,9 @@ class Database extends Config
         'port'         => 3306,
         'numberNative' => false,
         'foundRows'    => false,
+        'timezone'     => '-03:00',
         'dateFormat'   => [
+
             'date'     => 'Y-m-d',
             'datetime' => 'Y-m-d H:i:s',
             'time'     => 'H:i:s',

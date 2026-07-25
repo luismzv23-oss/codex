@@ -10,7 +10,12 @@ use App\Models\CustomerModel;
 use App\Models\SupplierModel;
 use App\Models\SystemModel;
 use App\Models\UserSystemModel;
+use App\Models\CashSessionModel;
+use App\Models\UserModel;
 use CodeIgniter\HTTP\RedirectResponse;
+use Dompdf\Dompdf;
+use Dompdf\Options;
+
 
 class CashController extends BaseController
 {
@@ -22,22 +27,90 @@ class CashController extends BaseController
         }
 
         $service = $this->cashService();
+        $companyId = $context['company']['id'];
+        $session = session();
+
+        if ($this->request->getGet('cash_register_id') !== null) {
+            $cashRegisterId = trim((string) $this->request->getGet('cash_register_id'));
+            if ($cashRegisterId !== '') {
+                $session->set('active_cash_register_id', $cashRegisterId);
+            } else {
+                $session->remove('active_cash_register_id');
+            }
+        } else {
+            $cashRegisterId = (string) ($session->get('active_cash_register_id') ?? '');
+        }
+
+        $activeSessions = $service->activeSessions($companyId, $cashRegisterId);
+
+        $activeSessionsMap = [];
+        foreach ($activeSessions as $s) {
+            $activeSessionsMap[$s['cash_register_id']] = $s;
+        }
+
+        $registers = $service->registerRows($companyId);
+        $isVendedor = $this->roleSlug() === 'vendedor';
+        $currentUserId = $this->currentUser()['id'] ?? '';
+        $hasAnyOpenSessionByMe = false;
+
+        // Check if current seller already has an open session
+        $sellerSessions = (new CashSessionModel())
+            ->where('company_id', $companyId)
+            ->where('status', 'open')
+            ->where('opened_by', $currentUserId)
+            ->findAll();
+        if ($sellerSessions !== []) {
+            $hasAnyOpenSessionByMe = true;
+        }
+
+        if ($isVendedor) {
+            $filteredRegisters = [];
+            foreach ($registers as $r) {
+                $activeSess = $activeSessionsMap[$r['id']] ?? null;
+                if ($activeSess && $activeSess['opened_by'] === $currentUserId) {
+                    $filteredRegisters[] = $r;
+                }
+            }
+            if ($filteredRegisters === []) {
+                foreach ($registers as $r) {
+                    $activeSess = $activeSessionsMap[$r['id']] ?? null;
+                    if (!$activeSess) {
+                        $filteredRegisters[] = $r;
+                    }
+                }
+            }
+            $registers = $filteredRegisters;
+        }
+
+        $filterRegisterId = $cashRegisterId;
+        if ($isVendedor && empty($cashRegisterId)) {
+            $filterRegisterId = array_column($registers, 'id');
+        }
+
+        $sessions = $service->recentSessions($companyId, 20, $filterRegisterId);
+        $movements = $service->recentMovements($companyId, 20, $filterRegisterId);
+        $paymentMethods = $service->paymentMethodBreakdown($companyId, $filterRegisterId);
 
         return view('cash/index', [
             'pageTitle' => 'Caja y Tesoreria',
+            'hasAnyOpenSessionByMe' => $hasAnyOpenSessionByMe,
             'context' => $context,
             'companies' => $this->cashCompanies(),
-            'selectedCompanyId' => $context['company']['id'],
-            'summary' => $service->summary($context['company']['id']),
-            'registers' => $service->registerRows($context['company']['id']),
-            'sessions' => $service->activeSessions($context['company']['id']),
-            'movements' => $service->recentMovements($context['company']['id']),
-            'paymentMethods' => $service->paymentMethodBreakdown($context['company']['id']),
-            'gateways' => $service->gatewayRows($context['company']['id']),
-            'checks' => $service->checkRows($context['company']['id']),
-            'reconciliations' => $service->reconciliationRows($context['company']['id']),
+            'selectedCompanyId' => $companyId,
+            'selectedRegisterId' => $cashRegisterId,
+            'summary' => $service->summary($companyId, $cashRegisterId),
+            'registers' => $registers,
+            'sessions' => $sessions,
+            'activeSessionsMap' => $activeSessionsMap,
+            'movements' => $movements,
+            'paymentMethods' => $paymentMethods,
+            'gateways' => $service->gatewayRows($companyId),
+            'checks' => $service->checkRows($companyId),
+            'reconciliations' => $service->reconciliationRows($companyId),
         ]);
     }
+
+
 
     public function openSessionForm()
     {
@@ -46,13 +119,26 @@ class CashController extends BaseController
             return $context;
         }
 
+        if ($this->roleSlug() === 'vendedor') {
+            $hasOpen = (new CashSessionModel())
+                ->where('company_id', $context['company']['id'])
+                ->where('status', 'open')
+                ->where('opened_by', $this->currentUser()['id'] ?? '')
+                ->countAllResults() > 0;
+            if ($hasOpen) {
+                return $this->popupOrRedirect($this->cashRoute('caja', $context['company']['id']), 'Ya tienes una sesión de caja abierta. Solo puedes abrir una caja a la vez.', 'error');
+            }
+        }
+
         return view('cash/forms/open_session', [
             'pageTitle' => 'Apertura de caja',
             'companyId' => $context['company']['id'],
             'registers' => $this->cashService()->registerRows($context['company']['id']),
+            'selectedRegisterId' => $this->request->getGet('cash_register_id') ?? '',
             'formAction' => site_url('caja/sesiones/apertura'),
             'isPopup' => $this->isPopupRequest(),
         ]);
+
     }
 
     public function storeOpenSession()
@@ -63,6 +149,17 @@ class CashController extends BaseController
         }
 
         $companyId = $context['company']['id'];
+
+        if ($this->roleSlug() === 'vendedor') {
+            $hasOpen = (new CashSessionModel())
+                ->where('company_id', $companyId)
+                ->where('status', 'open')
+                ->where('opened_by', $this->currentUser()['id'] ?? '')
+                ->countAllResults() > 0;
+            if ($hasOpen) {
+                return redirect()->back()->withInput()->with('error', 'Ya tienes una sesión de caja abierta. Solo puedes abrir una caja a la vez.');
+            }
+        }
         $registerId = trim((string) $this->request->getPost('cash_register_id'));
         $register = (new CashRegisterModel())->where('company_id', $companyId)->where('id', $registerId)->where('active', 1)->first();
         if (! $register) {
@@ -81,6 +178,8 @@ class CashController extends BaseController
             return redirect()->back()->withInput()->with('error', 'La caja seleccionada ya tiene una sesion abierta.');
         }
 
+        session()->set('active_cash_register_id', $registerId);
+
         return $this->popupOrRedirect($this->cashRoute('caja', $companyId), 'Caja abierta correctamente.');
     }
 
@@ -91,20 +190,30 @@ class CashController extends BaseController
             return $context;
         }
 
-        $userId = $this->isSuperadmin() ? null : $this->currentUser()['id'];
+        $userId = null;
         $session = $this->cashService()->ownedSession($context['company']['id'], $id, $userId);
         if (! $session) {
             return redirect()->to($this->cashRoute('caja', $context['company']['id']))->with('error', 'La sesion de caja no existe o no tienes permiso para cerrarla.');
         }
+
+        $otherRegisters = (new CashRegisterModel())
+            ->where('company_id', $context['company']['id'])
+            ->where('id !=', $session['cash_register_id'])
+            ->where('active', 1)
+            ->findAll();
 
         return view('cash/forms/close_session', [
             'pageTitle' => 'Cierre de caja',
             'companyId' => $context['company']['id'],
             'session' => $session,
             'expectedAmount' => $this->cashService()->expectedBalance($id, (float) ($session['opening_amount'] ?? 0)),
+            'otherRegisters' => $otherRegisters,
             'formAction' => site_url('caja/sesiones/' . $id . '/cierre'),
             'isPopup' => $this->isPopupRequest(),
+            'isAdmin' => in_array($this->roleSlug(), ['superadmin', 'admin'], true),
         ]);
+
+
     }
 
     public function storeCloseSession(string $id)
@@ -114,25 +223,116 @@ class CashController extends BaseController
             return $context;
         }
 
+        $companyId = $context['company']['id'];
+        $userId = null;
+        $session = $this->cashService()->ownedSession($companyId, $id, $userId);
+        if (!$session) {
+            return redirect()->back()->withInput()->with('error', 'La sesion de caja no existe o no tienes permiso para cerrarla.');
+        }
+
+        $expectedAmount = $this->cashService()->expectedBalance($id, (float) ($session['opening_amount'] ?? 0));
+        $actualAmount = (float) $this->request->getPost('actual_closing_amount');
+        $isAdmin = in_array($this->roleSlug(), ['superadmin', 'admin'], true);
+
+        if (!$isAdmin && abs($actualAmount - $expectedAmount) > 0.01) {
+            $supervisorUsername = trim((string) $this->request->getPost('supervisor_username'));
+            $supervisorPassword = trim((string) $this->request->getPost('supervisor_password'));
+
+            if ($supervisorUsername === '' || $supervisorPassword === '') {
+                return redirect()->back()->withInput()->with('error', 'El arqueo de caja presenta diferencias con el saldo esperado y requiere la autorización de un supervisor.');
+            }
+
+            $userModel = new \App\Models\UserModel();
+            $supervisor = $userModel
+                ->select('users.*, r.slug AS role_slug')
+                ->join('roles r', 'r.id = users.role_id')
+                ->where('users.company_id', $companyId)
+                ->where('users.username', $supervisorUsername)
+                ->whereIn('r.slug', ['superadmin', 'admin'])
+                ->first();
+
+            if (!$supervisor || !password_verify($supervisorPassword, $supervisor['password_hash'])) {
+                return redirect()->back()->withInput()->with('error', 'Credenciales de supervisor inválidas o usuario no posee permisos de administración.');
+            }
+        }
+
+        $db = db_connect();
+        $db->transStart();
+
+
+        $transferFunds = $this->request->getPost('transfer_funds') === '1';
+        $destRegisterId = trim((string) $this->request->getPost('dest_cash_register_id'));
+        $transferAmount = (float) $this->request->getPost('transfer_amount');
+
+        if ($transferFunds && $destRegisterId !== '' && $transferAmount > 0) {
+            $destRegister = (new CashRegisterModel())->where('company_id', $companyId)->find($destRegisterId);
+            $sourceRegister = (new CashRegisterModel())->find($session['cash_register_id']);
+            
+            if ($destRegister && $sourceRegister) {
+                $this->cashService()->registerMovement([
+                    'company_id' => $companyId,
+                    'cash_register_id' => $session['cash_register_id'],
+                    'cash_session_id' => $id,
+                    'movement_type' => 'transfer_out',
+                    'payment_method' => 'cash',
+                    'amount' => -$transferAmount,
+                    'notes' => 'Rendición de cierre a ' . $destRegister['name'],
+                    'created_by' => $this->currentUser()['id'],
+                ]);
+
+                $destSession = (new CashSessionModel())
+                    ->where('company_id', $companyId)
+                    ->where('cash_register_id', $destRegisterId)
+                    ->where('status', 'open')
+                    ->first();
+
+                $destSessionId = $destSession ? $destSession['id'] : null;
+
+                $movementModel = new \App\Models\CashMovementModel();
+                $movementModel->insert([
+                    'company_id' => $companyId,
+                    'cash_register_id' => $destRegisterId,
+                    'cash_session_id' => $destSessionId,
+                    'movement_type' => 'transfer_in',
+                    'payment_method' => 'cash',
+                    'amount' => $transferAmount,
+                    'notes' => 'Ingreso por rendición de cierre desde ' . $sourceRegister['name'],
+                    'occurred_at' => date('Y-m-d H:i:s'),
+                    'created_by' => $this->currentUser()['id'],
+                ]);
+
+                if ($destSessionId) {
+                    (new CashSessionModel())->update($destSessionId, [
+                        'expected_closing_amount' => $this->cashService()->expectedBalance($destSessionId, (float) ($destSession['opening_amount'] ?? 0)),
+                    ]);
+                }
+            }
+        }
+
         try {
             $closed = $this->cashService()->closeSession(
-                $context['company']['id'],
+                $companyId,
                 $id,
                 $this->currentUser()['id'],
                 (float) $this->request->getPost('actual_closing_amount'),
                 trim((string) $this->request->getPost('notes')),
-                $this->isSuperadmin()
+                true
             );
 
             if (! $closed) {
+                $db->transRollback();
                 return redirect()->back()->withInput()->with('error', 'No se pudo cerrar la sesion seleccionada.');
             }
         } catch (\Throwable $e) {
+            $db->transRollback();
             return redirect()->back()->withInput()->with('error', $e->getMessage());
         }
 
-        return $this->popupOrRedirect($this->cashRoute('caja', $context['company']['id']), 'Caja cerrada correctamente.');
+        $db->transComplete();
+
+        return $this->popupOrRedirect($this->cashRoute('caja', $companyId), 'Caja cerrada correctamente.');
     }
+
 
     public function createMovementForm()
     {
@@ -251,7 +451,7 @@ class CashController extends BaseController
         }
 
         $sessionId = trim((string) $this->request->getPost('cash_session_id'));
-        $userId = $this->isSuperadmin() ? null : $this->currentUser()['id'];
+        $userId = null;
         $session = $this->cashService()->ownedSession($context['company']['id'], $sessionId, $userId);
         if (! $session) {
             return redirect()->back()->withInput()->with('error', 'Debes seleccionar una sesion abierta valida o que te pertenezca.');
@@ -529,4 +729,258 @@ class CashController extends BaseController
 
         return $this->popupOrRedirect($this->cashRoute('caja', $context['company']['id']), 'Cheque rechazado correctamente.');
     }
+
+    public function sessionPdf(string $sessionId)
+    {
+        $context = $this->cashContext('view');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+
+        $sessionModel = new CashSessionModel();
+        $session = $sessionModel->where('company_id', $context['company']['id'])->find($sessionId);
+        if (!$session) {
+            return redirect()->to($this->cashRoute('caja', $context['company']['id']))->with('error', 'La sesión de caja no existe.');
+        }
+
+        $register = (new CashRegisterModel())->find($session['cash_register_id']);
+        $company = (new CompanyModel())->find($session['company_id']);
+
+        $userModel = new UserModel();
+        $openedBy = $userModel->find($session['opened_by']);
+        $closedBy = $session['closed_by'] ? $userModel->find($session['closed_by']) : null;
+
+        // Query sales linked to this session
+        $sales = db_connect()->table('sales s')
+            ->select('s.*, c.name AS customer_name, dt.name AS document_name')
+            ->join('customers c', 'c.id = s.customer_id', 'left')
+            ->join('sales_document_types dt', 'dt.id = s.document_type_id', 'left')
+            ->where('s.cash_session_id', $sessionId)
+            ->whereIn('s.status', ['confirmed', 'returned_partial', 'returned_total'])
+            ->orderBy('s.created_at', 'ASC')
+            ->get()->getResultArray();
+
+        // Summary of cash movements for this session
+        $paymentMethods = db_connect()->table('cash_movements')
+            ->select('payment_method, SUM(amount) AS total')
+            ->where('cash_session_id', $sessionId)
+            ->groupBy('payment_method')
+            ->get()->getResultArray();
+
+        $data = [
+            'session' => $session,
+            'register' => $register,
+            'company' => $company,
+            'openedBy' => $openedBy,
+            'closedBy' => $closedBy,
+            'sales' => $sales,
+            'paymentMethods' => $paymentMethods,
+        ];
+
+        return $this->renderPdf('cash/pdf/session', $data, 'reporte_caja_' . $session['id'] . '.pdf');
+    }
+
+    private function renderPdf(string $view, array $data, string $filename)
+    {
+        $options = new Options();
+        $options->set('isRemoteEnabled', false);
+        $options->set('defaultFont', 'DejaVu Sans');
+
+        $dompdf = new Dompdf($options);
+        $dompdf->loadHtml(view($view, $data));
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
+
+        return $this->response
+            ->setHeader('Content-Type', 'application/pdf')
+            ->setHeader('Content-Disposition', 'inline; filename="' . $filename . '"')
+            ->setBody($dompdf->output());
+    }
+
+    public function createRegisterForm()
+    {
+        $context = $this->cashContext('manage');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+
+        if ($this->roleSlug() === 'vendedor') {
+            return redirect()->to($this->cashRoute('caja', $context['company']['id']))->with('error', 'No tienes permisos para configurar cajas.');
+        }
+
+        // Check if we can create a new register under the active count limit
+        if (!$this->cashService()->canCreateOrActivateRegister($context['company']['id'])) {
+            $limit = $this->cashService()->getMaxCashRegisters($context['company']['id']);
+            return $this->popupOrRedirect($this->cashRoute('caja', $context['company']['id']), 'Se ha alcanzado el límite máximo de ' . $limit . ' cajas activas para esta empresa.', 'error');
+        }
+
+        return view('cash/forms/create_register', [
+            'pageTitle' => 'Nueva caja',
+            'companyId' => $context['company']['id'],
+            'formAction' => site_url('caja/cajas'),
+            'isPopup' => $this->isPopupRequest(),
+        ]);
+    }
+
+    public function storeRegister()
+    {
+        $context = $this->cashContext('manage');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+
+        if ($this->roleSlug() === 'vendedor') {
+            return redirect()->to($this->cashRoute('caja', $context['company']['id']))->with('error', 'No tienes permisos para configurar cajas.');
+        }
+
+        $companyId = $context['company']['id'];
+
+        if (!$this->cashService()->canCreateOrActivateRegister($companyId)) {
+            $limit = $this->cashService()->getMaxCashRegisters($companyId);
+            return $this->popupOrRedirect($this->cashRoute('caja', $companyId), 'Se ha alcanzado el límite máximo de ' . $limit . ' cajas activas para esta empresa.', 'error');
+        }
+
+        $name = trim((string) $this->request->getPost('name'));
+        $code = trim((string) $this->request->getPost('code'));
+        $registerType = trim((string) $this->request->getPost('register_type'));
+
+        if ($name === '' || $code === '' || $registerType === '') {
+            return redirect()->back()->withInput()->with('error', 'Todos los campos son obligatorios.');
+        }
+
+        // Check code uniqueness for the company
+        $registerModel = new CashRegisterModel();
+        if ($registerModel->where('company_id', $companyId)->where('code', $code)->first()) {
+            return redirect()->back()->withInput()->with('error', 'El código de caja ya está en uso en esta empresa.');
+        }
+
+        $branchId = (new \App\Models\BranchModel())
+            ->where('company_id', $companyId)
+            ->where('active', 1)
+            ->orderBy('code', 'ASC')
+            ->first()['id'] ?? null;
+
+        $registerModel->insert([
+            'company_id' => $companyId,
+            'branch_id' => $branchId,
+            'name' => $name,
+            'code' => $code,
+            'register_type' => $registerType,
+            'active' => 1,
+            'is_default' => 0,
+        ]);
+
+        return $this->popupOrRedirect($this->cashRoute('caja', $companyId), 'Caja registrada correctamente.');
+    }
+
+    public function editRegisterForm(string $id)
+    {
+        $context = $this->cashContext('manage');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+
+        if ($this->roleSlug() === 'vendedor') {
+            return redirect()->to($this->cashRoute('caja', $context['company']['id']))->with('error', 'No tienes permisos para configurar cajas.');
+        }
+
+        $register = (new CashRegisterModel())
+            ->where('company_id', $context['company']['id'])
+            ->find($id);
+
+        if (!$register) {
+            return redirect()->to($this->cashRoute('caja', $context['company']['id']))->with('error', 'Caja no encontrada.');
+        }
+
+        return view('cash/forms/edit_register', [
+            'pageTitle' => 'Editar caja',
+            'companyId' => $context['company']['id'],
+            'register' => $register,
+            'formAction' => site_url('caja/cajas/' . $id . '/actualizar'),
+            'isPopup' => $this->isPopupRequest(),
+        ]);
+    }
+
+    public function updateRegister(string $id)
+    {
+        $context = $this->cashContext('manage');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+
+        if ($this->roleSlug() === 'vendedor') {
+            return redirect()->to($this->cashRoute('caja', $context['company']['id']))->with('error', 'No tienes permisos para configurar cajas.');
+        }
+
+        $companyId = $context['company']['id'];
+        $registerModel = new CashRegisterModel();
+        $register = $registerModel->where('company_id', $companyId)->find($id);
+
+        if (!$register) {
+            return redirect()->to($this->cashRoute('caja', $companyId))->with('error', 'Caja no encontrada.');
+        }
+
+        $name = trim((string) $this->request->getPost('name'));
+        $code = trim((string) $this->request->getPost('code'));
+        $registerType = trim((string) $this->request->getPost('register_type'));
+        $active = (int) $this->request->getPost('active');
+
+        if ($name === '' || $code === '' || $registerType === '') {
+            return redirect()->back()->withInput()->with('error', 'Todos los campos son obligatorios.');
+        }
+
+        if ($code !== $register['code']) {
+            if ($registerModel->where('company_id', $companyId)->where('code', $code)->first()) {
+                return redirect()->back()->withInput()->with('error', 'El código de caja ya está en uso en esta empresa.');
+            }
+        }
+
+        if ($active === 1 && (int) $register['active'] === 0) {
+            if (!$this->cashService()->canCreateOrActivateRegister($companyId)) {
+                $limit = $this->cashService()->getMaxCashRegisters($companyId);
+                return redirect()->back()->withInput()->with('error', 'No se puede activar esta caja. Se ha alcanzado el límite máximo de ' . $limit . ' cajas activas.');
+            }
+        }
+
+        $registerModel->update($id, [
+            'name' => $name,
+            'code' => $code,
+            'register_type' => $registerType,
+            'active' => $active,
+        ]);
+
+        return $this->popupOrRedirect($this->cashRoute('caja', $companyId), 'Caja actualizada correctamente.');
+    }
+
+    public function deleteRegister(string $id)
+    {
+        $context = $this->cashContext('manage');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+
+        if ($this->roleSlug() === 'vendedor') {
+            return redirect()->to($this->cashRoute('caja', $context['company']['id']))->with('error', 'No tienes permisos para configurar cajas.');
+        }
+
+        $companyId = $context['company']['id'];
+        $registerModel = new CashRegisterModel();
+        $register = $registerModel->where('company_id', $companyId)->find($id);
+
+        if (!$register) {
+            return redirect()->to($this->cashRoute('caja', $companyId))->with('error', 'Caja no encontrada.');
+        }
+
+        $sessionCount = (new CashSessionModel())->where('cash_register_id', $id)->countAllResults();
+        if ($sessionCount > 0) {
+            $registerModel->update($id, ['active' => 0]);
+            return redirect()->to($this->cashRoute('caja', $companyId))->with('message', 'La caja tiene movimientos asociados, por lo que fue desactivada.');
+        }
+
+        $registerModel->delete($id);
+        return redirect()->to($this->cashRoute('caja', $companyId))->with('message', 'Caja eliminada correctamente.');
+    }
 }
+
+
+

@@ -231,6 +231,25 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
                         <label class="form-label">Vencimiento</label>
                         <input type="datetime-local" name="due_date" class="form-control" value="<?= esc($defaultDueDate) ?>">
                     </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Caja de imputación</label>
+                        <?php 
+                        $isCashAdmin = in_array(auth_user()['role_slug'] ?? '', ['superadmin', 'admin'], true); 
+                        ?>
+                        <select name="cash_register_id" class="form-select" <?= !$isCashAdmin ? 'disabled' : '' ?> required>
+                            <?php foreach (($activeSessions ?? []) as $session): ?>
+                                <option value="<?= esc($session['cash_register_id']) ?>" <?= (string) old('cash_register_id', $sale['cash_register_id'] ?? $selectedRegisterId) === (string) $session['cash_register_id'] ? 'selected' : '' ?>><?= esc($session['register_name']) ?> (<?= esc($session['register_type']) ?>)</option>
+                            <?php endforeach; ?>
+                            <?php if (empty($activeSessions)): ?>
+                                <option value="">No hay cajas abiertas</option>
+                            <?php endif; ?>
+                        </select>
+                        <?php if (!$isCashAdmin): ?>
+                            <input type="hidden" name="cash_register_id" value="<?= esc($selectedRegisterId) ?>">
+                        <?php endif; ?>
+                    </div>
+
+
                     <div class="col-12">
                         <label class="form-label">Observacion</label>
                         <textarea name="notes" class="form-control" rows="3"><?= esc(old('notes', $sale['notes'] ?? '')) ?></textarea>

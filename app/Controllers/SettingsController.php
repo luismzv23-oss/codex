@@ -70,8 +70,36 @@ class SettingsController extends BaseController
             'currency_code' => trim((string) $this->request->getPost('currency_code')),
         ]);
 
+        $maxCashRegistersVal = trim((string) ($this->request->getPost('max_cash_registers') ?? '0'));
+        $maxCashRegisters = max(0, (int) $maxCashRegistersVal);
+
+        $db = db_connect();
+        $existingSetting = $db->table('company_settings')
+            ->where('company_id', $companyId)
+            ->where('key', 'max_cash_registers')
+            ->get()->getRowArray();
+
+        if ($existingSetting) {
+            $db->table('company_settings')
+                ->where('id', $existingSetting['id'])
+                ->update([
+                    'value' => (string) $maxCashRegisters,
+                    'updated_at' => date('Y-m-d H:i:s'),
+                ]);
+        } else {
+            $db->table('company_settings')->insert([
+                'id' => app_uuid(),
+                'company_id' => $companyId,
+                'key' => 'max_cash_registers',
+                'value' => (string) $maxCashRegisters,
+                'created_at' => date('Y-m-d H:i:s'),
+                'updated_at' => date('Y-m-d H:i:s'),
+            ]);
+        }
+
         return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Datos de la empresa actualizados.');
     }
+
 
     public function storeBranch()
     {
@@ -244,14 +272,25 @@ class SettingsController extends BaseController
         $companyId = $this->resolveCompanyId();
         $company = (new CompanyModel())->find($companyId);
 
+        $db = db_connect();
+        $row = $db->table('company_settings')
+            ->where('company_id', $companyId)
+            ->where('key', 'max_cash_registers')
+            ->get()->getRowArray();
+        $settings = [
+            'max_cash_registers' => $row['value'] ?? '0'
+        ];
+
         return view('settings/forms/company', [
             'pageTitle' => 'Editar datos de empresa',
             'company' => $company,
             'currencyOptions' => $this->companyCurrencyOptions($companyId, $company['currency_code'] ?? null),
             'formAction' => site_url('configuracion/empresa'),
             'isPopup' => $this->isPopupRequest(),
+            'settings' => $settings,
         ]);
     }
+
 
     public function createBranchForm()
     {

@@ -27,6 +27,9 @@ class CashService
 
         foreach ($defaults as $row) {
             if (! $registerModel->where('company_id', $companyId)->where('code', $row['code'])->first()) {
+                if (! $this->canCreateOrActivateRegister($companyId)) {
+                    break;
+                }
                 $registerModel->insert(array_merge($row, [
                     'company_id' => $companyId,
                     'branch_id' => $branchId,
@@ -34,6 +37,7 @@ class CashService
                 ]));
             }
         }
+
 
         $gatewayModel = new CashPaymentGatewayModel();
         $gateways = [
@@ -53,48 +57,107 @@ class CashService
 
     public function registerRows(string $companyId): array
     {
-        return (new CashRegisterModel())->where('company_id', $companyId)->where('active', 1)->orderBy('register_type', 'ASC')->orderBy('name', 'ASC')->findAll();
+        return (new CashRegisterModel())->where('company_id', $companyId)->orderBy('register_type', 'ASC')->orderBy('name', 'ASC')->findAll();
     }
 
-    public function activeSessions(string $companyId): array
+
+    public function activeSessions(string $companyId, ?string $cashRegisterId = null): array
     {
-        return db_connect()->table('cash_sessions cs')
+        $query = db_connect()->table('cash_sessions cs')
             ->select('cs.*, cr.name AS register_name, cr.code AS register_code, cr.register_type')
             ->join('cash_registers cr', 'cr.id = cs.cash_register_id')
             ->where('cs.company_id', $companyId)
-            ->where('cs.status', 'open')
-            ->orderBy('cs.opened_at', 'DESC')
+            ->where('cs.status', 'open');
+
+        if ($cashRegisterId !== null && $cashRegisterId !== '') {
+            $query->where('cs.cash_register_id', $cashRegisterId);
+        }
+
+        return $query->orderBy('cs.opened_at', 'DESC')
             ->get()
             ->getResultArray();
     }
 
-    public function recentMovements(string $companyId, int $limit = 20): array
+    public function recentSessions(string $companyId, int $limit = 20, $cashRegisterId = null): array
     {
-        return db_connect()->table('cash_movements cm')
-            ->select('cm.*, cr.name AS register_name, g.name AS gateway_name, ch.check_number')
-            ->join('cash_registers cr', 'cr.id = cm.cash_register_id')
-            ->join('cash_payment_gateways g', 'g.id = cm.gateway_id', 'left')
-            ->join('cash_checks ch', 'ch.id = cm.cash_check_id', 'left')
-            ->where('cm.company_id', $companyId)
-            ->orderBy('cm.occurred_at', 'DESC')
+        $query = db_connect()->table('cash_sessions cs')
+            ->select('cs.*, cr.name AS register_name, cr.code AS register_code, cr.register_type')
+            ->join('cash_registers cr', 'cr.id = cs.cash_register_id')
+            ->where('cs.company_id', $companyId)
+            ->where('cs.id = (SELECT cs2.id FROM cash_sessions cs2 WHERE cs2.cash_register_id = cs.cash_register_id ORDER BY cs2.opened_at DESC LIMIT 1)', null, false);
+
+        if ($cashRegisterId !== null && $cashRegisterId !== '' && $cashRegisterId !== []) {
+            if (is_array($cashRegisterId)) {
+                $query->whereIn('cs.cash_register_id', $cashRegisterId);
+            } else {
+                $query->where('cs.cash_register_id', $cashRegisterId);
+            }
+        }
+
+        return $query->orderBy('cs.opened_at', 'DESC')
             ->limit($limit)
             ->get()
             ->getResultArray();
     }
 
-    public function summary(string $companyId): array
+
+    public function recentMovements(string $companyId, int $limit = 20, $cashRegisterId = null): array
+    {
+        $query = db_connect()->table('cash_movements cm')
+            ->select('cm.*, cr.name AS register_name, g.name AS gateway_name, ch.check_number')
+            ->join('cash_registers cr', 'cr.id = cm.cash_register_id')
+            ->join('cash_payment_gateways g', 'g.id = cm.gateway_id', 'left')
+            ->join('cash_checks ch', 'ch.id = cm.cash_check_id', 'left')
+            ->where('cm.company_id', $companyId);
+
+        if ($cashRegisterId !== null && $cashRegisterId !== '' && $cashRegisterId !== []) {
+            if (is_array($cashRegisterId)) {
+                $query->whereIn('cm.cash_register_id', $cashRegisterId);
+            } else {
+                $query->where('cm.cash_register_id', $cashRegisterId);
+            }
+        }
+
+        return $query->orderBy('cm.occurred_at', 'DESC')
+            ->limit($limit)
+            ->get()
+            ->getResultArray();
+    }
+
+    public function summary(string $companyId, ?string $cashRegisterId = null): array
     {
         $registerModel = new CashRegisterModel();
         $sessionModel = new CashSessionModel();
         $movementModel = new CashMovementModel();
 
         $today = date('Y-m-d');
-        $incomes = (float) (($movementModel->selectSum('amount', 'amount')->where('company_id', $companyId)->where('DATE(occurred_at) >=', $today)->where('amount >=', 0)->first()['amount'] ?? 0));
-        $expenses = abs((float) (($movementModel->selectSum('amount', 'amount')->where('company_id', $companyId)->where('DATE(occurred_at) >=', $today)->where('amount <', 0)->first()['amount'] ?? 0)));
+        
+        $incomesQuery = $movementModel->selectSum('amount', 'amount')
+            ->where('company_id', $companyId)
+            ->where('DATE(occurred_at) >=', $today)
+            ->where('amount >=', 0);
+            
+        $expensesQuery = $movementModel->selectSum('amount', 'amount')
+            ->where('company_id', $companyId)
+            ->where('DATE(occurred_at) >=', $today)
+            ->where('amount <', 0);
+
+        $registersQuery = $registerModel->where('company_id', $companyId)->where('active', 1);
+        $sessionsOpenQuery = $sessionModel->where('company_id', $companyId)->where('status', 'open');
+
+        if ($cashRegisterId !== null && $cashRegisterId !== '') {
+            $incomesQuery->where('cash_register_id', $cashRegisterId);
+            $expensesQuery->where('cash_register_id', $cashRegisterId);
+            $registersQuery->where('id', $cashRegisterId);
+            $sessionsOpenQuery->where('cash_register_id', $cashRegisterId);
+        }
+
+        $incomes = (float) ($incomesQuery->first()['amount'] ?? 0);
+        $expenses = abs((float) ($expensesQuery->first()['amount'] ?? 0));
 
         return [
-            'registers' => $registerModel->where('company_id', $companyId)->where('active', 1)->countAllResults(),
-            'sessions_open' => $sessionModel->where('company_id', $companyId)->where('status', 'open')->countAllResults(),
+            'registers' => $registersQuery->countAllResults(),
+            'sessions_open' => $sessionsOpenQuery->countAllResults(),
             'today_income' => round($incomes, 2),
             'today_expense' => round($expenses, 2),
             'today_balance' => round($incomes - $expenses, 2),
@@ -103,16 +166,26 @@ class CashService
         ];
     }
 
-    public function paymentMethodBreakdown(string $companyId): array
+    public function paymentMethodBreakdown(string $companyId, $cashRegisterId = null): array
     {
-        return db_connect()->table('cash_movements')
+        $query = db_connect()->table('cash_movements')
             ->select('payment_method, SUM(amount) AS total', false)
-            ->where('company_id', $companyId)
-            ->groupBy('payment_method')
+            ->where('company_id', $companyId);
+
+        if ($cashRegisterId !== null && $cashRegisterId !== '' && $cashRegisterId !== []) {
+            if (is_array($cashRegisterId)) {
+                $query->whereIn('cash_register_id', $cashRegisterId);
+            } else {
+                $query->where('cash_register_id', $cashRegisterId);
+            }
+        }
+
+        return $query->groupBy('payment_method')
             ->orderBy('payment_method', 'ASC')
             ->get()
             ->getResultArray();
     }
+
 
     public function gatewayRows(string $companyId): array
     {
@@ -186,13 +259,28 @@ class CashService
 
     public function activeSessionForChannel(string $companyId, string $channel = 'general'): ?array
     {
-        $rows = db_connect()->table('cash_sessions cs')
+        $session = session();
+        $activeRegisterId = $session->get('active_cash_register_id');
+
+        $query = db_connect()->table('cash_sessions cs')
             ->select('cs.*, cr.name AS register_name, cr.code AS register_code, cr.register_type')
             ->join('cash_registers cr', 'cr.id = cs.cash_register_id')
             ->where('cs.company_id', $companyId)
             ->where('cs.status', 'open')
-            ->where('cr.active', 1)
-            ->orderBy('cs.opened_at', 'DESC')
+            ->where('cr.active', 1);
+
+        if ($activeRegisterId !== null && $activeRegisterId !== '') {
+            $regSessionQuery = clone $query;
+            $regSession = $regSessionQuery->where('cs.cash_register_id', $activeRegisterId)
+                ->orderBy('cs.opened_at', 'DESC')
+                ->get()
+                ->getRowArray();
+            if ($regSession) {
+                return $regSession;
+            }
+        }
+
+        $rows = $query->orderBy('cs.opened_at', 'DESC')
             ->get()
             ->getResultArray();
 
@@ -209,6 +297,7 @@ class CashService
 
         return $rows[0] ?? null;
     }
+
 
     public function openSession(string $companyId, string $registerId, string $userId, float $openingAmount, ?string $notes = null): ?string
     {
@@ -354,7 +443,11 @@ class CashService
             ->first();
 
         if (! $register) {
+            if (! $this->canCreateOrActivateRegister($companyId)) {
+                return null;
+            }
             $branchId ??= (new BranchModel())
+
                 ->where('company_id', $companyId)
                 ->where('active', 1)
                 ->orderBy('code', 'ASC')
@@ -536,4 +629,30 @@ class CashService
         $db->transComplete();
         return $db->transStatus();
     }
+
+    public function getMaxCashRegisters(string $companyId): int
+    {
+        $db = db_connect();
+        $row = $db->table('company_settings')
+            ->where('company_id', $companyId)
+            ->where('key', 'max_cash_registers')
+            ->get()->getRowArray();
+        return $row ? max(0, (int) $row['value']) : 0;
+    }
+
+    public function canCreateOrActivateRegister(string $companyId): bool
+    {
+        $limit = $this->getMaxCashRegisters($companyId);
+        if ($limit === 0) {
+            return true;
+        }
+
+        $activeCount = (new CashRegisterModel())
+            ->where('company_id', $companyId)
+            ->where('active', 1)
+            ->countAllResults();
+
+        return $activeCount < $limit;
+    }
 }
+

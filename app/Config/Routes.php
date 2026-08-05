@@ -431,4 +431,14 @@ $routes->group('api/v1', ['namespace' => 'App\Controllers\Api\V1'], static funct
     $routes->get('notifications', 'NotificationsController::index', ['filter' => 'apiauth']);
     $routes->post('notifications/(:segment)/read', 'NotificationsController::markRead/$1', ['filter' => 'apiauth']);
     $routes->post('notifications/read-all', 'NotificationsController::markAllRead', ['filter' => 'apiauth']);
+
+    // ── Advanced ERP Operations (Phase 7) ─────────────────
+    $routes->post('mrp/calculate', 'Api\V1\ErpAdvancedController::calculateMrp', ['filter' => 'apipermission:systems.view']);
+    $routes->post('sales/check-credit-risk', 'Api\V1\ErpAdvancedController::checkCreditRisk', ['filter' => 'apipermission:systems.view']);
+    $routes->post('sales/arca/queue', 'Api\V1\ErpAdvancedController::queueArcaInvoice', ['filter' => 'apipermission:systems.manage']);
+    $routes->post('sales/arca/process-batch', 'Api\V1\ErpAdvancedController::processArcaBatch', ['filter' => 'apipermission:systems.manage']);
+    $routes->post('purchases/withholdings/calculate', 'Api\V1\ErpAdvancedController::calculateWithholdings', ['filter' => 'apipermission:systems.view']);
+    $routes->post('cash/reconcile-statement', 'Api\V1\ErpAdvancedController::reconcileBankStatement', ['filter' => 'apipermission:systems.manage']);
+    $routes->post('cash/checks/transition', 'Api\V1\ErpAdvancedController::transitionCheckState', ['filter' => 'apipermission:systems.manage']);
 });
+

@@ -19,6 +19,11 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     $routes->get('dashboard/readiness', 'DashboardController::readiness', ['filter' => 'permission:dashboard.view']);
     $routes->get('dashboard/qa', 'DashboardController::qa', ['filter' => 'permission:dashboard.view']);
     $routes->post('dashboard/qa/runs', 'DashboardController::storeQaRun', ['filter' => 'permission:dashboard.view']);
+
+    // Reporting Center Group (Restricted to Admin & Superadmin)
+    $routes->get('reports', 'ReportController::index', ['filter' => 'reports_auth']);
+    $routes->get('reports/export/(:segment)', 'ReportController::export/$1', ['filter' => 'reports_auth']);
+    $routes->get('reports/export/(:segment)/(:segment)', 'ReportController::export/$1/$2', ['filter' => 'reports_auth']);
     $routes->get('sistemas', 'SystemsController::index', ['filter' => 'permission:systems.view']);
     $routes->get('sistemas/nuevo', 'SystemsController::create', ['filter' => 'permission:systems.manage']);
     $routes->post('sistemas', 'SystemsController::store', ['filter' => 'permission:systems.manage']);

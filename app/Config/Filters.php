@@ -40,6 +40,7 @@ class Filters extends BaseConfig
         'permission'    => PermissionFilter::class,
         'throttle'        => ThrottleFilter::class,
         'securityheaders' => SecurityHeadersFilter::class,
+        'reports_auth'    => \App\Filters\ReportsAuthFilter::class,
     ];
 
     /**

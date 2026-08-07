@@ -1,0 +1,168 @@
+/* ==========================================================================
+   Codex ERP — Master International UI/UX Design System
+   Aligned with ISO 9241-210, WCAG 2.1 AA, Material Design 3 & Apple HIG
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+:root {
+    /* Color Palette — HSL Spectrum */
+    --codex-hue-primary: 243;
+    --codex-brand-primary: hsl(var(--codex-hue-primary), 75%, 59%);
+    --codex-brand-hover: hsl(var(--codex-hue-primary), 75%, 52%);
+    --codex-brand-active: hsl(var(--codex-hue-primary), 75%, 44%);
+    --codex-brand-glow: rgba(79, 70, 229, 0.4);
+    --codex-brand-subtle: rgba(79, 70, 229, 0.12);
+
+    /* Neutral Surface Tones (Dark Theme Default) */
+    --codex-bg-body: #090d16;
+    --codex-bg-surface: #111827;
+    --codex-bg-surface-hover: #1f2937;
+    --codex-bg-glass: rgba(17, 24, 39, 0.78);
+    --codex-bg-overlay: rgba(9, 13, 22, 0.85);
+
+    /* Text Colors (WCAG AAA High Contrast) */
+    --codex-text-main: #f9fafb;
+    --codex-text-muted: #9ca3af;
+    --codex-text-dim: #6b7280;
+    --codex-text-inverse: #090d16;
+
+    /* Semantics & Status Tokens */
+    --codex-success: #10b981;
+    --codex-success-bg: rgba(16, 185, 129, 0.14);
+    --codex-warning: #f59e0b;
+    --codex-warning-bg: rgba(245, 158, 11, 0.14);
+    --codex-danger: #ef4444;
+    --codex-danger-bg: rgba(239, 68, 68, 0.14);
+    --codex-info: #3b82f6;
+    --codex-info-bg: rgba(59, 130, 246, 0.14);
+
+    /* Glassmorphism Lines & Borders */
+    --codex-border-color: rgba(255, 255, 255, 0.08);
+    --codex-border-hover: rgba(255, 255, 255, 0.18);
+    --codex-border-focus: rgba(79, 70, 229, 0.6);
+
+    /* Typography */
+    --codex-font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    --codex-font-mono: 'JetBrains Mono', monospace;
+
+    /* Shadows & Elevation Levels */
+    --codex-radius-sm: 0.375rem;
+    --codex-radius-md: 0.75rem;
+    --codex-radius-lg: 1.25rem;
+    --codex-radius-full: 9999px;
+
+    --codex-shadow-1: 0 2px 4px rgba(0, 0, 0, 0.2);
+    --codex-shadow-2: 0 4px 12px rgba(0, 0, 0, 0.3);
+    --codex-shadow-3: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+    --codex-shadow-4: 0 20px 40px -10px rgba(0, 0, 0, 0.6);
+    --codex-shadow-glow: 0 0 20px rgba(79, 70, 229, 0.35);
+
+    /* Micro-Animations */
+    --codex-ease: cubic-bezier(0.16, 1, 0.3, 1);
+    --codex-transition-fast: 150ms var(--codex-ease);
+    --codex-transition-normal: 250ms var(--codex-ease);
+}
+
+/* Light Theme Variables */
+[data-theme="light"] {
+    --codex-bg-body: #f8fafc;
+    --codex-bg-surface: #ffffff;
+    --codex-bg-surface-hover: #f1f5f9;
+    --codex-bg-glass: rgba(255, 255, 255, 0.85);
+    --codex-bg-overlay: rgba(248, 250, 252, 0.85);
+
+    --codex-text-main: #0f172a;
+    --codex-text-muted: #64748b;
+    --codex-text-dim: #94a3b8;
+    --codex-text-inverse: #ffffff;
+
+    --codex-border-color: rgba(15, 23, 42, 0.08);
+    --codex-border-hover: rgba(15, 23, 42, 0.18);
+    --codex-shadow-1: 0 2px 4px rgba(15, 23, 42, 0.04);
+    --codex-shadow-2: 0 4px 12px rgba(15, 23, 42, 0.06);
+    --codex-shadow-3: 0 10px 25px -5px rgba(15, 23, 42, 0.08);
+}
+
+/* Base Styles */
+body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: var(--codex-font-sans);
+    font-size: 0.9375rem;
+    line-height: 1.6;
+    color: var(--codex-text-main);
+    background-color: var(--codex-bg-body);
+    background-image: 
+        radial-gradient(at 0% 0%, rgba(79, 70, 229, 0.15) 0px, transparent 45%),
+        radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.10) 0px, transparent 45%);
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Glass Container Cards */
+.codex-glass-card {
+    padding: 1.5rem;
+    border: 1px solid var(--codex-border-color);
+    border-radius: var(--codex-radius-lg);
+    background: var(--codex-bg-glass);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: var(--codex-shadow-2);
+    transition: var(--codex-transition-normal);
+}
+
+.codex-glass-card:hover {
+    border-color: var(--codex-border-hover);
+    box-shadow: var(--codex-shadow-3);
+}
+
+/* Buttons & Interactive Controls */
+.codex-btn-v2 {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    font-family: var(--codex-font-sans);
+    font-size: 0.875rem;
+    font-weight: 600;
+    border-radius: var(--codex-radius-md);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: var(--codex-transition-fast);
+    user-select: none;
+    text-decoration: none;
+}
+
+.codex-btn-v2-primary {
+    background-color: var(--codex-brand-primary);
+    color: #ffffff;
+    box-shadow: 0 4px 14px 0 rgba(79, 70, 229, 0.39);
+}
+
+.codex-btn-v2-primary:hover {
+    background-color: var(--codex-brand-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--codex-shadow-glow);
+}
+
+.codex-btn-v2-primary:active {
+    transform: scale(0.98);
+}
+
+/* Status Pulse Dot */
+.status-dot-pulse {
+    width: 0.625rem;
+    height: 0.625rem;
+    border-radius: 50%;
+    background-color: var(--codex-success);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    animation: codex-pulse-glow 2s infinite var(--codex-ease);
+}
+
+@keyframes codex-pulse-glow {
+    0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+    70% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}

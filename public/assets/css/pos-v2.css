@@ -1,0 +1,87 @@
+/* ==========================================================================
+   Codex ERP — POS & Kiosk V2 Touch & Fast-Key Stylesheet
+   ========================================================================== */
+
+.pos-layout {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 1.5rem;
+    height: calc(100vh - 120px);
+}
+
+.pos-fastkeys-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--codex-bg-surface);
+    border: 1px solid var(--codex-border-color);
+    border-radius: var(--codex-radius-md);
+    margin-bottom: 1rem;
+}
+
+.key-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.6rem;
+    background: var(--codex-brand-subtle);
+    color: var(--codex-brand-primary);
+    border-radius: var(--codex-radius-sm);
+    font-weight: 700;
+    font-size: 0.75rem;
+}
+
+.pos-products-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 1rem;
+    overflow-y: auto;
+    padding-right: 0.5rem;
+}
+
+.product-card-v2 {
+    background: var(--codex-bg-glass);
+    border: 1px solid var(--codex-border-color);
+    border-radius: var(--codex-radius-md);
+    padding: 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: var(--codex-transition-fast);
+    user-select: none;
+}
+
+.product-card-v2:hover {
+    border-color: var(--codex-brand-primary);
+    transform: translateY(-2px);
+    box-shadow: var(--codex-shadow-glow);
+}
+
+.product-card-v2:active {
+    transform: scale(0.96);
+}
+
+.pos-cart-sidebar {
+    background: var(--codex-bg-glass);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--codex-border-color);
+    border-radius: var(--codex-radius-lg);
+    display: flex;
+    flex-direction: column;
+    padding: 1.25rem;
+    box-shadow: var(--codex-shadow-3);
+}
+
+.pos-cart-items {
+    flex: 1;
+    overflow-y: auto;
+    margin: 1rem 0;
+}
+
+.pos-cart-item-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.625rem 0;
+    border-bottom: 1px solid var(--codex-border-color);
+}

@@ -27,3 +27,12 @@ if (! function_exists('auth_can')) {
         return auth()->can($permission);
     }
 }
+
+if (! function_exists('auth_company_id')) {
+    function auth_company_id(): ?string
+    {
+        $user = auth_user();
+        return $user['company_id'] ?? session('active_company_id') ?? null;
+    }
+}
+

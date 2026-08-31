@@ -3,6 +3,7 @@
 namespace App\Filters;
 
 use CodeIgniter\Filters\FilterInterface;
+use CodeIgniter\HTTP\IncomingRequest;
 use CodeIgniter\HTTP\RequestInterface;
 use CodeIgniter\HTTP\ResponseInterface;
 
@@ -12,8 +13,14 @@ use CodeIgniter\HTTP\ResponseInterface;
  */
 class ReportsAuthFilter implements FilterInterface
 {
+    /**
+     * @param IncomingRequest|RequestInterface $request
+     * @param array|null $arguments
+     * @return mixed
+     */
     public function before(RequestInterface $request, $arguments = null)
     {
+        /** @var IncomingRequest $request */
         $session = session();
         $user = $session->get('user') ?? auth_user();
 

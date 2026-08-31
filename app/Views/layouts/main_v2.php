@@ -8,6 +8,8 @@
     <!-- Master UI/UX Design System Stylesheets -->
     <link rel="stylesheet" href="<?= base_url('assets/css/codex-design-system.css') ?>">
     <link rel="stylesheet" href="<?= base_url('assets/css/data-grid.css') ?>">
+    <script src="<?= base_url('assets/js/alpine-components.js') ?>" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <script src="<?= base_url('assets/js/omnisearch.js') ?>" defer></script>
 
     <style>

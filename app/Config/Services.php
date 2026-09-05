@@ -108,4 +108,15 @@ class Services extends BaseService
 
         return new \App\Libraries\CodexAssistService();
     }
+
+    public static function format(?\Config\Format $config = null, bool $getShared = true)
+    {
+        if ($getShared) {
+            return static::getSharedInstance('format', $config);
+        }
+
+        $config ??= config('Format') ?? new \Config\Format();
+
+        return new \CodeIgniter\Format\Format($config);
+    }
 }

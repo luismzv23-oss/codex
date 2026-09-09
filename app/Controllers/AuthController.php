@@ -92,6 +92,11 @@ class AuthController extends BaseController
 
     public function logout()
     {
+        $user = auth()->user();
+        if ($user) {
+            service('audit')->log('auth', 'logout', 'user', $user['id'] ?? null);
+        }
+
         auth()->logout();
 
         return redirect()->to('/login')->with('message', 'Sesion cerrada correctamente.');

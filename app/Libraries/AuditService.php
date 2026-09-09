@@ -55,6 +55,8 @@ class AuditService
         } catch (\Throwable $e) {
             log_message('error', 'AuditService::log failed: ' . $e->getMessage());
         }
+
+        log_message('info', "AUDIT [{$module}::{$action}] entity={$entityType}" . ($entityId ? " id={$entityId}" : '') . ($notes ? " ({$notes})" : ''));
     }
 
     /**

@@ -195,19 +195,26 @@
     <div class="col-12">
         <div class="card border-0 shadow-sm rounded-4">
             <div class="card-body p-4">
-                <div class="d-flex justify-content-between align-items-start mb-3">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
                     <div>
                         <h2 class="h4 mb-1">Productos inventariables</h2>
                         <p class="text-secondary mb-0">Catalogo operativo con minimos, stock consolidado y trazabilidad por producto.</p>
                     </div>
-                    <a href="<?= site_url('inventario/productos/nuevo' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-dark icon-btn" data-popup="true" data-popup-title="Producto" data-popup-subtitle="Registrar un producto para control de stock." title="Nuevo producto" aria-label="Nuevo producto"><i class="bi bi-plus-lg"></i></a>
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <div class="btn-group btn-group-sm p-1 bg-light rounded-pill border" role="group" id="productStatusFilterGroup" aria-label="Filtro de estado de productos">
+                            <button type="button" class="btn btn-dark rounded-pill px-3 product-status-btn active" data-status="active">Activos</button>
+                            <button type="button" class="btn btn-light rounded-pill px-3 text-secondary product-status-btn" data-status="inactive">Inactivos</button>
+                            <button type="button" class="btn btn-light rounded-pill px-3 text-secondary product-status-btn" data-status="all">Todos</button>
+                        </div>
+                        <a href="<?= site_url('inventario/productos/nuevo' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-dark icon-btn" data-popup="true" data-popup-title="Producto" data-popup-subtitle="Registrar un producto para control de stock." title="Nuevo producto" aria-label="Nuevo producto"><i class="bi bi-plus-lg"></i></a>
+                    </div>
                 </div>
                 <div class="table-responsive">
                     <table class="table align-middle mb-0" id="products-table">
                         <thead><tr><th></th><th>SKU</th><th>Producto</th><th>Clasificacion</th><th>Unidad</th><th>Min/Max</th><th>Stock</th><th>Estado</th><th></th></tr></thead>
                         <tbody>
                             <?php foreach ($products as $product): ?>
-                                <tr class="data-row">
+                                <tr class="data-row" data-active="<?= (int) $product['active'] ?>">
                                     <td><?php if (! empty($product['image'])): ?><img src="<?= esc(base_url('uploads/products/' . $product['image'])) ?>" alt="" style="width:40px;height:40px;object-fit:cover;" class="rounded"><?php else: ?><span class="d-flex align-items-center justify-content-center rounded bg-light text-secondary" style="width:40px;height:40px;"><i class="bi bi-box"></i></span><?php endif; ?></td>
                                     <td><?= esc($product['sku']) ?></td>
                                     <td><?= esc($product['name']) ?></td>
@@ -379,11 +386,12 @@
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     class PaginatedTable {
-        constructor(tableId, pageSize, searchInputId) {
+        constructor(tableId, pageSize, searchInputId, customFilterFn = null) {
             this.table = document.getElementById(tableId);
             if (!this.table) return;
             this.pageSize = pageSize;
             this.currentPage = 1;
+            this.customFilterFn = customFilterFn;
             this.tbody = this.table.tBodies[0];
             if (!this.tbody) return;
             this.allRows = Array.from(this.tbody.querySelectorAll('tr.data-row'));
@@ -408,6 +416,12 @@ document.addEventListener('DOMContentLoaded', () => {
             this.update();
         }
 
+        setCustomFilter(fn) {
+            this.customFilterFn = fn;
+            this.currentPage = 1;
+            this.update();
+        }
+
         update() {
             const query = document.getElementById('inventorySearchInput')?.value.toLowerCase().trim() || '';
             
@@ -427,6 +441,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     const text = row.textContent.toLowerCase();
                     matches = text.includes(query);
+                }
+
+                if (matches && this.customFilterFn) {
+                    matches = Boolean(this.customFilterFn(row));
                 }
 
                 if (matches) {
@@ -540,7 +558,39 @@ document.addEventListener('DOMContentLoaded', () => {
     new PaginatedTable('warehouses-table', 5, 'inventorySearchInput');
     new PaginatedTable('locations-table', 5, 'inventorySearchInput');
     new PaginatedTable('reservations-table', 5, 'inventorySearchInput');
-    new PaginatedTable('products-table', 5, 'inventorySearchInput');
+    
+    // Filtro de estado para productos (por defecto 'active')
+    let currentProductStatusFilter = 'active';
+    const productsTable = new PaginatedTable('products-table', 5, 'inventorySearchInput', (row) => {
+        const isActive = row.getAttribute('data-active') === '1';
+        if (currentProductStatusFilter === 'active') return isActive;
+        if (currentProductStatusFilter === 'inactive') return !isActive;
+        return true;
+    });
+
+    const productStatusFilterGroup = document.getElementById('productStatusFilterGroup');
+    if (productStatusFilterGroup && productsTable) {
+        const buttons = productStatusFilterGroup.querySelectorAll('.product-status-btn');
+        buttons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                buttons.forEach(b => {
+                    b.classList.remove('btn-dark', 'active');
+                    b.classList.add('btn-light', 'text-secondary');
+                });
+                btn.classList.remove('btn-light', 'text-secondary');
+                btn.classList.add('btn-dark', 'active');
+
+                currentProductStatusFilter = btn.getAttribute('data-status');
+                productsTable.setCustomFilter((row) => {
+                    const isActive = row.getAttribute('data-active') === '1';
+                    if (currentProductStatusFilter === 'active') return isActive;
+                    if (currentProductStatusFilter === 'inactive') return !isActive;
+                    return true;
+                });
+            });
+        });
+    }
+
     new PaginatedTable('cost-layers-table', 5, 'inventorySearchInput');
     new PaginatedTable('assemblies-table', 5, 'inventorySearchInput');
     new PaginatedTable('closures-table', 5, 'inventorySearchInput');

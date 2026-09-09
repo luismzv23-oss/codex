@@ -1079,8 +1079,13 @@ class InventoryController extends BaseController
             ->orderBy('name', 'ASC')
             ->first();
 
+        $requestedProductId = trim((string) $this->request->getGet('product_id'));
+        if ($requestedProductId !== '' && ! $this->validCompanyProduct($context['company']['id'], $requestedProductId)) {
+            $requestedProductId = '';
+        }
+
         $defaults = [
-            'product_id' => trim((string) $this->request->getGet('product_id')),
+            'product_id' => $requestedProductId,
             'movement_type' => trim((string) $this->request->getGet('movement_type')) ?: 'ingreso',
             'quantity' => trim((string) $this->request->getGet('quantity')) ?: '1',
             'source_warehouse_id' => trim((string) $this->request->getGet('source_warehouse_id')) ?: ($defaultWarehouse['id'] ?? ''),

@@ -266,7 +266,8 @@
                                 <tr class="product-row" data-sku="<?= esc($product['sku']) ?>"
                                     data-name="<?= esc($product['name']) ?>"
                                     data-category-brand="<?= esc(trim(($product['category'] ?? '') . ' ' . ($product['brand'] ?? ''))) ?>"
-                                    data-status="<?= $product['is_critical'] ? 'critical' : (($product['is_overstock'] ?? false) ? 'overstock' : 'healthy') ?>">
+                                    data-status="<?= $product['is_critical'] ? 'critical' : (($product['is_overstock'] ?? false) ? 'overstock' : 'healthy') ?>"
+                                    data-active="<?= (int) ($product['active'] ?? 1) ?>">
                                     <td><?= esc($product['sku']) ?></td>
                                     <td><?= esc($product['name']) ?>
                                         <div class="small text-secondary">
@@ -279,18 +280,27 @@
                                     <td><?= number_format((int) ($product['available_stock'] ?? 0), 0, ',', '.') ?></td>
                                     <td><?= number_format((int) $product['min_stock'], 0, ',', '.') ?> /
                                         <?= number_format((int) ($product['max_stock'] ?? 0), 0, ',', '.') ?></td>
-                                    <td
-                                        class="<?= $product['is_critical'] ? 'text-danger' : (($product['is_overstock'] ?? false) ? 'text-warning' : 'text-success') ?>">
-                                        <?= $product['is_critical'] ? 'Critico' : (($product['is_overstock'] ?? false) ? 'Sobre stock' : 'Saludable') ?>
+                                    <td>
+                                        <?php if ((int) ($product['active'] ?? 1) === 0): ?>
+                                            <span class="badge bg-secondary-subtle text-secondary border px-2 py-1">Inactivo</span>
+                                        <?php else: ?>
+                                            <span class="<?= $product['is_critical'] ? 'text-danger fw-semibold' : (($product['is_overstock'] ?? false) ? 'text-warning fw-semibold' : 'text-success fw-semibold') ?>">
+                                                <?= $product['is_critical'] ? 'Critico' : (($product['is_overstock'] ?? false) ? 'Sobre stock' : 'Saludable') ?>
+                                            </span>
+                                        <?php endif; ?>
                                     </td>
                                     <td class="text-end">
-                                        <?php if ($context['canManage']): ?>
+                                        <?php if ($context['canManage'] && (int) ($product['active'] ?? 1) === 1): ?>
                                             <a href="<?= site_url('inventario/movimientos/nuevo?popup=1' . (!empty($companies) ? '&company_id=' . $selectedCompanyId : '') . '&product_id=' . $product['id'] . '&movement_type=ajuste&adjustment_mode=increase&reason=Ajuste%20manual%20de%20stock') ?>"
                                                 class="btn btn-sm btn-outline-dark icon-btn" data-popup="true"
                                                 data-popup-title="Editar stock"
                                                 data-popup-subtitle="Ajustar stock del producto con trazabilidad."
                                                 title="Editar stock" aria-label="Editar stock"><i
                                                     class="bi bi-pencil-square"></i></a>
+                                        <?php elseif ($context['canManage']): ?>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary icon-btn opacity-50" disabled
+                                                title="Producto inactivo. Debe habilitarse desde Configuración de inventario para ajustar existencias."
+                                                aria-label="Producto inactivo"><i class="bi bi-pencil-square"></i></button>
                                         <?php endif; ?>
                                         <a href="<?= site_url('inventario/productos/' . $product['id'] . '/trazabilidad' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
                                             class="btn btn-sm btn-outline-secondary icon-btn" data-popup="true"

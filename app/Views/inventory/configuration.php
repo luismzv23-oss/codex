@@ -215,7 +215,13 @@
                                     <td><?= esc($product['unit']) ?></td>
                                     <td><?= number_format((float) $product['min_stock'], 2, ',', '.') ?> / <?= number_format((float) ($product['max_stock'] ?? 0), 2, ',', '.') ?></td>
                                     <td><?= number_format((float) $product['total_stock'], 2, ',', '.') ?><div class="small text-secondary">Disponible: <?= number_format((float) ($product['available_stock'] ?? 0), 2, ',', '.') ?></div></td>
-                                    <td><?= (int) $product['active'] === 1 ? 'Activo' : 'Inactivo' ?></td>
+                                    <td>
+                                        <?php if ((int) $product['active'] === 1): ?>
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">Activo</span>
+                                        <?php else: ?>
+                                            <span class="badge bg-secondary-subtle text-secondary border px-2 py-1">Inactivo</span>
+                                        <?php endif; ?>
+                                    </td>
                                     <td class="text-end">
                                         <a href="<?= site_url('inventario/productos/' . $product['id'] . '/trazabilidad' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-sm btn-outline-secondary icon-btn" data-popup="true" data-popup-title="Trazabilidad del producto" data-popup-subtitle="Historial, stock por deposito y responsables." title="Ver trazabilidad" aria-label="Ver trazabilidad"><i class="bi bi-diagram-3"></i></a>
                                         <a href="<?= site_url('inventario/productos/' . $product['id'] . '/editar' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-sm btn-outline-dark icon-btn" data-popup="true" data-popup-title="Producto" data-popup-subtitle="Editar datos del producto y sus minimos." title="Editar producto" aria-label="Editar producto"><i class="bi bi-pencil-square"></i></a>
@@ -223,9 +229,9 @@
                                             <?= csrf_field() ?>
                                             <button class="btn btn-sm <?= (int) $product['active'] === 1 ? 'btn-outline-warning' : 'btn-outline-success' ?> icon-btn" title="<?= (int) $product['active'] === 1 ? 'Deshabilitar producto' : 'Habilitar producto' ?>" aria-label="<?= (int) $product['active'] === 1 ? 'Deshabilitar producto' : 'Habilitar producto' ?>"><i class="bi <?= (int) $product['active'] === 1 ? 'bi-pause-circle' : 'bi-play-circle' ?>"></i></button>
                                         </form>
-                                        <form method="post" action="<?= site_url('inventario/productos/' . $product['id'] . '/eliminar' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="d-inline" onsubmit="return confirm('Se eliminara el producto. Deseas continuar?');">
+                                        <form method="post" action="<?= site_url('inventario/productos/' . $product['id'] . '/eliminar' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="d-inline" onsubmit="return confirm('Si el producto cuenta con movimientos o existencias, sera deshabilitado/inactivado para conservar la trazabilidad historica. Deseas continuar?');">
                                             <?= csrf_field() ?>
-                                            <button class="btn btn-sm btn-outline-danger icon-btn" title="Eliminar producto" aria-label="Eliminar producto"><i class="bi bi-trash3"></i></button>
+                                            <button class="btn btn-sm btn-outline-danger icon-btn" title="Eliminar / Inactivar producto" aria-label="Eliminar / Inactivar producto"><i class="bi bi-trash3"></i></button>
                                         </form>
                                     </td>
                                 </tr>

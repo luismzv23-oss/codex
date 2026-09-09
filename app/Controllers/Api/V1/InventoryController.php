@@ -506,7 +506,16 @@ class InventoryController extends BaseApiController
         $hasMovements = (new InventoryMovementModel())->where('product_id', $id)->first() !== null;
         $hasReservations = (new InventoryReservationModel())->where('product_id', $id)->where('status', 'active')->first() !== null;
         if ($hasStock || $hasMovements || $hasReservations) {
-            return $this->fail('No puedes eliminar un producto con stock o trazabilidad registrada.', 422);
+            $model->update($id, [
+                'active' => 0,
+            ]);
+
+            return $this->success([
+                'id' => $id,
+                'deleted' => false,
+                'deactivated' => true,
+                'message' => 'El producto cuenta con stock o trazabilidad histórica y ha sido deshabilitado/inactivado para conservar el historial.',
+            ]);
         }
 
         $model->delete($id);

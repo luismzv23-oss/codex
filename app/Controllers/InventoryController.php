@@ -1017,7 +1017,12 @@ class InventoryController extends BaseController
             ->first() !== null;
 
         if ($hasStock || $hasMovements || $hasReservations) {
-            return redirect()->to($this->inventoryRoute('inventario/configuracion', $context['company']['id']))->with('error', 'No puedes eliminar un producto con stock o trazabilidad registrada.');
+            $productModel->update($id, [
+                'active' => 0,
+            ]);
+
+            return redirect()->to($this->inventoryRoute('inventario/configuracion', $context['company']['id']))
+                ->with('message', 'El producto cuenta con stock o trazabilidad histórica y no puede borrarse físicamente. Se ha deshabilitado/inactivado correctamente para conservar el historial.');
         }
 
         if (! empty($product['image'])) {

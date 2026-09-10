@@ -29,7 +29,7 @@
             </div>
             <div class="col-md-3">
                 <label class="form-label">Cantidad</label>
-                <input type="number" name="quantity" class="form-control" min="0.0001" step="0.0001" value="1" required>
+                <input type="number" name="quantity" class="form-control" min="0.01" step="0.01" value="1.00" required>
             </div>
             <div class="col-md-6">
                 <label class="form-label">Deposito</label>

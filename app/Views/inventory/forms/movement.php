@@ -14,10 +14,22 @@
             <?php if (! empty($companyId)): ?><input type="hidden" name="company_id" value="<?= esc($companyId) ?>"><?php endif; ?>
             <div class="col-md-6">
                 <label class="form-label">Producto</label>
-                <select name="product_id" class="form-select" required>
+                <select name="product_id" id="movement-product-id" class="form-select" required>
                     <option value="">Seleccionar</option>
                     <?php foreach ($products as $product): ?>
-                        <option value="<?= esc($product['id']) ?>" <?= old('product_id', $defaults['product_id'] ?? '') === $product['id'] ? 'selected' : '' ?>><?= esc($product['sku'] . ' - ' . $product['name']) ?></option>
+                        <option value="<?= esc($product['id']) ?>"
+                            data-cost-price="<?= esc(isset($product['cost_price']) ? number_format((float) $product['cost_price'], 2, '.', '') : '0.00') ?>"
+                            data-warehouse-id="<?= esc($product['default_warehouse_id'] ?? '') ?>"
+                            data-location-id="<?= esc($product['default_location_id'] ?? '') ?>"
+                            data-lot-number="<?= esc($product['latest_lot_number'] ?? '') ?>"
+                            data-serial-number="<?= esc($product['latest_serial_number'] ?? '') ?>"
+                            data-expiration-date="<?= esc($product['latest_expiration_date'] ?? '') ?>"
+                            data-lot-control="<?= (int) ($product['lot_control'] ?? 0) ?>"
+                            data-serial-control="<?= (int) ($product['serial_control'] ?? 0) ?>"
+                            data-expiration-control="<?= (int) ($product['expiration_control'] ?? 0) ?>"
+                            <?= old('product_id', $defaults['product_id'] ?? '') === $product['id'] ? 'selected' : '' ?>>
+                            <?= esc($product['sku'] . ' - ' . $product['name']) ?>
+                        </option>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -31,7 +43,7 @@
             </div>
             <div class="col-md-3">
                 <label class="form-label">Cantidad</label>
-                <input type="number" onkeypress="return event.charCode >= 48 && event.charCode <= 57" name="quantity" class="form-control" value="<?= esc(old('quantity', $defaults['quantity'] ?? '1')) ?>" required>
+                <input type="number" step="0.01" min="0.01" name="quantity" class="form-control" value="<?= esc(old('quantity', $defaults['quantity'] !== '' ? number_format((float) $defaults['quantity'], 2, '.', '') : '1.00')) ?>" required>
             </div>
             <div class="col-md-6 movement-source">
                 <label class="form-label">Deposito origen</label>
@@ -91,7 +103,7 @@
             </div>
             <div class="col-md-3">
                 <label class="form-label">Costo unitario</label>
-                <input type="number" step="0.0001" min="0" name="unit_cost" class="form-control" value="<?= esc(old('unit_cost', $defaults['unit_cost'] ?? '')) ?>">
+                <input type="number" step="0.01" min="0" name="unit_cost" class="form-control" value="<?= esc(old('unit_cost', $defaults['unit_cost'] !== '' && $defaults['unit_cost'] !== null ? number_format((float) $defaults['unit_cost'], 2, '.', '') : '')) ?>">
             </div>
             <div class="col-md-3">
                 <label class="form-label">Lote</label>
@@ -125,7 +137,16 @@
         const destination = document.querySelector('.movement-destination');
         const destinationLocation = document.querySelector('.movement-destination-location');
         const adjustment = document.querySelector('.movement-adjustment');
+        const productSelect = document.getElementById('movement-product-id');
+        const unitCostInput = document.querySelector('[name="unit_cost"]');
+        const lotNumberInput = document.querySelector('[name="lot_number"]');
+        const serialNumberInput = document.querySelector('[name="serial_number"]');
+        const expirationDateInput = document.querySelector('[name="expiration_date"]');
+        const sourceWarehouseSelect = document.querySelector('[name="source_warehouse_id"]');
+        const destinationWarehouseSelect = document.querySelector('[name="destination_warehouse_id"]');
+
         if (!typeField || !source || !sourceLocation || !destination || !destinationLocation || !adjustment) return;
+
         const filterLocationOptions = (warehouseFieldName) => {
             const warehouseField = document.querySelector(`[name="${warehouseFieldName}"]`);
             const locationField = document.querySelector(`.movement-location[data-warehouse-field="${warehouseFieldName}"]`);
@@ -138,6 +159,7 @@
                 locationField.value = '';
             }
         };
+
         const sync = () => {
             const value = typeField.value;
             source.style.display = ['egreso', 'transferencia', 'ajuste'].includes(value) ? '' : 'none';
@@ -148,10 +170,61 @@
             filterLocationOptions('source_warehouse_id');
             filterLocationOptions('destination_warehouse_id');
         };
+
+        const onProductChange = (isInit = false) => {
+            if (!productSelect) return;
+            const selectedOpt = productSelect.selectedOptions[0];
+            if (!selectedOpt || !selectedOpt.value) return;
+
+            const costPrice = selectedOpt.dataset.costPrice;
+            const warehouseId = selectedOpt.dataset.warehouseId;
+            const locationId = selectedOpt.dataset.locationId;
+            const lotNum = selectedOpt.dataset.lotNumber;
+            const serialNum = selectedOpt.dataset.serialNumber;
+            const expDate = selectedOpt.dataset.expirationDate;
+
+            if (costPrice !== undefined && (unitCostInput.value === '' || !isInit)) {
+                if (parseFloat(costPrice) > 0) {
+                    unitCostInput.value = costPrice;
+                }
+            }
+
+            if (!isInit) {
+                if (warehouseId) {
+                    if (sourceWarehouseSelect && (!sourceWarehouseSelect.value || sourceWarehouseSelect.value === '')) {
+                        sourceWarehouseSelect.value = warehouseId;
+                        filterLocationOptions('source_warehouse_id');
+                    }
+                    if (destinationWarehouseSelect && (!destinationWarehouseSelect.value || destinationWarehouseSelect.value === '')) {
+                        destinationWarehouseSelect.value = warehouseId;
+                        filterLocationOptions('destination_warehouse_id');
+                    }
+                }
+                if (locationId) {
+                    const srcLoc = document.querySelector('[name="source_location_id"]');
+                    if (srcLoc) srcLoc.value = locationId;
+                }
+                if (lotNum !== undefined && lotNumberInput) {
+                    lotNumberInput.value = lotNum;
+                }
+                if (serialNum !== undefined && serialNumberInput) {
+                    serialNumberInput.value = serialNum;
+                }
+                if (expDate !== undefined && expirationDateInput) {
+                    expirationDateInput.value = expDate;
+                }
+            }
+        };
+
         document.querySelector('[name="source_warehouse_id"]')?.addEventListener('change', () => filterLocationOptions('source_warehouse_id'));
         document.querySelector('[name="destination_warehouse_id"]')?.addEventListener('change', () => filterLocationOptions('destination_warehouse_id'));
         typeField.addEventListener('change', sync);
+        productSelect?.addEventListener('change', () => onProductChange(false));
+
         sync();
+        if (productSelect && productSelect.value) {
+            onProductChange(true);
+        }
     })();
 </script>
 <?= $this->endSection() ?>

@@ -866,6 +866,12 @@ class InventoryController extends BaseController
             return redirect()->to($this->inventoryRoute('inventario/configuracion', $context['company']['id']))->with('error', 'Producto no disponible.');
         }
 
+        $stockLevel = (new InventoryStockLevelModel())
+            ->where('company_id', $context['company']['id'])
+            ->where('product_id', $id)
+            ->orderBy('quantity', 'DESC')
+            ->first();
+
         return view('inventory/forms/product', [
             'pageTitle' => 'Producto',
             'product' => $product,
@@ -874,6 +880,10 @@ class InventoryController extends BaseController
             'formAction' => site_url('inventario/productos/' . $id . '/actualizar'),
             'companyId' => $context['company']['id'],
             'isPopup' => $this->isPopupRequest(),
+            'warehouses' => $this->activeWarehouses($context['company']['id']),
+            'currentWarehouseId' => $stockLevel['warehouse_id'] ?? '',
+            'currentStock' => (float) ($stockLevel['quantity'] ?? 0),
+            'redirectTo' => $this->request->getGet('redirect_to') ?? '',
         ]);
     }
 
@@ -954,7 +964,47 @@ class InventoryController extends BaseController
         $this->syncProductMinimums($context['company']['id'], $id, (float) $payload['min_stock']);
         $this->syncKitItems($id, $this->requestKitItems($context['company']['id'], $id));
 
-        return $this->popupOrRedirect($this->inventoryRoute('inventario/configuracion', $context['company']['id']), 'Producto actualizado correctamente.');
+        $initialWarehouseId = trim((string) $this->request->getPost('initial_warehouse_id'));
+        $initialStock = (float) $this->request->getPost('initial_stock');
+
+        if ($initialWarehouseId !== '') {
+            $stockModel = new InventoryStockLevelModel();
+            $existingLevel = $stockModel
+                ->where('company_id', $context['company']['id'])
+                ->where('product_id', $id)
+                ->where('warehouse_id', $initialWarehouseId)
+                ->first();
+
+            $currentQty = (float) ($existingLevel['quantity'] ?? 0);
+            $delta = $initialStock - $currentQty;
+
+            if (abs($delta) >= 0.0001) {
+                $costPrice = (float) $this->request->getPost('cost_price');
+                $db = db_connect();
+                $db->transStart();
+                $this->applyStockDelta($context['company']['id'], $id, $initialWarehouseId, $delta);
+                (new InventoryMovementModel())->insert([
+                    'company_id' => $context['company']['id'],
+                    'product_id' => $id,
+                    'movement_type' => $delta > 0 ? 'ingreso' : 'egreso',
+                    'quantity' => abs($delta),
+                    'unit_cost' => $costPrice > 0 ? $costPrice : null,
+                    'total_cost' => $costPrice > 0 ? round($costPrice * abs($delta), 2) : null,
+                    'destination_warehouse_id' => $delta > 0 ? $initialWarehouseId : null,
+                    'source_warehouse_id' => $delta < 0 ? $initialWarehouseId : null,
+                    'performed_by' => $this->currentUser()['id'],
+                    'occurred_at' => date('Y-m-d H:i:s'),
+                    'reason' => 'Ajuste de stock desde edición de producto',
+                    'notes' => 'Actualización de stock desde formulario de producto',
+                ]);
+                $db->transComplete();
+            }
+        }
+
+        $redirectTo = trim((string) ($this->request->getPost('redirect_to') ?? ''));
+        $redirectUrl = $redirectTo !== '' ? $redirectTo : $this->inventoryRoute('inventario/configuracion', $context['company']['id']);
+
+        return $this->popupOrRedirect($redirectUrl, 'Producto actualizado correctamente.');
     }
 
     public function toggleProduct(string $id)
@@ -1084,29 +1134,131 @@ class InventoryController extends BaseController
             $requestedProductId = '';
         }
 
+        $products = $this->activeProducts($context['company']['id']);
+        $productIds = array_column($products, 'id');
+        $productStockMap = [];
+        $productLotMap = [];
+        $productSerialMap = [];
+
+        if (! empty($productIds)) {
+            $db = db_connect();
+            $stockLevels = $db->table('inventory_stock_levels')
+                ->where('company_id', $context['company']['id'])
+                ->whereIn('product_id', $productIds)
+                ->orderBy('quantity', 'DESC')
+                ->get()
+                ->getResultArray();
+
+            foreach ($stockLevels as $level) {
+                if (! isset($productStockMap[$level['product_id']])) {
+                    $productStockMap[$level['product_id']] = $level;
+                }
+            }
+
+            $lots = $db->table('inventory_lots')
+                ->where('company_id', $context['company']['id'])
+                ->whereIn('product_id', $productIds)
+                ->orderBy('created_at', 'DESC')
+                ->get()
+                ->getResultArray();
+
+            foreach ($lots as $lot) {
+                if (! isset($productLotMap[$lot['product_id']])) {
+                    $productLotMap[$lot['product_id']] = $lot;
+                }
+            }
+
+            $serials = $db->table('inventory_serials')
+                ->where('company_id', $context['company']['id'])
+                ->whereIn('product_id', $productIds)
+                ->orderBy('created_at', 'DESC')
+                ->get()
+                ->getResultArray();
+
+            foreach ($serials as $serial) {
+                if (! isset($productSerialMap[$serial['product_id']])) {
+                    $productSerialMap[$serial['product_id']] = $serial;
+                }
+            }
+        }
+
+        foreach ($products as &$p) {
+            $pid = $p['id'];
+            $st = $productStockMap[$pid] ?? null;
+            $lt = $productLotMap[$pid] ?? null;
+            $sr = $productSerialMap[$pid] ?? null;
+
+            $p['default_warehouse_id'] = $st['warehouse_id'] ?? ($defaultWarehouse['id'] ?? '');
+            $p['default_location_id'] = $st['location_id'] ?? '';
+            $p['latest_lot_number'] = $lt['lot_number'] ?? '';
+            $p['latest_serial_number'] = $sr['serial_number'] ?? '';
+            $p['latest_expiration_date'] = ! empty($lt['expiration_date']) ? substr($lt['expiration_date'], 0, 10) : (! empty($sr['expiration_date']) ? substr($sr['expiration_date'], 0, 10) : '');
+        }
+        unset($p);
+
+        $selectedProduct = null;
+        if ($requestedProductId !== '') {
+            foreach ($products as $p) {
+                if ($p['id'] === $requestedProductId) {
+                    $selectedProduct = $p;
+                    break;
+                }
+            }
+        }
+
+        $sourceWarehouseId = trim((string) $this->request->getGet('source_warehouse_id'));
+        if ($sourceWarehouseId === '') {
+            $sourceWarehouseId = $selectedProduct['default_warehouse_id'] ?? ($defaultWarehouse['id'] ?? '');
+        }
+
+        $sourceLocationId = trim((string) $this->request->getGet('source_location_id'));
+        if ($sourceLocationId === '' && $selectedProduct) {
+            $sourceLocationId = $selectedProduct['default_location_id'] ?? '';
+        }
+
+        $unitCost = trim((string) $this->request->getGet('unit_cost'));
+        if ($unitCost === '' && $selectedProduct && isset($selectedProduct['cost_price']) && (float) $selectedProduct['cost_price'] > 0) {
+            $unitCost = number_format((float) $selectedProduct['cost_price'], 2, '.', '');
+        }
+
+        $lotNumber = trim((string) $this->request->getGet('lot_number'));
+        if ($lotNumber === '' && $selectedProduct && ! empty($selectedProduct['latest_lot_number'])) {
+            $lotNumber = $selectedProduct['latest_lot_number'];
+        }
+
+        $serialNumber = trim((string) $this->request->getGet('serial_number'));
+        if ($serialNumber === '' && $selectedProduct && ! empty($selectedProduct['latest_serial_number'])) {
+            $serialNumber = $selectedProduct['latest_serial_number'];
+        }
+
+        $expirationDate = trim((string) $this->request->getGet('expiration_date'));
+        if ($expirationDate === '' && $selectedProduct && ! empty($selectedProduct['latest_expiration_date'])) {
+            $expirationDate = $selectedProduct['latest_expiration_date'];
+        }
+
         $defaults = [
             'product_id' => $requestedProductId,
             'movement_type' => trim((string) $this->request->getGet('movement_type')) ?: 'ingreso',
-            'quantity' => trim((string) $this->request->getGet('quantity')) ?: '1',
-            'source_warehouse_id' => trim((string) $this->request->getGet('source_warehouse_id')) ?: ($defaultWarehouse['id'] ?? ''),
-            'source_location_id' => trim((string) $this->request->getGet('source_location_id')),
+            'quantity' => trim((string) $this->request->getGet('quantity')) ?: '1.00',
+            'source_warehouse_id' => $sourceWarehouseId,
+            'source_location_id' => $sourceLocationId,
             'destination_warehouse_id' => trim((string) $this->request->getGet('destination_warehouse_id')),
             'destination_location_id' => trim((string) $this->request->getGet('destination_location_id')),
             'adjustment_mode' => trim((string) $this->request->getGet('adjustment_mode')),
             'occurred_at' => date('Y-m-d\TH:i'),
             'reason' => trim((string) $this->request->getGet('reason')),
             'source_document' => trim((string) $this->request->getGet('source_document')),
-            'unit_cost' => trim((string) $this->request->getGet('unit_cost')),
-            'lot_number' => trim((string) $this->request->getGet('lot_number')),
-            'serial_number' => trim((string) $this->request->getGet('serial_number')),
-            'expiration_date' => trim((string) $this->request->getGet('expiration_date')),
+            'unit_cost' => $unitCost,
+            'lot_number' => $lotNumber,
+            'serial_number' => $serialNumber,
+            'expiration_date' => $expirationDate,
             'notes' => trim((string) $this->request->getGet('notes')),
         ];
 
         return view('inventory/forms/movement', [
             'pageTitle' => 'Nuevo movimiento',
             'formAction' => site_url('inventario/movimientos'),
-            'products' => $this->activeProducts($context['company']['id']),
+            'products' => $products,
             'warehouses' => $this->activeWarehouses($context['company']['id']),
             'locations' => $this->activeLocations($context['company']['id']),
             'companyId' => $context['company']['id'],

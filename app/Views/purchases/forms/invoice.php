@@ -61,7 +61,7 @@
                                                 value="<?= esc($item['description'] ?? '') ?>"></td>
                                         <td><input type="number" step="0.01" min="0" name="items_quantity[]"
                                                 class="form-control" value="<?= esc($item['quantity']) ?>"></td>
-                                        <td><input type="number" step="0.0001" min="0" name="items_unit_cost[]"
+                                        <td><input type="number" step="0.01" min="0" name="items_unit_cost[]"
                                                 class="form-control" value="<?= esc($item['unit_cost']) ?>"></td>
                                         <td><input type="number" step="0.01" min="0" name="items_tax_rate[]"
                                                 class="form-control" value="0"></td>
@@ -79,7 +79,7 @@
                                         <td><input type="text" name="items_description[]" class="form-control"></td>
                                         <td><input type="number" step="0.01" min="0" name="items_quantity[]"
                                                 class="form-control" value="0"></td>
-                                        <td><input type="number" step="0.0001" min="0" name="items_unit_cost[]"
+                                        <td><input type="number" step="0.01" min="0" name="items_unit_cost[]"
                                                 class="form-control" value="0"></td>
                                         <td><input type="number" step="0.01" min="0" name="items_tax_rate[]"
                                                 class="form-control" value="0"></td>

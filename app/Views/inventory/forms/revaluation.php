@@ -31,7 +31,7 @@
             </div>
             <div class="col-md-6">
                 <label class="form-label">Nuevo costo unitario</label>
-                <input type="number" name="new_unit_cost" class="form-control" min="0.0001" step="0.0001" required>
+                <input type="number" name="new_unit_cost" class="form-control" min="0.01" step="0.01" required>
             </div>
             <div class="col-md-6">
                 <label class="form-label">Fecha y hora</label>

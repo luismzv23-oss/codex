@@ -483,16 +483,33 @@ class InventoryController extends BaseController
         $warehouse = $this->ownedWarehouse($context['company']['id'], $id);
 
         if (! $warehouse) {
+            if ($this->isAjaxRequest()) {
+                return $this->ajaxError('Deposito no disponible.', 404);
+            }
             return redirect()->to($this->inventoryRoute('inventario/configuracion', $context['company']['id']))->with('error', 'Deposito no disponible.');
         }
 
         if ((int) $warehouse['is_default'] === 1 && (int) $warehouse['active'] === 1) {
+            if ($this->isAjaxRequest()) {
+                return $this->ajaxError('El deposito base no puede deshabilitarse.', 422);
+            }
             return redirect()->to($this->inventoryRoute('inventario/configuracion', $context['company']['id']))->with('error', 'El deposito base no puede deshabilitarse.');
         }
 
+        $newActive = (int) $warehouse['active'] === 1 ? 0 : 1;
         $warehouseModel->update($id, [
-            'active' => (int) $warehouse['active'] === 1 ? 0 : 1,
+            'active' => $newActive,
         ]);
+
+        $updated = $warehouseModel->find($id);
+
+        if ($this->isAjaxRequest()) {
+            return $this->ajaxSuccess('Estado del deposito actualizado correctamente.', [
+                'entity' => 'warehouse',
+                'action' => 'toggle',
+                'item' => $updated,
+            ]);
+        }
 
         return redirect()->to($this->inventoryRoute('inventario/configuracion', $context['company']['id']))->with('message', 'Estado del deposito actualizado correctamente.');
     }
@@ -506,6 +523,9 @@ class InventoryController extends BaseController
         }
 
         if (! $this->canConfigureInventory($context)) {
+            if ($this->isAjaxRequest()) {
+                return $this->ajaxError('No tienes permisos para eliminar depositos.', 403);
+            }
             return redirect()->to('/inventario')->with('error', 'No tienes permisos para eliminar depositos.');
         }
 
@@ -513,10 +533,16 @@ class InventoryController extends BaseController
         $warehouse = $this->ownedWarehouse($context['company']['id'], $id);
 
         if (! $warehouse) {
+            if ($this->isAjaxRequest()) {
+                return $this->ajaxError('Deposito no disponible.', 404);
+            }
             return redirect()->to($this->inventoryRoute('inventario/configuracion', $context['company']['id']))->with('error', 'Deposito no disponible.');
         }
 
         if ((int) $warehouse['is_default'] === 1) {
+            if ($this->isAjaxRequest()) {
+                return $this->ajaxError('El deposito base no puede eliminarse.', 422);
+            }
             return redirect()->to($this->inventoryRoute('inventario/configuracion', $context['company']['id']))->with('error', 'El deposito base no puede eliminarse.');
         }
 
@@ -538,10 +564,21 @@ class InventoryController extends BaseController
             ->first() !== null;
 
         if ($hasStock || $hasMovements || $hasReservations) {
+            if ($this->isAjaxRequest()) {
+                return $this->ajaxError('No puedes eliminar un deposito con stock o trazabilidad registrada.', 422);
+            }
             return redirect()->to($this->inventoryRoute('inventario/configuracion', $context['company']['id']))->with('error', 'No puedes eliminar un deposito con stock o trazabilidad registrada.');
         }
 
         $warehouseModel->delete($id);
+
+        if ($this->isAjaxRequest()) {
+            return $this->ajaxSuccess('Deposito eliminado correctamente.', [
+                'entity' => 'warehouse',
+                'action' => 'delete',
+                'item' => ['id' => $id],
+            ]);
+        }
 
         return redirect()->to($this->inventoryRoute('inventario/configuracion', $context['company']['id']))->with('message', 'Deposito eliminado correctamente.');
     }
@@ -689,17 +726,34 @@ class InventoryController extends BaseController
         }
 
         if (! $this->canConfigureInventory($context)) {
+            if ($this->isAjaxRequest()) {
+                return $this->ajaxError('No tienes permisos para cambiar el estado de la ubicacion.', 403);
+            }
             return redirect()->to('/inventario')->with('error', 'No tienes permisos para cambiar el estado de la ubicacion.');
         }
 
         $location = $this->ownedLocation($context['company']['id'], $id);
         if (! $location) {
+            if ($this->isAjaxRequest()) {
+                return $this->ajaxError('Ubicacion no disponible.', 404);
+            }
             return redirect()->to($this->inventoryRoute('inventario/configuracion', $context['company']['id']))->with('error', 'Ubicacion no disponible.');
         }
 
+        $newActive = (int) $location['active'] === 1 ? 0 : 1;
         (new InventoryLocationModel())->update($id, [
-            'active' => (int) $location['active'] === 1 ? 0 : 1,
+            'active' => $newActive,
         ]);
+
+        $updated = (new InventoryLocationModel())->find($id);
+
+        if ($this->isAjaxRequest()) {
+            return $this->ajaxSuccess('Estado de la ubicacion actualizado correctamente.', [
+                'entity' => 'location',
+                'action' => 'toggle',
+                'item' => $updated,
+            ]);
+        }
 
         return redirect()->to($this->inventoryRoute('inventario/configuracion', $context['company']['id']))->with('message', 'Estado de la ubicacion actualizado correctamente.');
     }
@@ -713,21 +767,39 @@ class InventoryController extends BaseController
         }
 
         if (! $this->canConfigureInventory($context)) {
+            if ($this->isAjaxRequest()) {
+                return $this->ajaxError('No tienes permisos para eliminar ubicaciones.', 403);
+            }
             return redirect()->to('/inventario')->with('error', 'No tienes permisos para eliminar ubicaciones.');
         }
 
         $location = $this->ownedLocation($context['company']['id'], $id);
         if (! $location) {
+            if ($this->isAjaxRequest()) {
+                return $this->ajaxError('Ubicacion no disponible.', 404);
+            }
             return redirect()->to($this->inventoryRoute('inventario/configuracion', $context['company']['id']))->with('error', 'Ubicacion no disponible.');
         }
 
         $hasStock = (new InventoryStockLevelModel())->where('location_id', $id)->where('quantity !=', 0)->first() !== null;
         $hasMovements = (new InventoryMovementModel())->groupStart()->where('source_location_id', $id)->orWhere('destination_location_id', $id)->groupEnd()->first() !== null;
         if ($hasStock || $hasMovements) {
+            if ($this->isAjaxRequest()) {
+                return $this->ajaxError('No puedes eliminar una ubicacion con stock o trazabilidad registrada.', 422);
+            }
             return redirect()->to($this->inventoryRoute('inventario/configuracion', $context['company']['id']))->with('error', 'No puedes eliminar una ubicacion con stock o trazabilidad registrada.');
         }
 
         (new InventoryLocationModel())->delete($id);
+
+        if ($this->isAjaxRequest()) {
+            return $this->ajaxSuccess('Ubicacion eliminada correctamente.', [
+                'entity' => 'location',
+                'action' => 'delete',
+                'item' => ['id' => $id],
+            ]);
+        }
+
         return redirect()->to($this->inventoryRoute('inventario/configuracion', $context['company']['id']))->with('message', 'Ubicacion eliminada correctamente.');
     }
 
@@ -794,6 +866,11 @@ class InventoryController extends BaseController
             $imageFile->move(FCPATH . 'uploads/products/', $imageName);
         }
 
+        $costPrice = (float) str_replace([' ', ','], ['', '.'], (string) $this->request->getPost('cost_price'));
+        $salePrice = (float) str_replace([' ', ','], ['', '.'], (string) $this->request->getPost('sale_price'));
+        $minStock = (float) str_replace([' ', ','], ['', '.'], (string) $this->request->getPost('min_stock'));
+        $maxStock = (float) str_replace([' ', ','], ['', '.'], (string) $this->request->getPost('max_stock'));
+
         $productId = $productModel->insert([
             'company_id' => $context['company']['id'],
             'sku' => $sku,
@@ -805,22 +882,33 @@ class InventoryController extends BaseController
             'description' => trim((string) $this->request->getPost('description')),
             'image' => $imageName,
             'unit' => trim((string) $this->request->getPost('unit')) ?: 'unidad',
-            'min_stock' => (float) $this->request->getPost('min_stock'),
-            'max_stock' => (float) $this->request->getPost('max_stock'),
-            'cost_price' => (float) $this->request->getPost('cost_price'),
-            'sale_price' => (float) $this->request->getPost('sale_price'),
-            'lot_control' => $this->request->getPost('lot_control') === '1' ? 1 : 0,
-            'serial_control' => $this->request->getPost('serial_control') === '1' ? 1 : 0,
-            'expiration_control' => $this->request->getPost('expiration_control') === '1' ? 1 : 0,
-            'active' => $this->request->getPost('active') === '0' ? 0 : 1,
+            'min_stock' => $minStock,
+            'max_stock' => $maxStock,
+            'cost_price' => $costPrice,
+            'sale_price' => $salePrice,
+            'lot_control' => (string) $this->request->getPost('lot_control') === '1' ? 1 : 0,
+            'serial_control' => (string) $this->request->getPost('serial_control') === '1' ? 1 : 0,
+            'expiration_control' => (string) $this->request->getPost('expiration_control') === '1' ? 1 : 0,
+            'active' => (string) $this->request->getPost('active') === '0' ? 0 : 1,
         ], true);
 
         $this->syncKitItems($productId, $this->requestKitItems($context['company']['id'], $productId));
 
         $initialWarehouseId = trim((string) $this->request->getPost('initial_warehouse_id'));
-        $initialStock = (float) $this->request->getPost('initial_stock');
+        $initialStockRaw = $this->request->getPost('initial_stock');
+        $initialStock = $initialStockRaw !== null && $initialStockRaw !== '' ? (float) str_replace([' ', ','], ['', '.'], (string) $initialStockRaw) : 0.0;
+
+        if ($initialWarehouseId === '' && $initialStock > 0) {
+            $defaultWh = (new InventoryWarehouseModel())
+                ->where('company_id', $context['company']['id'])
+                ->where('is_default', 1)
+                ->first() ?? (new InventoryWarehouseModel())->where('company_id', $context['company']['id'])->first();
+            if ($defaultWh) {
+                $initialWarehouseId = (string) $defaultWh['id'];
+            }
+        }
+
         if ($initialWarehouseId !== '' && $initialStock > 0) {
-            $costPrice = (float) $this->request->getPost('cost_price');
             $db = db_connect();
             $db->transStart();
             $this->applyStockDelta($context['company']['id'], $productId, $initialWarehouseId, $initialStock);
@@ -829,8 +917,8 @@ class InventoryController extends BaseController
                 'product_id' => $productId,
                 'movement_type' => 'ingreso',
                 'quantity' => $initialStock,
-                'unit_cost' => $costPrice,
-                'total_cost' => round($costPrice * $initialStock, 2),
+                'unit_cost' => $costPrice > 0 ? $costPrice : null,
+                'total_cost' => $costPrice > 0 ? round($costPrice * $initialStock, 2) : null,
                 'destination_warehouse_id' => $initialWarehouseId,
                 'performed_by' => $this->currentUser()['id'],
                 'occurred_at' => date('Y-m-d H:i:s'),
@@ -843,7 +931,36 @@ class InventoryController extends BaseController
         $redirectTo = trim((string) ($this->request->getPost('redirect_to') ?? ''));
         $redirectUrl = $redirectTo !== '' ? $redirectTo : $this->inventoryRoute('inventario/configuracion', $context['company']['id']);
 
-        return $this->popupOrRedirect($redirectUrl, 'Producto registrado correctamente.');
+        $productRow = null;
+        foreach ($this->productStockRows($context['company']['id']) as $p) {
+            if ($p['id'] === $productId) {
+                $productRow = $p;
+                break;
+            }
+        }
+        if (!$productRow) {
+            $productRow = $productModel->find($productId);
+            $productRow['total_stock'] = $initialStock;
+            $productRow['available_stock'] = $initialStock;
+            $productRow['reserved_stock'] = 0;
+            $productRow['is_critical'] = ((float) $productRow['available_stock'] <= (float) $productRow['min_stock']);
+            $productRow['is_overstock'] = ((float) $productRow['max_stock'] > 0 && (float) $productRow['total_stock'] > (float) $productRow['max_stock']);
+            $productRow['image_url'] = ! empty($productRow['image']) ? base_url('uploads/products/' . $productRow['image']) : null;
+        }
+
+        if ($this->isAjaxRequest()) {
+            return $this->ajaxSuccess('Producto registrado correctamente.', [
+                'entity' => 'product',
+                'action' => 'create',
+                'item' => $productRow,
+            ]);
+        }
+
+        return $this->popupOrRedirect($redirectUrl, 'Producto registrado correctamente.', [
+            'entity' => 'product',
+            'action' => 'create',
+            'item' => $productRow,
+        ]);
     }
 
 
@@ -896,6 +1013,9 @@ class InventoryController extends BaseController
         }
 
         if (! $this->canConfigureInventory($context)) {
+            if ($this->isAjaxRequest()) {
+                return $this->ajaxError('No tienes permisos para editar productos.', 403);
+            }
             return redirect()->to('/inventario')->with('error', 'No tienes permisos para editar productos.');
         }
 
@@ -903,12 +1023,18 @@ class InventoryController extends BaseController
         $product = $this->ownedProduct($context['company']['id'], $id);
 
         if (! $product) {
+            if ($this->isAjaxRequest()) {
+                return $this->ajaxError('Producto no disponible.', 404);
+            }
             return redirect()->to($this->inventoryRoute('inventario/configuracion', $context['company']['id']))->with('error', 'Producto no disponible.');
         }
 
         $sku = strtoupper(trim((string) $this->request->getPost('sku')));
 
         if ($sku === '' || trim((string) $this->request->getPost('name')) === '') {
+            if ($this->isAjaxRequest()) {
+                return $this->ajaxError('Debes indicar SKU y nombre del producto.', 422);
+            }
             return redirect()->back()->withInput()->with('error', 'Debes indicar SKU y nombre del producto.');
         }
 
@@ -919,6 +1045,9 @@ class InventoryController extends BaseController
             ->first();
 
         if ($duplicate) {
+            if ($this->isAjaxRequest()) {
+                return $this->ajaxError('Ya existe un producto con ese SKU en la empresa.', 422);
+            }
             return redirect()->back()->withInput()->with('error', 'Ya existe un producto con ese SKU en la empresa.');
         }
 
@@ -929,6 +1058,9 @@ class InventoryController extends BaseController
             $allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
             if (! in_array($imageFile->getMimeType(), $allowed, true) || $imageFile->getSize() > 2 * 1024 * 1024) {
+                if ($this->isAjaxRequest()) {
+                    return $this->ajaxError('La imagen debe ser JPG, PNG, WEBP o GIF y no superar 2 MB.', 422);
+                }
                 return redirect()->back()->withInput()->with('error', 'La imagen debe ser JPG, PNG, WEBP o GIF y no superar 2 MB.');
             }
 
@@ -940,6 +1072,11 @@ class InventoryController extends BaseController
             $imageFile->move(FCPATH . 'uploads/products/', $imageName);
         }
 
+        $costPrice = (float) str_replace([' ', ','], ['', '.'], (string) $this->request->getPost('cost_price'));
+        $salePrice = (float) str_replace([' ', ','], ['', '.'], (string) $this->request->getPost('sale_price'));
+        $minStock = (float) str_replace([' ', ','], ['', '.'], (string) $this->request->getPost('min_stock'));
+        $maxStock = (float) str_replace([' ', ','], ['', '.'], (string) $this->request->getPost('max_stock'));
+
         $payload = [
             'sku' => $sku,
             'name' => trim((string) $this->request->getPost('name')),
@@ -950,14 +1087,14 @@ class InventoryController extends BaseController
             'description' => trim((string) $this->request->getPost('description')),
             'image' => $imageName,
             'unit' => trim((string) $this->request->getPost('unit')) ?: 'unidad',
-            'min_stock' => (float) $this->request->getPost('min_stock'),
-            'max_stock' => (float) $this->request->getPost('max_stock'),
-            'cost_price' => (float) $this->request->getPost('cost_price'),
-            'sale_price' => (float) $this->request->getPost('sale_price'),
-            'lot_control' => $this->request->getPost('lot_control') === '1' ? 1 : 0,
-            'serial_control' => $this->request->getPost('serial_control') === '1' ? 1 : 0,
-            'expiration_control' => $this->request->getPost('expiration_control') === '1' ? 1 : 0,
-            'active' => $this->request->getPost('active') === '0' ? 0 : 1,
+            'min_stock' => $minStock,
+            'max_stock' => $maxStock,
+            'cost_price' => $costPrice,
+            'sale_price' => $salePrice,
+            'lot_control' => (string) $this->request->getPost('lot_control') === '1' ? 1 : 0,
+            'serial_control' => (string) $this->request->getPost('serial_control') === '1' ? 1 : 0,
+            'expiration_control' => (string) $this->request->getPost('expiration_control') === '1' ? 1 : 0,
+            'active' => (string) $this->request->getPost('active') === '0' ? 0 : 1,
         ];
 
         $productModel->update($id, $payload);
@@ -965,9 +1102,20 @@ class InventoryController extends BaseController
         $this->syncKitItems($id, $this->requestKitItems($context['company']['id'], $id));
 
         $initialWarehouseId = trim((string) $this->request->getPost('initial_warehouse_id'));
-        $initialStock = (float) $this->request->getPost('initial_stock');
+        $initialStockRaw = $this->request->getPost('initial_stock');
 
-        if ($initialWarehouseId !== '') {
+        if ($initialWarehouseId === '' && $initialStockRaw !== null && $initialStockRaw !== '') {
+            $defaultWh = (new InventoryWarehouseModel())
+                ->where('company_id', $context['company']['id'])
+                ->where('is_default', 1)
+                ->first() ?? (new InventoryWarehouseModel())->where('company_id', $context['company']['id'])->first();
+            if ($defaultWh) {
+                $initialWarehouseId = (string) $defaultWh['id'];
+            }
+        }
+
+        if ($initialWarehouseId !== '' && $initialStockRaw !== null && $initialStockRaw !== '') {
+            $initialStock = (float) str_replace([' ', ','], ['', '.'], (string) $initialStockRaw);
             $stockModel = new InventoryStockLevelModel();
             $existingLevel = $stockModel
                 ->where('company_id', $context['company']['id'])
@@ -978,33 +1126,71 @@ class InventoryController extends BaseController
             $currentQty = (float) ($existingLevel['quantity'] ?? 0);
             $delta = $initialStock - $currentQty;
 
-            if (abs($delta) >= 0.0001) {
-                $costPrice = (float) $this->request->getPost('cost_price');
-                $db = db_connect();
-                $db->transStart();
-                $this->applyStockDelta($context['company']['id'], $id, $initialWarehouseId, $delta);
-                (new InventoryMovementModel())->insert([
+            if ($existingLevel) {
+                $stockModel->update($existingLevel['id'], [
+                    'quantity' => $initialStock,
+                ]);
+            } else {
+                $stockModel->insert([
                     'company_id' => $context['company']['id'],
                     'product_id' => $id,
-                    'movement_type' => $delta > 0 ? 'ingreso' : 'egreso',
-                    'quantity' => abs($delta),
-                    'unit_cost' => $costPrice > 0 ? $costPrice : null,
-                    'total_cost' => $costPrice > 0 ? round($costPrice * abs($delta), 2) : null,
-                    'destination_warehouse_id' => $delta > 0 ? $initialWarehouseId : null,
-                    'source_warehouse_id' => $delta < 0 ? $initialWarehouseId : null,
-                    'performed_by' => $this->currentUser()['id'],
-                    'occurred_at' => date('Y-m-d H:i:s'),
-                    'reason' => 'Ajuste de stock desde edición de producto',
-                    'notes' => 'Actualización de stock desde formulario de producto',
+                    'warehouse_id' => $initialWarehouseId,
+                    'quantity' => $initialStock,
+                    'reserved_quantity' => 0,
+                    'min_stock' => $minStock,
                 ]);
-                $db->transComplete();
+            }
+
+            if (abs($delta) >= 0.0001) {
+                try {
+                    (new InventoryMovementModel())->insert([
+                        'company_id' => $context['company']['id'],
+                        'product_id' => $id,
+                        'movement_type' => $delta > 0 ? 'ingreso' : 'egreso',
+                        'quantity' => abs($delta),
+                        'unit_cost' => $costPrice > 0 ? $costPrice : null,
+                        'total_cost' => $costPrice > 0 ? round($costPrice * abs($delta), 2) : null,
+                        'destination_warehouse_id' => $delta > 0 ? $initialWarehouseId : null,
+                        'source_warehouse_id' => $delta < 0 ? $initialWarehouseId : null,
+                        'performed_by' => $this->currentUser()['id'] ?? null,
+                        'occurred_at' => date('Y-m-d H:i:s'),
+                        'reason' => 'Ajuste de stock desde edición de producto',
+                        'notes' => 'Actualización de stock desde formulario de producto',
+                    ]);
+                } catch (\Throwable $e) {
+                    log_message('warning', 'Error registering movement on product update: ' . $e->getMessage());
+                }
             }
         }
 
         $redirectTo = trim((string) ($this->request->getPost('redirect_to') ?? ''));
         $redirectUrl = $redirectTo !== '' ? $redirectTo : $this->inventoryRoute('inventario/configuracion', $context['company']['id']);
 
-        return $this->popupOrRedirect($redirectUrl, 'Producto actualizado correctamente.');
+        $productRow = null;
+        foreach ($this->productStockRows($context['company']['id']) as $p) {
+            if ((string) $p['id'] === (string) $id) {
+                $productRow = $p;
+                break;
+            }
+        }
+        if (!$productRow) {
+            $productRow = $productModel->find($id);
+            $productRow['image_url'] = ! empty($productRow['image']) ? base_url('uploads/products/' . $productRow['image']) : null;
+        }
+
+        if ($this->isAjaxRequest()) {
+            return $this->ajaxSuccess('Producto actualizado correctamente.', [
+                'entity' => 'product',
+                'action' => 'update',
+                'item' => $productRow,
+            ]);
+        }
+
+        return $this->popupOrRedirect($redirectUrl, 'Producto actualizado correctamente.', [
+            'entity' => 'product',
+            'action' => 'update',
+            'item' => $productRow,
+        ]);
     }
 
     public function toggleProduct(string $id)
@@ -1016,6 +1202,9 @@ class InventoryController extends BaseController
         }
 
         if (! $this->canConfigureInventory($context)) {
+            if ($this->isAjaxRequest()) {
+                return $this->ajaxError('No tienes permisos para cambiar el estado del producto.', 403);
+            }
             return redirect()->to('/inventario')->with('error', 'No tienes permisos para cambiar el estado del producto.');
         }
 
@@ -1023,12 +1212,35 @@ class InventoryController extends BaseController
         $product = $this->ownedProduct($context['company']['id'], $id);
 
         if (! $product) {
+            if ($this->isAjaxRequest()) {
+                return $this->ajaxError('Producto no disponible.', 404);
+            }
             return redirect()->to($this->inventoryRoute('inventario/configuracion', $context['company']['id']))->with('error', 'Producto no disponible.');
         }
 
+        $newActive = (int) $product['active'] === 1 ? 0 : 1;
         $productModel->update($id, [
-            'active' => (int) $product['active'] === 1 ? 0 : 1,
+            'active' => $newActive,
         ]);
+
+        $productRow = null;
+        foreach ($this->productStockRows($context['company']['id']) as $p) {
+            if ($p['id'] === $id) {
+                $productRow = $p;
+                break;
+            }
+        }
+        if (!$productRow) {
+            $productRow = $productModel->find($id);
+        }
+
+        if ($this->isAjaxRequest()) {
+            return $this->ajaxSuccess('Estado del producto actualizado correctamente.', [
+                'entity' => 'product',
+                'action' => 'toggle',
+                'item' => $productRow,
+            ]);
+        }
 
         return redirect()->to($this->inventoryRoute('inventario/configuracion', $context['company']['id']))->with('message', 'Estado del producto actualizado correctamente.');
     }
@@ -1042,6 +1254,9 @@ class InventoryController extends BaseController
         }
 
         if (! $this->canConfigureInventory($context)) {
+            if ($this->isAjaxRequest()) {
+                return $this->ajaxError('No tienes permisos para eliminar productos.', 403);
+            }
             return redirect()->to('/inventario')->with('error', 'No tienes permisos para eliminar productos.');
         }
 
@@ -1049,6 +1264,9 @@ class InventoryController extends BaseController
         $product = $this->ownedProduct($context['company']['id'], $id);
 
         if (! $product) {
+            if ($this->isAjaxRequest()) {
+                return $this->ajaxError('Producto no disponible.', 404);
+            }
             return redirect()->to($this->inventoryRoute('inventario/configuracion', $context['company']['id']))->with('error', 'Producto no disponible.');
         }
 
@@ -1071,6 +1289,25 @@ class InventoryController extends BaseController
                 'active' => 0,
             ]);
 
+            $productRow = null;
+            foreach ($this->productStockRows($context['company']['id']) as $p) {
+                if ($p['id'] === $id) {
+                    $productRow = $p;
+                    break;
+                }
+            }
+            if (!$productRow) {
+                $productRow = $productModel->find($id);
+            }
+
+            if ($this->isAjaxRequest()) {
+                return $this->ajaxSuccess('El producto cuenta con stock o trazabilidad histórica y fue desactivado para conservar el historial.', [
+                    'entity' => 'product',
+                    'action' => 'update',
+                    'item' => $productRow,
+                ]);
+            }
+
             return redirect()->to($this->inventoryRoute('inventario/configuracion', $context['company']['id']))
                 ->with('message', 'El producto cuenta con stock o trazabilidad histórica y no puede borrarse físicamente. Se ha deshabilitado/inactivado correctamente para conservar el historial.');
         }
@@ -1080,6 +1317,14 @@ class InventoryController extends BaseController
         }
 
         $productModel->delete($id);
+
+        if ($this->isAjaxRequest()) {
+            return $this->ajaxSuccess('Producto eliminado correctamente.', [
+                'entity' => 'product',
+                'action' => 'delete',
+                'item' => ['id' => $id],
+            ]);
+        }
 
         return redirect()->to($this->inventoryRoute('inventario/configuracion', $context['company']['id']))->with('message', 'Producto eliminado correctamente.');
     }
@@ -1547,7 +1792,26 @@ class InventoryController extends BaseController
         $db->transComplete();
 
         if (! $db->transStatus()) {
+            if ($this->isAjaxRequest()) {
+                return $this->ajaxError('No se pudo liberar la reserva.', 500);
+            }
             return redirect()->to($this->inventoryRoute('inventario', $context['company']['id']))->with('error', 'No se pudo liberar la reserva.');
+        }
+
+        if ($this->isAjaxRequest()) {
+            $productRow = null;
+            foreach ($this->productStockRows($context['company']['id']) as $p) {
+                if ((string) $p['id'] === (string) $reservation['product_id']) {
+                    $productRow = $p;
+                    break;
+                }
+            }
+            return $this->ajaxSuccess('Reserva liberada correctamente.', [
+                'entity' => 'reservation',
+                'action' => 'release',
+                'reservation_id' => $id,
+                'product' => $productRow,
+            ]);
         }
 
         return redirect()->to($this->inventoryRoute('inventario', $context['company']['id']))->with('message', 'Reserva liberada correctamente.');
@@ -2090,10 +2354,10 @@ class InventoryController extends BaseController
     {
         $builder = db_connect()->table('inventory_products p');
         $builder
-            ->select('p.id, p.sku, p.name, p.category, p.brand, p.barcode, p.product_type, p.unit, p.min_stock, p.max_stock, p.lot_control, p.serial_control, p.expiration_control, p.active, p.image, COALESCE(SUM(s.quantity), 0) AS total_stock, COALESCE(SUM(s.reserved_quantity), 0) AS reserved_stock, COUNT(s.id) AS warehouse_count', false)
+            ->select('p.id, p.company_id, p.sku, p.name, p.category, p.brand, p.barcode, p.product_type, p.unit, p.min_stock, p.max_stock, p.cost_price, p.sale_price, p.description, p.lot_control, p.serial_control, p.expiration_control, p.active, p.image, COALESCE(SUM(s.quantity), 0) AS total_stock, COALESCE(SUM(s.reserved_quantity), 0) AS reserved_stock, COUNT(s.id) AS warehouse_count', false)
             ->join('inventory_stock_levels s', 's.product_id = p.id', 'left')
             ->where('p.company_id', $companyId)
-            ->groupBy('p.id, p.sku, p.name, p.category, p.brand, p.barcode, p.product_type, p.unit, p.min_stock, p.max_stock, p.lot_control, p.serial_control, p.expiration_control, p.active, p.image')
+            ->groupBy('p.id, p.company_id, p.sku, p.name, p.category, p.brand, p.barcode, p.product_type, p.unit, p.min_stock, p.max_stock, p.cost_price, p.sale_price, p.description, p.lot_control, p.serial_control, p.expiration_control, p.active, p.image')
             ->orderBy('p.name', 'ASC');
 
         $rows = $builder->get()->getResultArray();
@@ -2104,6 +2368,13 @@ class InventoryController extends BaseController
             $row['available_stock'] = $row['total_stock'] - $row['reserved_stock'];
             $row['min_stock'] = (float) ($row['min_stock'] ?? 0);
             $row['max_stock'] = (float) ($row['max_stock'] ?? 0);
+            $row['cost_price'] = (float) ($row['cost_price'] ?? 0);
+            $row['sale_price'] = (float) ($row['sale_price'] ?? 0);
+            $row['lot_control'] = (int) ($row['lot_control'] ?? 0);
+            $row['serial_control'] = (int) ($row['serial_control'] ?? 0);
+            $row['expiration_control'] = (int) ($row['expiration_control'] ?? 0);
+            $row['active'] = (int) ($row['active'] ?? 1);
+            $row['description'] = (string) ($row['description'] ?? '');
             $row['is_critical'] = $row['available_stock'] <= $row['min_stock'];
             $row['is_overstock'] = $row['max_stock'] > 0 && $row['total_stock'] > $row['max_stock'];
 
@@ -2656,12 +2927,16 @@ class InventoryController extends BaseController
         $stockLevelModel = new InventoryStockLevelModel();
         $product = (new InventoryProductModel())->find($productId);
 
-        $existing = $stockLevelModel
+        $query = $stockLevelModel
             ->where('company_id', $companyId)
             ->where('product_id', $productId)
-            ->where('warehouse_id', $warehouseId)
-            ->where('location_id', $locationId)
-            ->first();
+            ->where('warehouse_id', $warehouseId);
+
+        if (! empty($locationId)) {
+            $query->where('location_id', $locationId);
+        }
+
+        $existing = $query->first();
 
         if ($existing) {
             $stockLevelModel->update($existing['id'], [
@@ -2675,7 +2950,7 @@ class InventoryController extends BaseController
             'company_id' => $companyId,
             'product_id' => $productId,
             'warehouse_id' => $warehouseId,
-            'location_id' => $locationId,
+            'location_id' => ! empty($locationId) ? $locationId : null,
             'quantity' => $delta,
             'reserved_quantity' => 0,
             'min_stock' => $product['min_stock'] ?? 0,

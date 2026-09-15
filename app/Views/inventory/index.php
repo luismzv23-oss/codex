@@ -263,7 +263,8 @@
                         </thead>
                         <tbody>
                             <?php foreach ($products as $product): ?>
-                                <tr class="product-row" data-sku="<?= esc($product['sku']) ?>"
+                                <tr class="product-row" data-product-id="<?= esc($product['id']) ?>"
+                                    data-sku="<?= esc($product['sku']) ?>"
                                     data-name="<?= esc($product['name']) ?>"
                                     data-category-brand="<?= esc(trim(($product['category'] ?? '') . ' ' . ($product['brand'] ?? ''))) ?>"
                                     data-status="<?= $product['is_critical'] ? 'critical' : (($product['is_overstock'] ?? false) ? 'overstock' : 'healthy') ?>"
@@ -468,11 +469,70 @@
         const table = document.getElementById('inventory-products-table');
         if (!table) return;
 
+        const companyQuery = '<?= !empty($companies) ? '&company_id=' . $selectedCompanyId : '' ?>';
+        const siteBase = '<?= rtrim(site_url(), '/') ?>';
+        const canManage = <?= $context['canManage'] ? 'true' : 'false' ?>;
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function formatInt(val) {
+            return Number(val || 0).toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        }
+
+        function buildInventoryProductRowHtml(item) {
+            const isActive = Number(item.active ?? 1) === 1;
+            const isCritical = Boolean(item.is_critical);
+            const isOverstock = Boolean(item.is_overstock);
+            const statusLabel = isCritical ? 'Critico' : (isOverstock ? 'Sobre stock' : 'Saludable');
+            const statusClass = isCritical ? 'text-danger fw-semibold' : (isOverstock ? 'text-warning fw-semibold' : 'text-success fw-semibold');
+
+            let statusHtml = '';
+            if (!isActive) {
+                statusHtml = '<span class="badge bg-secondary-subtle text-secondary border px-2 py-1">Inactivo</span>';
+            } else {
+                statusHtml = `<span class="${statusClass}">${statusLabel}</span>`;
+            }
+
+            let manageBtn = '';
+            if (canManage && isActive) {
+                manageBtn = `<a href="${siteBase}/inventario/movimientos/nuevo?popup=1${companyQuery}&product_id=${item.id}&movement_type=ajuste&adjustment_mode=increase&reason=Ajuste%20manual%20de%20stock" class="btn btn-sm btn-outline-dark icon-btn" data-popup="true" data-popup-title="Editar stock" data-popup-subtitle="Ajustar stock del producto con trazabilidad." title="Editar stock" aria-label="Editar stock"><i class="bi bi-pencil-square"></i></a>`;
+            } else if (canManage) {
+                manageBtn = `<button type="button" class="btn btn-sm btn-outline-secondary icon-btn opacity-50" disabled title="Producto inactivo. Debe habilitarse desde Configuración de inventario para ajustar existencias." aria-label="Producto inactivo"><i class="bi bi-pencil-square"></i></button>`;
+            }
+
+            const catBrand = ((item.category || '') + ' ' + (item.brand || '')).trim();
+
+            return `
+                <td>${escapeHtml(item.sku || '')}</td>
+                <td>${escapeHtml(item.name || '')}
+                    <div class="small text-secondary">${escapeHtml(catBrand)}</div>
+                </td>
+                <td>${escapeHtml(item.unit || 'unidad')}</td>
+                <td>${formatInt(item.total_stock)}</td>
+                <td>${formatInt(item.reserved_stock)}</td>
+                <td>${formatInt(item.available_stock)}</td>
+                <td>${formatInt(item.min_stock)} / ${formatInt(item.max_stock)}</td>
+                <td>${statusHtml}</td>
+                <td class="text-end">
+                    ${manageBtn}
+                    <a href="${siteBase}/inventario/productos/${item.id}/trazabilidad${companyQuery ? '?' + companyQuery.substring(1) : ''}" class="btn btn-sm btn-outline-secondary icon-btn" data-popup="true" data-popup-title="Trazabilidad del producto" data-popup-subtitle="Historial, stock por deposito y responsables." title="Ver trazabilidad" aria-label="Ver trazabilidad"><i class="bi bi-diagram-3"></i></a>
+                </td>
+            `;
+        }
+
         const searchInput = document.getElementById('productSearchInput');
         const clearSearchBtn = document.getElementById('clearSearchBtn');
         const filterPills = document.querySelectorAll('.filter-pill');
         const tableBody = table.querySelector('tbody');
-        const allRows = Array.from(tableBody.querySelectorAll('.product-row'));
+        let allRows = Array.from(tableBody.querySelectorAll('.product-row'));
         const noResultsRow = document.getElementById('no-results-row');
         const noProductsRow = document.getElementById('no-products-row');
         const pageSize = 8;
@@ -485,6 +545,35 @@
         const paginationWrapper = document.createElement('div');
         paginationWrapper.className = 'codex-pagination mt-4';
         tableResponsive.after(paginationWrapper);
+
+        function refreshInventoryProducts(targetRow = null) {
+            allRows = Array.from(tableBody.querySelectorAll('.product-row'));
+            
+            if (targetRow) {
+                const query = searchInput.value.toLowerCase().trim();
+                const matched = allRows.filter(row => {
+                    const sku = (row.dataset.sku || '').toLowerCase();
+                    const name = (row.dataset.name || '').toLowerCase();
+                    const catBrand = (row.dataset.categoryBrand || '').toLowerCase();
+                    const status = row.dataset.status || '';
+
+                    const matchesSearch = !query ||
+                        sku.includes(query) ||
+                        name.includes(query) ||
+                        catBrand.includes(query);
+
+                    const matchesStatus = currentFilter === 'all' || status === currentFilter;
+                    return matchesSearch && matchesStatus;
+                });
+
+                const idx = matched.indexOf(targetRow);
+                if (idx !== -1) {
+                    currentPage = Math.floor(idx / pageSize) + 1;
+                }
+            }
+
+            updateFilters();
+        }
 
         function updateFilters() {
             searchQuery = searchInput.value.toLowerCase().trim();
@@ -710,6 +799,52 @@
 
         // Initial render
         updateFilters();
+
+        // Listen for real-time product updates/creations
+        window.addEventListener('codex:product-saved', (event) => {
+            const data = event.detail;
+            if (!data || !data.item) return;
+            const item = data.item;
+
+            let row = tableBody.querySelector(`tr.product-row[data-product-id="${item.id}"]`);
+            const isCritical = Boolean(item.is_critical);
+            const isOverstock = Boolean(item.is_overstock);
+            const statusType = isCritical ? 'critical' : (isOverstock ? 'overstock' : 'healthy');
+            const catBrand = ((item.category || '') + ' ' + (item.brand || '')).trim();
+
+            if (row) {
+                row.dataset.sku = item.sku || '';
+                row.dataset.name = item.name || '';
+                row.dataset.categoryBrand = catBrand;
+                row.dataset.status = statusType;
+                row.dataset.active = String(item.active ?? 1);
+                row.innerHTML = buildInventoryProductRowHtml(item);
+            } else {
+                row = document.createElement('tr');
+                row.className = 'product-row';
+                row.dataset.productId = item.id;
+                row.dataset.sku = item.sku || '';
+                row.dataset.name = item.name || '';
+                row.dataset.categoryBrand = catBrand;
+                row.dataset.status = statusType;
+                row.dataset.active = String(item.active ?? 1);
+                row.innerHTML = buildInventoryProductRowHtml(item);
+
+                if (noResultsRow) {
+                    tableBody.insertBefore(row, noResultsRow);
+                } else {
+                    tableBody.appendChild(row);
+                }
+            }
+
+            row.style.transition = 'background-color 0.4s ease';
+            row.style.backgroundColor = 'rgba(25, 135, 84, 0.2)';
+            setTimeout(() => {
+                row.style.backgroundColor = '';
+            }, 1800);
+
+            refreshInventoryProducts(row);
+        });
 
         // Paginacion de Ultimos movimientos
         const movementsList = document.getElementById('recent-movements-list');

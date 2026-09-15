@@ -214,7 +214,7 @@
                         <thead><tr><th></th><th>SKU</th><th>Producto</th><th>Clasificacion</th><th>Unidad</th><th>Min/Max</th><th>Stock</th><th>Estado</th><th></th></tr></thead>
                         <tbody>
                             <?php foreach ($products as $product): ?>
-                                <tr class="data-row" data-active="<?= (int) $product['active'] ?>">
+                                <tr class="data-row" data-active="<?= (int) $product['active'] ?>" data-product-id="<?= esc($product['id']) ?>">
                                     <td><?php if (! empty($product['image'])): ?><img src="<?= esc(base_url('uploads/products/' . $product['image'])) ?>" alt="" style="width:40px;height:40px;object-fit:cover;" class="rounded"><?php else: ?><span class="d-flex align-items-center justify-content-center rounded bg-light text-secondary" style="width:40px;height:40px;"><i class="bi bi-box"></i></span><?php endif; ?></td>
                                     <td><?= esc($product['sku']) ?></td>
                                     <td><?= esc($product['name']) ?></td>
@@ -385,12 +385,86 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    const companyQuery = '<?= ! empty($companies) ? '?company_id=' . $selectedCompanyId : '' ?>';
+    const siteBase = '<?= rtrim(site_url(), '/') ?>';
+    const uploadsBase = '<?= rtrim(base_url('uploads/products/'), '/') ?>';
+    const csrfTokenName = '<?= csrf_token() ?>';
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '<?= csrf_hash() ?>';
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function formatNumber(val, decimals = 2) {
+        return Number(val || 0).toLocaleString('es-ES', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    }
+
+    function buildProductRowHtml(item) {
+        const isActive = Number(item.active ?? 1) === 1;
+        const imgHtml = item.image ?
+            `<img src="${uploadsBase}/${item.image}" alt="" style="width:40px;height:40px;object-fit:cover;" class="rounded">` :
+            `<span class="d-flex align-items-center justify-content-center rounded bg-light text-secondary" style="width:40px;height:40px;"><i class="bi bi-box"></i></span>`;
+
+        const cat = (item.category && String(item.category).trim()) ? String(item.category).trim() : '-';
+        const brand = (item.brand && String(item.brand).trim()) ? String(item.brand).trim() : '-';
+        const catBrand = (cat === '-' && brand === '-') ? '-' : (cat !== '-' && brand !== '-' ? `${cat} / ${brand}` : (cat !== '-' ? cat : brand));
+        const type = item.product_type || 'simple';
+        const barcode = item.barcode ? ` / ${item.barcode}` : '';
+        const lot = Number(item.lot_control) === 1 ? ' / Lote' : '';
+        const serial = Number(item.serial_control) === 1 ? ' / Serie' : '';
+        const exp = Number(item.expiration_control) === 1 ? ' / Vence' : '';
+
+        const minStock = formatNumber(item.min_stock, 2);
+        const maxStock = formatNumber(item.max_stock, 2);
+        const totalStock = formatNumber(item.total_stock, 2);
+        const availStock = formatNumber(item.available_stock, 2);
+
+        const badgeHtml = isActive ?
+            `<span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">Activo</span>` :
+            `<span class="badge bg-secondary-subtle text-secondary border px-2 py-1">Inactivo</span>`;
+
+        const toggleBtnClass = isActive ? 'btn-outline-warning' : 'btn-outline-success';
+        const toggleIconClass = isActive ? 'bi-pause-circle' : 'bi-play-circle';
+        const toggleTitle = isActive ? 'Deshabilitar producto' : 'Habilitar producto';
+
+        return `
+            <td>${imgHtml}</td>
+            <td>${escapeHtml(item.sku || '')}</td>
+            <td>${escapeHtml(item.name || '')}</td>
+            <td>${escapeHtml(catBrand)}<div class="small text-secondary">${escapeHtml(type + barcode + lot + serial + exp)}</div></td>
+            <td>${escapeHtml(item.unit || 'unidad')}</td>
+            <td>${minStock} / ${maxStock}</td>
+            <td>${totalStock}<div class="small text-secondary">Disponible: ${availStock}</div></td>
+            <td>${badgeHtml}</td>
+            <td class="text-end">
+                <a href="${siteBase}/inventario/productos/${item.id}/trazabilidad${companyQuery}" class="btn btn-sm btn-outline-secondary icon-btn" data-popup="true" data-popup-title="Trazabilidad del producto" data-popup-subtitle="Historial, stock por deposito y responsables." title="Ver trazabilidad" aria-label="Ver trazabilidad"><i class="bi bi-diagram-3"></i></a>
+                <a href="${siteBase}/inventario/productos/${item.id}/editar${companyQuery}" class="btn btn-sm btn-outline-dark icon-btn" data-popup="true" data-popup-title="Producto" data-popup-subtitle="Editar datos del producto y sus minimos." title="Editar producto" aria-label="Editar producto"><i class="bi bi-pencil-square"></i></a>
+                <form method="post" action="${siteBase}/inventario/productos/${item.id}/toggle${companyQuery}" class="d-inline">
+                    <input type="hidden" name="${csrfTokenName}" value="${csrfToken}">
+                    <button class="btn btn-sm ${toggleBtnClass} icon-btn" title="${toggleTitle}" aria-label="${toggleTitle}"><i class="bi ${toggleIconClass}"></i></button>
+                </form>
+                <form method="post" action="${siteBase}/inventario/productos/${item.id}/eliminar${companyQuery}" class="d-inline" onsubmit="return confirm('Si el producto cuenta con movimientos o existencias, sera deshabilitado/inactivado para conservar la trazabilidad historica. Deseas continuar?');">
+                    <input type="hidden" name="${csrfTokenName}" value="${csrfToken}">
+                    <button class="btn btn-sm btn-outline-danger icon-btn" title="Eliminar / Inactivar producto" aria-label="Eliminar / Inactivar producto"><i class="bi bi-trash3"></i></button>
+                </form>
+            </td>
+        `;
+    }
+
     class PaginatedTable {
         constructor(tableId, pageSize, searchInputId, customFilterFn = null) {
+            this.tableId = tableId;
             this.table = document.getElementById(tableId);
             if (!this.table) return;
             this.pageSize = pageSize;
             this.currentPage = 1;
+            this.searchInputId = searchInputId;
             this.customFilterFn = customFilterFn;
             this.tbody = this.table.tBodies[0];
             if (!this.tbody) return;
@@ -422,8 +496,30 @@ document.addEventListener('DOMContentLoaded', () => {
             this.update();
         }
 
+        matchesRow(row, query) {
+            let matches = !query || row.textContent.toLowerCase().includes(query);
+            if (matches && this.customFilterFn) {
+                matches = Boolean(this.customFilterFn(row));
+            }
+            return matches;
+        }
+
+        refreshRows(targetRow = null) {
+            this.allRows = Array.from(this.tbody.querySelectorAll('tr.data-row'));
+            const query = document.getElementById(this.searchInputId)?.value.toLowerCase().trim() || '';
+
+            if (targetRow) {
+                const matchedRows = this.allRows.filter(r => this.matchesRow(r, query));
+                const idx = matchedRows.indexOf(targetRow);
+                if (idx !== -1) {
+                    this.currentPage = Math.floor(idx / this.pageSize) + 1;
+                }
+            }
+            this.update();
+        }
+
         update() {
-            const query = document.getElementById('inventorySearchInput')?.value.toLowerCase().trim() || '';
+            const query = document.getElementById(this.searchInputId)?.value.toLowerCase().trim() || '';
             
             if (this.allRows.length === 0) {
                 if (this.noDataRow) this.noDataRow.style.display = '';
@@ -435,18 +531,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let matchedRows = [];
 
             this.allRows.forEach(row => {
-                let matches = false;
-                if (!query) {
-                    matches = true;
-                } else {
-                    const text = row.textContent.toLowerCase();
-                    matches = text.includes(query);
-                }
-
-                if (matches && this.customFilterFn) {
-                    matches = Boolean(this.customFilterFn(row));
-                }
-
+                const matches = this.matchesRow(row, query);
                 if (matches) {
                     row.style.display = '';
                     matchedRows.push(row);
@@ -555,9 +640,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Initialize Paginated Tables
-    new PaginatedTable('warehouses-table', 5, 'inventorySearchInput');
-    new PaginatedTable('locations-table', 5, 'inventorySearchInput');
-    new PaginatedTable('reservations-table', 5, 'inventorySearchInput');
+    const warehousesTable = new PaginatedTable('warehouses-table', 5, 'inventorySearchInput');
+    const locationsTable = new PaginatedTable('locations-table', 5, 'inventorySearchInput');
+    const reservationsTable = new PaginatedTable('reservations-table', 5, 'inventorySearchInput');
     
     // Filtro de estado para productos (por defecto 'active')
     let currentProductStatusFilter = 'active';
@@ -590,6 +675,111 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
     }
+
+    // Listen for product updates in real-time
+    window.addEventListener('codex:product-saved', (event) => {
+        const data = event.detail;
+        if (!data || !data.item) return;
+        const item = data.item;
+        const productsTbody = document.querySelector('#products-table tbody');
+        if (!productsTbody || !productsTable) return;
+
+        let row = productsTbody.querySelector(`tr.data-row[data-product-id="${item.id}"]`);
+        if (row) {
+            row.setAttribute('data-active', String(item.active ?? 1));
+            row.innerHTML = buildProductRowHtml(item);
+        } else {
+            row = document.createElement('tr');
+            row.className = 'data-row';
+            row.setAttribute('data-product-id', String(item.id));
+            row.setAttribute('data-active', String(item.active ?? 1));
+            row.innerHTML = buildProductRowHtml(item);
+            
+            const noResultsRow = productsTbody.querySelector('tr.no-results-row');
+            if (noResultsRow) {
+                productsTbody.insertBefore(row, noResultsRow);
+            } else {
+                productsTbody.appendChild(row);
+            }
+        }
+
+        row.style.transition = 'background-color 0.4s ease';
+        row.style.backgroundColor = 'rgba(25, 135, 84, 0.2)';
+        setTimeout(() => {
+            row.style.backgroundColor = '';
+        }, 1800);
+
+        productsTable.refreshRows(row);
+    });
+
+    // Event delegation for in-table form actions (toggle, delete, release)
+    document.addEventListener('submit', async (e) => {
+        const form = e.target;
+        const table = form.closest('#products-table, #warehouses-table, #locations-table, #reservations-table');
+        if (!table) return;
+
+        e.preventDefault();
+        const tr = form.closest('tr.data-row');
+        const formData = new FormData(form);
+
+        try {
+            const response = await fetch(form.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                window.showCodexToast(errData.message || 'Error al procesar la solicitud.', 'error');
+                return;
+            }
+
+            const res = await response.json();
+            if (res.message) {
+                window.showCodexToast(res.message, 'success');
+            }
+
+            if (table.id === 'products-table' && res.item) {
+                tr.setAttribute('data-active', String(res.item.active ?? 1));
+                tr.innerHTML = buildProductRowHtml(res.item);
+                tr.style.transition = 'background-color 0.4s ease';
+                tr.style.backgroundColor = 'rgba(25, 135, 84, 0.2)';
+                setTimeout(() => { tr.style.backgroundColor = ''; }, 1800);
+                productsTable.refreshRows(tr);
+            } else if (res.action === 'delete' || res.action === 'release' || form.action.includes('/eliminar') || form.action.includes('/liberar')) {
+                if (res.item && table.id === 'products-table') {
+                    tr.setAttribute('data-active', String(res.item.active ?? 0));
+                    tr.innerHTML = buildProductRowHtml(res.item);
+                    productsTable.refreshRows(tr);
+                } else {
+                    tr.remove();
+                    const pt = table.id === 'products-table' ? productsTable :
+                               (table.id === 'warehouses-table' ? warehousesTable :
+                               (table.id === 'locations-table' ? locationsTable : reservationsTable));
+                    if (pt) pt.refreshRows();
+                }
+            } else if (res.item && (table.id === 'warehouses-table' || table.id === 'locations-table')) {
+                const activeCell = tr.querySelector('td:nth-last-child(2)');
+                const isActive = Number(res.item.active) === 1;
+                if (activeCell) activeCell.textContent = isActive ? 'Activo' : 'Inactivo';
+                
+                const toggleBtn = form.querySelector('button');
+                if (toggleBtn) {
+                    toggleBtn.className = `btn btn-sm ${isActive ? 'btn-outline-warning' : 'btn-outline-success'} icon-btn`;
+                    toggleBtn.title = isActive ? 'Deshabilitar' : 'Habilitar';
+                    toggleBtn.setAttribute('aria-label', toggleBtn.title);
+                    toggleBtn.innerHTML = `<i class="bi ${isActive ? 'bi-pause-circle' : 'bi-play-circle'}"></i>`;
+                }
+            }
+        } catch (err) {
+            console.error(err);
+            window.showCodexToast('Error de conexión al procesar la acción.', 'error');
+        }
+    });
 
     new PaginatedTable('cost-layers-table', 5, 'inventorySearchInput');
     new PaginatedTable('assemblies-table', 5, 'inventorySearchInput');

@@ -78,6 +78,7 @@ if (auth_check() && !$isPopup) {
     <link href="<?= base_url('assets/css/app.css') ?>" rel="stylesheet">
     <link href="<?= base_url('assets/css/codex-assist.css') ?>" rel="stylesheet">
     <meta name="codex-api-base" content="<?= site_url('api/v1') ?>">
+    <meta name="csrf-token" content="<?= csrf_hash() ?>">
     <style>
         body.popup-mode {
             background: #f6f1eb;
@@ -390,8 +391,64 @@ if (auth_check() && !$isPopup) {
                     }
                 });
 
+                window.showCodexToast = (message, type = 'success') => {
+                    let container = document.getElementById('codex-toast-container');
+                    if (!container) {
+                        container = document.createElement('div');
+                        container.id = 'codex-toast-container';
+                        container.style.position = 'fixed';
+                        container.style.top = '20px';
+                        container.style.right = '20px';
+                        container.style.zIndex = '99999';
+                        container.style.display = 'flex';
+                        container.style.flexDirection = 'column';
+                        container.style.gap = '10px';
+                        container.style.pointerEvents = 'none';
+                        document.body.appendChild(container);
+                    }
+
+                    const toast = document.createElement('div');
+                    toast.className = `alert alert-${type === 'error' ? 'danger' : 'success'} alert-dismissible shadow-lg border-0 rounded-4 px-4 py-3 mb-0`;
+                    toast.style.pointerEvents = 'auto';
+                    toast.style.minWidth = '280px';
+                    toast.style.maxWidth = '420px';
+                    toast.style.transition = 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
+                    toast.style.transform = 'translateY(-10px)';
+                    toast.style.opacity = '0';
+                    toast.innerHTML = `
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-${type === 'error' ? 'exclamation-octagon-fill' : 'check-circle-fill'} fs-5"></i>
+                            <div class="fw-semibold text-wrap">${message}</div>
+                        </div>
+                    `;
+                    container.appendChild(toast);
+
+                    requestAnimationFrame(() => {
+                        toast.style.transform = 'translateY(0)';
+                        toast.style.opacity = '1';
+                    });
+
+                    setTimeout(() => {
+                        toast.style.transform = 'translateY(-10px)';
+                        toast.style.opacity = '0';
+                        setTimeout(() => toast.remove(), 300);
+                    }, 4000);
+                };
+
                 window.addEventListener('message', (event) => {
                     if (event.origin !== window.location.origin || !event.data) {
+                        return;
+                    }
+
+                    if (event.data.type === 'codex-popup-saved') {
+                        closePopup();
+                        if (event.data.message) {
+                            window.showCodexToast(event.data.message, 'success');
+                        }
+                        if (event.data.entity) {
+                            window.dispatchEvent(new CustomEvent('codex:' + event.data.entity + '-saved', { detail: event.data }));
+                        }
+                        window.dispatchEvent(new CustomEvent('codex:item-saved', { detail: event.data }));
                         return;
                     }
 
@@ -407,7 +464,9 @@ if (auth_check() && !$isPopup) {
 
                     if (event.data.type === 'codex-popup-close') {
                         closePopup();
-                        window.location.href = event.data.redirectUrl || window.location.href;
+                        if (event.data.forceReload) {
+                            window.location.href = event.data.redirectUrl || window.location.href;
+                        }
                         return;
                     }
 

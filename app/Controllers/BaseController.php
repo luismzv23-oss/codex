@@ -98,13 +98,41 @@ abstract class BaseController extends Controller
         return $this->request->getGet('popup') === '1' || $this->request->getPost('popup') === '1';
     }
 
-    protected function popupOrRedirect(string $redirectUrl, string $message)
+    protected function isAjaxRequest(): bool
+    {
+        return $this->request->isAJAX()
+            || $this->request->hasHeader('X-Requested-With')
+            || str_contains((string) $this->request->getHeaderLine('Accept'), 'application/json')
+            || $this->request->getGet('ajax') === '1'
+            || $this->request->getPost('ajax') === '1';
+    }
+
+    protected function ajaxSuccess(string $message, array $data = [], int $status = 200)
+    {
+        return $this->response->setStatusCode($status)->setJSON(array_merge([
+            'success' => true,
+            'ok' => true,
+            'message' => $message,
+        ], $data));
+    }
+
+    protected function ajaxError(string $message, int $status = 400, array $errors = [])
+    {
+        return $this->response->setStatusCode($status)->setJSON([
+            'success' => false,
+            'ok' => false,
+            'message' => $message,
+            'errors' => $errors,
+        ]);
+    }
+
+    protected function popupOrRedirect(string $redirectUrl, string $message, ?array $payload = null)
     {
         if ($this->isPopupRequest()) {
-            return view('layouts/popup_close', [
+            return view('layouts/popup_close', array_merge([
                 'redirectUrl' => $redirectUrl,
                 'message' => $message,
-            ]);
+            ], $payload ?? []));
         }
 
         return redirect()->to($redirectUrl)->with('message', $message);

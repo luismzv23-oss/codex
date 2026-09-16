@@ -1523,14 +1523,31 @@ class InventoryController extends BaseController
         $companyId = $context['company']['id'];
         $productId = trim((string) $this->request->getPost('product_id'));
         $movementType = trim((string) $this->request->getPost('movement_type'));
-        $quantity = (float) $this->request->getPost('quantity');
+        $quantity = (float) str_replace([' ', ','], ['', '.'], (string) $this->request->getPost('quantity'));
         $sourceWarehouseId = trim((string) $this->request->getPost('source_warehouse_id')) ?: null;
         $sourceLocationId = trim((string) $this->request->getPost('source_location_id')) ?: null;
         $destinationWarehouseId = trim((string) $this->request->getPost('destination_warehouse_id')) ?: null;
         $destinationLocationId = trim((string) $this->request->getPost('destination_location_id')) ?: null;
         $adjustmentMode = trim((string) $this->request->getPost('adjustment_mode')) ?: null;
-        $unitCost = $this->request->getPost('unit_cost') !== null && $this->request->getPost('unit_cost') !== '' ? (float) $this->request->getPost('unit_cost') : null;
-        $totalCost = $unitCost !== null ? $unitCost * $quantity : null;
+        
+        $unitCostRaw = $this->request->getPost('unit_cost');
+        $unitCost = $unitCostRaw !== null && $unitCostRaw !== '' ? (float) str_replace([' ', ','], ['', '.'], (string) $unitCostRaw) : null;
+        $totalCost = $unitCost !== null ? round($unitCost * $quantity, 2) : null;
+
+        $rawOccurredAt = trim((string) $this->request->getPost('occurred_at'));
+        $occurredAt = date('Y-m-d H:i:s');
+        if ($rawOccurredAt !== '') {
+            $cleanDate = str_replace('T', ' ', $rawOccurredAt);
+            $timestamp = strtotime($cleanDate);
+            if ($timestamp === false) {
+                $dt = \DateTime::createFromFormat('d/m/Y H:i', $rawOccurredAt) ?: \DateTime::createFromFormat('d/m/Y H:i:s', $rawOccurredAt);
+                if ($dt) {
+                    $occurredAt = $dt->format('Y-m-d H:i:s');
+                }
+            } else {
+                $occurredAt = date('Y-m-d H:i:s', $timestamp);
+            }
+        }
 
         if (! in_array($movementType, ['ingreso', 'egreso', 'transferencia', 'ajuste'], true)) {
             return redirect()->back()->withInput()->with('error', 'Tipo de movimiento no valido.');
@@ -1648,8 +1665,8 @@ class InventoryController extends BaseController
                 'source_location_id' => in_array($movementType, ['egreso', 'transferencia', 'ajuste'], true) ? $sourceLocationId : null,
                 'destination_warehouse_id' => in_array($movementType, ['ingreso', 'transferencia'], true) ? $destinationWarehouseId : null,
                 'destination_location_id' => in_array($movementType, ['ingreso', 'transferencia'], true) ? $destinationLocationId : null,
-                'performed_by' => $this->currentUser()['id'],
-                'occurred_at' => trim((string) $this->request->getPost('occurred_at')) ?: date('Y-m-d H:i:s'),
+                'performed_by' => $this->currentUser()['id'] ?? null,
+                'occurred_at' => $occurredAt,
                 'reason' => trim((string) $this->request->getPost('reason')),
                 'source_document' => trim((string) $this->request->getPost('source_document')),
                 'lot_number' => trim((string) $this->request->getPost('lot_number')),
@@ -1671,15 +1688,17 @@ class InventoryController extends BaseController
                 'lot_number' => trim((string) $this->request->getPost('lot_number')),
                 'serial_number' => trim((string) $this->request->getPost('serial_number')),
                 'expiration_date' => trim((string) $this->request->getPost('expiration_date')) ?: null,
-                'occurred_at' => trim((string) $this->request->getPost('occurred_at')) ?: date('Y-m-d H:i:s'),
+                'occurred_at' => $occurredAt,
             ]);
 
             $db->transComplete();
 
             if (! $db->transStatus()) {
-                return redirect()->back()->withInput()->with('error', 'No se pudo registrar el movimiento de inventario.');
+                $dbErr = $db->error();
+                $errDetail = ! empty($dbErr['message']) ? $dbErr['message'] : 'No se pudo registrar el movimiento de inventario.';
+                return redirect()->back()->withInput()->with('error', $errDetail);
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             if (isset($db)) {
                 $db->transRollback();
             }
@@ -1687,7 +1706,28 @@ class InventoryController extends BaseController
             return redirect()->back()->withInput()->with('error', $e->getMessage());
         }
 
-        return $this->popupOrRedirect($this->inventoryRoute('inventario', $companyId), 'Movimiento registrado correctamente.');
+        $productRow = null;
+        foreach ($this->productStockRows($companyId) as $p) {
+            if ((string) $p['id'] === (string) $productId) {
+                $productRow = $p;
+                break;
+            }
+        }
+
+        if ($this->isAjaxRequest()) {
+            return $this->ajaxSuccess('Movimiento registrado correctamente.', [
+                'entity' => 'movement',
+                'action' => 'create',
+                'movement_id' => $movementId,
+                'item' => $productRow,
+            ]);
+        }
+
+        return $this->popupOrRedirect($this->inventoryRoute('inventario', $companyId), 'Movimiento registrado correctamente.', [
+            'entity' => 'product',
+            'action' => 'update',
+            'item' => $productRow,
+        ]);
     }
 
     public function createReservationForm()
@@ -2927,21 +2967,20 @@ class InventoryController extends BaseController
         $stockLevelModel = new InventoryStockLevelModel();
         $product = (new InventoryProductModel())->find($productId);
 
-        $query = $stockLevelModel
+        $existing = $stockLevelModel
             ->where('company_id', $companyId)
             ->where('product_id', $productId)
-            ->where('warehouse_id', $warehouseId);
-
-        if (! empty($locationId)) {
-            $query->where('location_id', $locationId);
-        }
-
-        $existing = $query->first();
+            ->where('warehouse_id', $warehouseId)
+            ->first();
 
         if ($existing) {
-            $stockLevelModel->update($existing['id'], [
+            $updateData = [
                 'quantity' => ((float) $existing['quantity']) + $delta,
-            ]);
+            ];
+            if (! empty($locationId)) {
+                $updateData['location_id'] = $locationId;
+            }
+            $stockLevelModel->update($existing['id'], $updateData);
 
             return;
         }

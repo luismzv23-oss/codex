@@ -429,6 +429,18 @@ class ArcaService
 
     // ── SOAP callers ─────────────────────────────────────
 
+    public function resolveAfipIvaCode(float $rate): int
+    {
+        $r = round($rate, 2);
+        if (abs($r - 21.00) < 0.01) return 5;
+        if (abs($r - 10.50) < 0.01) return 4;
+        if (abs($r - 27.00) < 0.01) return 6;
+        if (abs($r - 5.00) < 0.01)  return 8;
+        if (abs($r - 2.50) < 0.01)  return 9;
+        if (abs($r - 0.00) < 0.01)  return 3;
+        return 5; // Default 21%
+    }
+
     private function resolveIvaConditionId(string $profile): int
     {
         $profile = strtolower(trim($profile));
@@ -481,9 +493,14 @@ class ArcaService
         // Build IVA array from items
         $ivaByRate = [];
         foreach ($items as $item) {
-            $afipCode = (int) ($item['afip_iva_code'] ?? 5); // Default 21%
-            $lineNet  = (float) ($item['line_total'] ?? 0) - (float) ($item['line_tax'] ?? 0);
-            $lineTax  = (float) ($item['line_tax'] ?? 0);
+            $taxRate  = isset($item['tax_rate']) ? (float) $item['tax_rate'] : null;
+            $afipCode = (int) ($item['afip_iva_code'] ?? ($taxRate !== null ? $this->resolveAfipIvaCode($taxRate) : 5));
+            $lineNet  = (float) ($item['subtotal'] ?? (($item['line_total'] ?? 0) - ($item['tax_total'] ?? $item['line_tax'] ?? 0)));
+            $lineTax  = (float) ($item['tax_total'] ?? ($item['line_tax'] ?? 0));
+
+            if ($lineTax == 0 && $taxRate !== null && $taxRate > 0 && $lineNet > 0) {
+                $lineTax = round($lineNet * ($taxRate / 100), 2);
+            }
 
             if (! isset($ivaByRate[$afipCode])) {
                 $ivaByRate[$afipCode] = ['Id' => $afipCode, 'BaseImp' => 0, 'Importe' => 0];
@@ -492,10 +509,19 @@ class ArcaService
             $ivaByRate[$afipCode]['Importe'] += $lineTax;
         }
 
+        // Fallback: If no item accumulated or empty array but sale has amounts
+        if (empty($ivaByRate) && $subtotal > 0) {
+            $afipCode = ($taxTotal > 0) ? 5 : 3;
+            $ivaByRate[$afipCode] = [
+                'Id' => $afipCode,
+                'BaseImp' => round($subtotal, 2),
+                'Importe' => round($taxTotal, 2),
+            ];
+        }
+
         // AFIP requires: when ImpIVA = 0 the Iva/AlicIva block must still be
         // present with Id = 3 (IVA 0%) and the full neto as BaseImp.
         if ($taxTotal == 0 && $subtotal > 0) {
-            // Replace whatever was accumulated with the mandatory 0% entry
             $ivaByRate = [
                 3 => ['Id' => 3, 'BaseImp' => round($subtotal, 2), 'Importe' => 0],
             ];
@@ -510,6 +536,13 @@ class ArcaService
             $aliq['Importe'] = round($aliq['Importe'], 2);
         }
         unset($aliq);
+
+        // Ensure exact match between single rate and header net/tax
+        if (count($ivaByRate) === 1) {
+            $key = array_key_first($ivaByRate);
+            $ivaByRate[$key]['BaseImp'] = round($subtotal, 2);
+            $ivaByRate[$key]['Importe'] = round($taxTotal, 2);
+        }
 
         // Determine document type for customer
         $docTipo = 80; // CUIT by default
@@ -562,12 +595,18 @@ class ArcaService
         $ivaSubtotals = [];
 
         foreach ($items as $item) {
-            $afipCode = (int) ($item['afip_iva_code'] ?? 5);
+            $taxRate  = isset($item['tax_rate']) ? (float) $item['tax_rate'] : null;
+            $afipCode = (int) ($item['afip_iva_code'] ?? ($taxRate !== null ? $this->resolveAfipIvaCode($taxRate) : 5));
             $qty      = (float) ($item['quantity'] ?? 1);
             $price    = (float) ($item['unit_price'] ?? 0);
-            $lineTax  = (float) ($item['line_tax'] ?? 0);
-            $lineTotal = (float) ($item['line_total'] ?? 0);
-            $lineNet  = $lineTotal - $lineTax;
+            $lineNet  = (float) ($item['subtotal'] ?? (($item['line_total'] ?? 0) - ($item['tax_total'] ?? $item['line_tax'] ?? 0)));
+            $lineTax  = (float) ($item['tax_total'] ?? ($item['line_tax'] ?? 0));
+            $lineTotal = (float) ($item['line_total'] ?? ($lineNet + $lineTax));
+
+            if ($lineTax == 0 && $taxRate !== null && $taxRate > 0 && $lineNet > 0) {
+                $lineTax = round($lineNet * ($taxRate / 100), 2);
+                $lineTotal = $lineNet + $lineTax;
+            }
 
             $mtxcaItems[] = [
                 'codigo'          => $item['sku'] ?? '',
@@ -590,6 +629,15 @@ class ArcaService
         $taxTotal = (float) ($sale['tax_total'] ?? 0);
         $subtotal = (float) ($sale['subtotal'] ?? 0);
 
+        if (empty($ivaSubtotals) && $subtotal > 0) {
+            $afipCode = ($taxTotal > 0) ? 5 : 3;
+            $ivaSubtotals[$afipCode] = [
+                'codigo' => $afipCode,
+                'importe' => round($taxTotal, 2),
+                'base' => round($subtotal, 2),
+            ];
+        }
+
         // AFIP requires: when ImpIVA = 0, AlicIva must contain Id=3 (IVA 0%)
         if ($taxTotal == 0 && $subtotal > 0) {
             $ivaSubtotals = [
@@ -604,6 +652,12 @@ class ArcaService
             $sub['base']    = round($sub['base'], 2);
         }
         unset($sub);
+
+        if (count($ivaSubtotals) === 1) {
+            $key = array_key_first($ivaSubtotals);
+            $ivaSubtotals[$key]['base'] = round($subtotal, 2);
+            $ivaSubtotals[$key]['importe'] = round($taxTotal, 2);
+        }
 
         $taxProfile = $sale['customer_tax_profile'] ?? '';
         $condicionIvaReceptorId = $this->resolveIvaConditionId($taxProfile);
@@ -1078,12 +1132,18 @@ class ArcaService
             $ivaSubtotals = [];
 
             foreach ($items as $item) {
-                $afipCode = (int) ($item['afip_iva_code'] ?? 5);
+                $taxRate  = isset($item['tax_rate']) ? (float) $item['tax_rate'] : null;
+                $afipCode = (int) ($item['afip_iva_code'] ?? ($taxRate !== null ? $this->resolveAfipIvaCode($taxRate) : 5));
                 $qty      = (float) ($item['quantity'] ?? 1);
                 $price    = (float) ($item['unit_price'] ?? 0);
-                $lineTax  = (float) ($item['line_tax'] ?? 0);
-                $lineTotal = (float) ($item['line_total'] ?? 0);
-                $lineNet  = $lineTotal - $lineTax;
+                $lineNet  = (float) ($item['subtotal'] ?? (($item['line_total'] ?? 0) - ($item['tax_total'] ?? $item['line_tax'] ?? 0)));
+                $lineTax  = (float) ($item['tax_total'] ?? ($item['line_tax'] ?? 0));
+                $lineTotal = (float) ($item['line_total'] ?? ($lineNet + $lineTax));
+
+                if ($lineTax == 0 && $taxRate !== null && $taxRate > 0 && $lineNet > 0) {
+                    $lineTax = round($lineNet * ($taxRate / 100), 2);
+                    $lineTotal = $lineNet + $lineTax;
+                }
 
                 $mtxcaItems[] = [
                     'codigo'          => $item['sku'] ?? '',
@@ -1103,6 +1163,15 @@ class ArcaService
                 $ivaSubtotals[$afipCode]['base']    += $lineNet;
             }
 
+            if (empty($ivaSubtotals) && $subtotal > 0) {
+                $afipCode = ($taxTotal > 0) ? 5 : 3;
+                $ivaSubtotals[$afipCode] = [
+                    'codigo' => $afipCode,
+                    'importe' => round($taxTotal, 2),
+                    'base' => round($subtotal, 2),
+                ];
+            }
+
             if ($taxTotal == 0 && $subtotal > 0) {
                 $ivaSubtotals = [
                     3 => ['codigo' => 3, 'importe' => 0, 'base' => round($subtotal, 2)],
@@ -1115,6 +1184,12 @@ class ArcaService
                 $sub['base']    = round($sub['base'], 2);
             }
             unset($sub);
+
+            if (count($ivaSubtotals) === 1) {
+                $key = array_key_first($ivaSubtotals);
+                $ivaSubtotals[$key]['base'] = round($subtotal, 2);
+                $ivaSubtotals[$key]['importe'] = round($taxTotal, 2);
+            }
 
             $docTipo = 80; // CUIT by default
             $docNro  = $sale['customer_document_snapshot'] ?? '0';
@@ -1146,15 +1221,29 @@ class ArcaService
         } else {
             $ivaByRate = [];
             foreach ($items as $item) {
-                $afipCode = (int) ($item['afip_iva_code'] ?? 5);
-                $lineNet  = (float) ($item['line_total'] ?? 0) - (float) ($item['line_tax'] ?? 0);
-                $lineTax  = (float) ($item['line_tax'] ?? 0);
+                $taxRate  = isset($item['tax_rate']) ? (float) $item['tax_rate'] : null;
+                $afipCode = (int) ($item['afip_iva_code'] ?? ($taxRate !== null ? $this->resolveAfipIvaCode($taxRate) : 5));
+                $lineNet  = (float) ($item['subtotal'] ?? (($item['line_total'] ?? 0) - ($item['tax_total'] ?? $item['line_tax'] ?? 0)));
+                $lineTax  = (float) ($item['tax_total'] ?? ($item['line_tax'] ?? 0));
+
+                if ($lineTax == 0 && $taxRate !== null && $taxRate > 0 && $lineNet > 0) {
+                    $lineTax = round($lineNet * ($taxRate / 100), 2);
+                }
 
                 if (! isset($ivaByRate[$afipCode])) {
                     $ivaByRate[$afipCode] = ['Id' => $afipCode, 'BaseImp' => 0, 'Importe' => 0];
                 }
                 $ivaByRate[$afipCode]['BaseImp'] += $lineNet;
                 $ivaByRate[$afipCode]['Importe'] += $lineTax;
+            }
+
+            if (empty($ivaByRate) && $subtotal > 0) {
+                $afipCode = ($taxTotal > 0) ? 5 : 3;
+                $ivaByRate[$afipCode] = [
+                    'Id' => $afipCode,
+                    'BaseImp' => round($subtotal, 2),
+                    'Importe' => round($taxTotal, 2),
+                ];
             }
 
             if ($taxTotal == 0 && $subtotal > 0) {
@@ -1169,6 +1258,12 @@ class ArcaService
                 $aliq['Importe'] = round($aliq['Importe'], 2);
             }
             unset($aliq);
+
+            if (count($ivaByRate) === 1) {
+                $key = array_key_first($ivaByRate);
+                $ivaByRate[$key]['BaseImp'] = round($subtotal, 2);
+                $ivaByRate[$key]['Importe'] = round($taxTotal, 2);
+            }
 
             $docTipo = 80; // CUIT by default
             $docNro  = $sale['customer_document_snapshot'] ?? '0';

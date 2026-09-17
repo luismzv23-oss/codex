@@ -176,62 +176,100 @@ class SalesController extends BaseController
         $context = $this->salesContext('manage');
 
         if ($context instanceof RedirectResponse) {
+            if ($this->request->isAJAX()) {
+                $msg = session()->getFlashdata('error') ?? 'Sesión expirada o sin permisos de acceso. Por favor recarga la página.';
+                return $this->response->setJSON(['status' => 'error', 'message' => $msg, 'csrf_token' => csrf_hash()])->setStatusCode(401);
+            }
             return $context;
         }
 
-        $companyId = $context['company']['id'];
-        $isAdmin = in_array($this->roleSlug(), ['superadmin', 'admin'], true);
-        if ($isAdmin) {
-            $formRegisterId = trim((string) $this->request->getPost('cash_register_id'));
-            if ($formRegisterId !== '') {
-                session()->set('active_cash_register_id', $formRegisterId);
+        try {
+            $companyId = $context['company']['id'];
+            $isAdmin = in_array($this->roleSlug(), ['superadmin', 'admin'], true);
+            if ($isAdmin) {
+                $formRegisterId = trim((string) $this->request->getPost('cash_register_id'));
+                if ($formRegisterId !== '') {
+                    session()->set('active_cash_register_id', $formRegisterId);
+                }
             }
+            $cashSession = $this->resolveCashSession($companyId, 'pos');
+
+            if (!$cashSession) {
+                $msg = 'No se puede registrar la venta. Debes abrir primero la caja CAJA-POS desde el modulo de Caja.';
+                if ($this->request->isAJAX()) {
+                    return $this->response->setJSON(['status' => 'error', 'message' => $msg, 'csrf_token' => csrf_hash()])->setStatusCode(422);
+                }
+                return redirect()->back()->withInput()->with('error', $msg);
+            }
+            $payload = $this->salePayload($companyId, [], $context['access_level'] ?? 'manage');
+
+            if ($payload instanceof RedirectResponse) {
+                if ($this->request->isAJAX()) {
+                    $errors = session()->getFlashdata('error') ?? 'Error de validación en la factura.';
+                    return $this->response->setJSON(['status' => 'error', 'message' => $errors, 'csrf_token' => csrf_hash()])->setStatusCode(422);
+                }
+                return $payload;
+            }
+
+            $documentType = $payload['documentType'];
+            $saleNumber = $this->nextSequenceNumber($companyId, $documentType['sequence_key'], $documentType['default_prefix'] ?: 'VTA');
+            $saleId = (new SaleModel())->insert(array_merge($payload['sale'], [
+                'company_id' => $companyId,
+                'branch_id' => $this->currentUser()['branch_id'] ?? null,
+                'cash_register_id' => $cashSession['cash_register_id'],
+                'cash_session_id' => $cashSession['id'],
+                'sale_number' => $saleNumber,
+                'document_code' => $documentType['code'],
+                'created_by' => $this->currentUser()['id'],
+                'pos_mode' => 1,
+            ]), true);
+
+            $this->persistSaleChildren($saleId, $payload['items'], $payload['payments']);
+            $result = $this->confirmSaleTransaction($companyId, $saleId);
+
+            if ($result !== true) {
+                if ($this->request->isAJAX()) {
+                    return $this->response->setJSON(['status' => 'error', 'message' => $result, 'csrf_token' => csrf_hash()])->setStatusCode(422);
+                }
+                return redirect()->to($this->salesRoute('ventas/pos', $companyId))->with('error', $result);
+            }
+
+            $authorizeArca = $this->request->getPost('authorize_arca') === '1';
+            $arcaResult = [];
+            if ($authorizeArca) {
+                $saleFresh = $this->ownedSale($companyId, $saleId);
+                $arcaResult = $this->authorizeSaleInArca($companyId, $saleFresh);
+            } else {
+                $this->processArcaAfterConfirmation($companyId, $saleId);
+            }
+            $this->recordHardwareEvent($companyId, 'pos', 'printer', 'sale_confirmed', 'ok', 'sale', $saleId, [
+                'sale_number' => $saleNumber,
+                'cash_session_id' => $cashSession['id'],
+            ], 'Venta POS confirmada y enviada a mostrador.');
+
+            if ($this->request->isAJAX()) {
+                return $this->response->setJSON([
+                    'status' => 'ok',
+                    'message' => 'Venta POS confirmada correctamente.',
+                    'sale_number' => $saleNumber,
+                    'sale_id' => $saleId,
+                    'arca_cae' => $arcaResult['cae'] ?? null,
+                    'csrf_token' => csrf_hash(),
+                ]);
+            }
+
+            return redirect()->to($this->salesRoute('ventas', $companyId))->with('message', 'Venta POS confirmada correctamente.');
+        } catch (\Throwable $e) {
+            log_message('error', 'SalesController::storePos exception: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+            if ($this->request->isAJAX()) {
+                return $this->response->setJSON([
+                    'status' => 'error',
+                    'message' => 'Error al procesar la venta POS: ' . $e->getMessage(),
+                    'csrf_token' => csrf_hash(),
+                ])->setStatusCode(500);
+            }
+            return redirect()->back()->withInput()->with('error', 'Error al registrar venta POS: ' . $e->getMessage());
         }
-        $cashSession = $this->resolveCashSession($companyId, 'pos');
-
-
-        if (!$cashSession) {
-            return redirect()->back()->withInput()->with('error', 'No se puede registrar la venta. Debes abrir primero la caja CAJA-POS desde el modulo de Caja.');
-        }
-        $payload = $this->salePayload($companyId, [], $context['access_level'] ?? 'manage');
-
-        if ($payload instanceof RedirectResponse) {
-            return $payload;
-        }
-
-        $documentType = $payload['documentType'];
-        $saleNumber = $this->nextSequenceNumber($companyId, $documentType['sequence_key'], $documentType['default_prefix'] ?: 'VTA');
-        $saleId = (new SaleModel())->insert(array_merge($payload['sale'], [
-            'company_id' => $companyId,
-            'branch_id' => $this->currentUser()['branch_id'] ?? null,
-            'cash_register_id' => $cashSession['cash_register_id'],
-            'cash_session_id' => $cashSession['id'],
-            'sale_number' => $saleNumber,
-            'document_code' => $documentType['code'],
-            'created_by' => $this->currentUser()['id'],
-            'pos_mode' => 1,
-        ]), true);
-
-        $this->persistSaleChildren($saleId, $payload['items'], $payload['payments']);
-        $result = $this->confirmSaleTransaction($companyId, $saleId);
-
-        if ($result !== true) {
-            return redirect()->to($this->salesRoute('ventas/pos', $companyId))->with('error', $result);
-        }
-
-        $authorizeArca = $this->request->getPost('authorize_arca') === '1';
-        if ($authorizeArca) {
-            $saleFresh = $this->ownedSale($companyId, $saleId);
-            $this->authorizeSaleInArca($companyId, $saleFresh);
-        } else {
-            $this->processArcaAfterConfirmation($companyId, $saleId);
-        }
-        $this->recordHardwareEvent($companyId, 'pos', 'printer', 'sale_confirmed', 'ok', 'sale', $saleId, [
-            'sale_number' => $saleNumber,
-            'cash_session_id' => $cashSession['id'],
-        ], 'Venta POS confirmada y enviada a mostrador.');
-
-        return redirect()->to($this->salesRoute('ventas', $companyId))->with('message', 'Venta POS confirmada correctamente.');
     }
 
 
@@ -1107,102 +1145,118 @@ class SalesController extends BaseController
     {
         $context = $this->salesContext('manage');
         if ($context instanceof RedirectResponse) {
+            if ($this->request->isAJAX()) {
+                $msg = session()->getFlashdata('error') ?? 'Sesión expirada o sin permisos de acceso. Por favor recarga la página.';
+                return $this->response->setJSON(['status' => 'error', 'message' => $msg, 'csrf_token' => csrf_hash()])->setStatusCode(401);
+            }
             return $context;
         }
 
-        $companyId = $context['company']['id'];
-        $cashSession = $this->resolveCashSession($companyId, 'kiosk');
-        if (!$cashSession) {
-            $msg = 'No se puede registrar la venta. Debes abrir primero la caja CAJA-KIOSCO desde el modulo de Caja.';
-            if ($this->request->isAJAX()) {
-                return $this->response->setJSON(['status' => 'error', 'message' => $msg, 'csrf_token' => csrf_hash()])->setStatusCode(422);
+        try {
+            $companyId = $context['company']['id'];
+            $cashSession = $this->resolveCashSession($companyId, 'kiosk');
+            if (!$cashSession) {
+                $msg = 'No se puede registrar la venta. Debes abrir primero la caja CAJA-KIOSCO desde el modulo de Caja.';
+                if ($this->request->isAJAX()) {
+                    return $this->response->setJSON(['status' => 'error', 'message' => $msg, 'csrf_token' => csrf_hash()])->setStatusCode(422);
+                }
+                return redirect()->back()->withInput()->with('error', $msg);
             }
-            return redirect()->back()->withInput()->with('error', $msg);
-        }
-        $consumer = $this->ensureConsumerFinalCustomer($companyId);
-        $customerId = trim((string) ($this->request->getPost('customer_id') ?? ''));
-        if ($customerId === '') {
-            $customerId = $consumer['id'] ?? null;
-        }
-        $kioskDocumentType = $this->defaultDocumentType($companyId, 'kiosk');
-        $authorizeArca    = $this->request->getPost('authorize_arca') === '1';
-        $facturaDocTypeId = trim((string) ($this->request->getPost('factura_document_type_id') ?? ''));
+            $consumer = $this->ensureConsumerFinalCustomer($companyId);
+            $customerId = trim((string) ($this->request->getPost('customer_id') ?? ''));
+            if ($customerId === '') {
+                $customerId = $consumer['id'] ?? null;
+            }
+            $kioskDocumentType = $this->defaultDocumentType($companyId, 'kiosk');
+            $authorizeArca    = $this->request->getPost('authorize_arca') === '1';
+            $facturaDocTypeId = trim((string) ($this->request->getPost('factura_document_type_id') ?? ''));
 
-        if ($authorizeArca && $facturaDocTypeId !== '') {
-            $effectiveDocType = (new SalesDocumentTypeModel())->find($facturaDocTypeId) ?? $kioskDocumentType;
-        } else {
-            $effectiveDocType = $kioskDocumentType;
-        }
-        $documentReference = $this->nextSequenceNumber($companyId, $effectiveDocType['sequence_key'], $effectiveDocType['default_prefix'] ?: 'TCK');
+            if ($authorizeArca && $facturaDocTypeId !== '') {
+                $effectiveDocType = (new SalesDocumentTypeModel())->find($facturaDocTypeId) ?? $kioskDocumentType;
+            } else {
+                $effectiveDocType = $kioskDocumentType;
+            }
+            $documentReference = $this->nextSequenceNumber($companyId, $effectiveDocType['sequence_key'], $effectiveDocType['default_prefix'] ?: 'TCK');
 
-        $payload = $this->salePayload($companyId, [
-            'customer_id' => $customerId,
-            'pos_mode' => '1',
-            'price_list_name' => 'KIOSCO',
-            'document_type_id' => $effectiveDocType['id'] ?? null,
-            'point_of_sale_id' => $this->defaultPointOfSale($companyId, 'kiosk')['id'] ?? null,
-            'payments' => [
-                0 => [
-                    'reference' => $documentReference,
+            $payload = $this->salePayload($companyId, [
+                'customer_id' => $customerId,
+                'pos_mode' => '1',
+                'price_list_name' => 'KIOSCO',
+                'document_type_id' => $effectiveDocType['id'] ?? null,
+                'point_of_sale_id' => $this->defaultPointOfSale($companyId, 'kiosk')['id'] ?? null,
+                'payments' => [
+                    0 => [
+                        'reference' => $documentReference,
+                    ],
                 ],
-            ],
-        ]);
-
-        if ($payload instanceof RedirectResponse) {
-            if ($this->request->isAJAX()) {
-                $errors = session()->getFlashdata('error') ?? 'Error de validación en la factura.';
-                return $this->response->setJSON(['status' => 'error', 'message' => $errors, 'csrf_token' => csrf_hash()])->setStatusCode(422);
-            }
-            return $payload;
-        }
-
-        $saleId = (new SaleModel())->insert(array_merge($payload['sale'], [
-            'company_id' => $companyId,
-            'branch_id' => $this->currentUser()['branch_id'] ?? null,
-            'cash_register_id' => $cashSession['cash_register_id'],
-            'cash_session_id' => $cashSession['id'],
-            'sale_number' => $documentReference,
-            'document_code' => $effectiveDocType['code'] ?? 'TICKET',
-            'created_by' => $this->currentUser()['id'],
-            'pos_mode' => 1,
-        ]), true);
-
-        $this->persistSaleChildren($saleId, $payload['items'], $payload['payments']);
-        $result = $this->confirmSaleTransaction($companyId, $saleId);
-
-        if ($result !== true) {
-            if ($this->request->isAJAX()) {
-                return $this->response->setJSON(['status' => 'error', 'message' => $result, 'csrf_token' => csrf_hash()])->setStatusCode(422);
-            }
-            return redirect()->to($this->salesRoute('ventas/kiosco', $companyId))->with('error', $result);
-        }
-
-        $arcaResult = [];
-        if ($authorizeArca) {
-            $saleFresh  = $this->ownedSale($companyId, $saleId);
-            $arcaResult = $this->authorizeSaleInArca($companyId, $saleFresh);
-        } else {
-            $this->processArcaAfterConfirmation($companyId, $saleId);
-        }
-        $this->recordHardwareEvent($companyId, 'kiosk', 'printer', 'sale_confirmed', 'ok', 'sale', $saleId, [
-            'sale_number' => $documentReference,
-            'cash_session_id' => $cashSession['id'],
-        ], 'Venta kiosco confirmada y lista para impresion.');
-
-        if ($this->request->isAJAX()) {
-            return $this->response->setJSON([
-                'status' => 'ok',
-                'message' => 'Factura kiosco registrada correctamente.',
-                'sale_number' => $documentReference,
-                'sale_id' => $saleId,
-                'arca_cae'     => $arcaResult['cae'] ?? null,
-                'arca_status'  => $arcaResult['status'] ?? null,
-                'arca_message' => $arcaResult['message'] ?? null,
-                'csrf_token' => csrf_hash(),
             ]);
-        }
 
-        return redirect()->to($this->salesRoute('ventas', $companyId))->with('message', 'Factura kiosco registrada correctamente.');
+            if ($payload instanceof RedirectResponse) {
+                if ($this->request->isAJAX()) {
+                    $errors = session()->getFlashdata('error') ?? 'Error de validación en la factura.';
+                    return $this->response->setJSON(['status' => 'error', 'message' => $errors, 'csrf_token' => csrf_hash()])->setStatusCode(422);
+                }
+                return $payload;
+            }
+
+            $saleId = (new SaleModel())->insert(array_merge($payload['sale'], [
+                'company_id' => $companyId,
+                'branch_id' => $this->currentUser()['branch_id'] ?? null,
+                'cash_register_id' => $cashSession['cash_register_id'],
+                'cash_session_id' => $cashSession['id'],
+                'sale_number' => $documentReference,
+                'document_code' => $effectiveDocType['code'] ?? 'TICKET',
+                'created_by' => $this->currentUser()['id'],
+                'pos_mode' => 1,
+            ]), true);
+
+            $this->persistSaleChildren($saleId, $payload['items'], $payload['payments']);
+            $result = $this->confirmSaleTransaction($companyId, $saleId);
+
+            if ($result !== true) {
+                if ($this->request->isAJAX()) {
+                    return $this->response->setJSON(['status' => 'error', 'message' => $result, 'csrf_token' => csrf_hash()])->setStatusCode(422);
+                }
+                return redirect()->to($this->salesRoute('ventas/kiosco', $companyId))->with('error', $result);
+            }
+
+            $arcaResult = [];
+            if ($authorizeArca) {
+                $saleFresh  = $this->ownedSale($companyId, $saleId);
+                $arcaResult = $this->authorizeSaleInArca($companyId, $saleFresh);
+            } else {
+                $this->processArcaAfterConfirmation($companyId, $saleId);
+            }
+            $this->recordHardwareEvent($companyId, 'kiosk', 'printer', 'sale_confirmed', 'ok', 'sale', $saleId, [
+                'sale_number' => $documentReference,
+                'cash_session_id' => $cashSession['id'],
+            ], 'Venta kiosco confirmada y lista para impresion.');
+
+            if ($this->request->isAJAX()) {
+                return $this->response->setJSON([
+                    'status' => 'ok',
+                    'message' => 'Factura kiosco registrada correctamente.',
+                    'sale_number' => $documentReference,
+                    'sale_id' => $saleId,
+                    'arca_cae'     => $arcaResult['cae'] ?? null,
+                    'arca_status'  => $arcaResult['status'] ?? null,
+                    'arca_message' => $arcaResult['message'] ?? null,
+                    'csrf_token' => csrf_hash(),
+                ]);
+            }
+
+            return redirect()->to($this->salesRoute('ventas', $companyId))->with('message', 'Factura kiosco registrada correctamente.');
+        } catch (\Throwable $e) {
+            log_message('error', 'SalesController::storeKiosk exception: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+            if ($this->request->isAJAX()) {
+                return $this->response->setJSON([
+                    'status' => 'error',
+                    'message' => 'Error al procesar la venta: ' . $e->getMessage(),
+                    'csrf_token' => csrf_hash(),
+                ])->setStatusCode(500);
+            }
+            return redirect()->back()->withInput()->with('error', 'Error al registrar: ' . $e->getMessage());
+        }
     }
 
     public function createPriceListForm()

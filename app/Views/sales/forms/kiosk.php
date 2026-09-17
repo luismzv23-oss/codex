@@ -985,18 +985,30 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 body: formData,
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
             })
-                .then(res => {
-                    // CSRF failure — reload to get a fresh token
-                    if (res.status === 403) {
+                .then(async res => {
+                    if (res.status === 401 || res.status === 403) {
                         beepError();
-                        showToast('Sesion de seguridad expirada, recargando...', 'shield-exclamation');
+                        showToast('Sesión de seguridad expirada, recargando...', 'shield-exclamation');
                         setTimeout(() => window.location.reload(), 1500);
-                        return;
+                        return null;
+                    }
+                    const text = await res.text();
+                    let data;
+                    try {
+                        data = JSON.parse(text);
+                    } catch (e) {
+                        if (text.includes('<!DOCTYPE') || text.includes('<!doctype') || text.includes('<html')) {
+                            beepError();
+                            showToast('Sesión expirada o servidor no disponible. Recargando...', 'shield-exclamation');
+                            setTimeout(() => window.location.reload(), 1500);
+                            return null;
+                        }
+                        throw new Error('Respuesta inválida del servidor (HTTP ' + res.status + ')');
                     }
                     if (!res.ok) {
-                        return res.json().then(data => { throw new Error(data.message || 'HTTP ' + res.status); });
+                        throw new Error(data.message || 'Error HTTP ' + res.status);
                     }
-                    return res.json();
+                    return data;
                 })
                 .then(data => {
                     if (!data) return;

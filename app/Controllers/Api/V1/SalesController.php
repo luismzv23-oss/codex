@@ -2,6 +2,8 @@
 
 namespace App\Controllers\Api\V1;
 
+use App\Libraries\SalesIntegrityService;
+
 use App\Libraries\AccountingService;
 use App\Libraries\ArcaService;
 use App\Libraries\CashService;
@@ -943,6 +945,19 @@ class SalesController extends BaseApiController
     public function cancel(string $id)
     {
         $context = $this->salesContext('manage');
+        if (isset($context['error'])) { return $this->fail($context['error'], $context['status']); }
+        try {
+            return (new SalesIntegrityService())->locked(db_connect(), 'sales', $context['company']['id'], $id, ['draft', 'confirmed', 'returned_partial'], function () use ($id) {
+                return $this->cancelLocked($id);
+            });
+        } catch (\Throwable $e) {
+            return $this->fail($e->getMessage(), 422);
+        }
+    }
+
+    private function cancelLocked(string $id)
+    {
+        $context = $this->salesContext('manage');
         if (isset($context['error'])) {
             return $this->fail($context['error'], $context['status']);
         }
@@ -958,9 +973,9 @@ class SalesController extends BaseApiController
 
         $payload = $this->payload();
         $db = db_connect();
-        $db->transStart();
 
-        if (($sale['status'] ?? '') === 'confirmed') {
+
+        if (in_array($sale['status'] ?? '', ['confirmed', 'returned_partial'], true)) {
             $documentType = ! empty($sale['document_type_id']) ? (new SalesDocumentTypeModel())->find($sale['document_type_id']) : null;
             $category = (string) ($documentType['category'] ?? 'invoice');
             $items = $this->saleItems($id);
@@ -978,7 +993,7 @@ class SalesController extends BaseApiController
             'cancelled_at' => date('Y-m-d H:i:s'),
             'cancellation_reason' => trim((string) ($payload['cancellation_reason'] ?? '')) ?: 'Cancelacion manual',
         ]);
-        $db->transComplete();
+
         $this->syncReceivableForSale($id);
         $this->syncSaleCommission($context['company']['id'], $id);
         (new AccountingService())->syncSale($context['company']['id'], $id, $this->apiUser()['id']);
@@ -993,6 +1008,19 @@ class SalesController extends BaseApiController
     public function storeReturn(string $id)
     {
         $context = $this->salesContext('manage');
+        if (isset($context['error'])) { return $this->fail($context['error'], $context['status']); }
+        try {
+            return (new SalesIntegrityService())->locked(db_connect(), 'sales', $context['company']['id'], $id, ['confirmed', 'returned_partial'], function () use ($id) {
+                return $this->storeReturnLocked($id);
+            });
+        } catch (\Throwable $e) {
+            return $this->fail($e->getMessage(), 422);
+        }
+    }
+
+    private function storeReturnLocked(string $id)
+    {
+        $context = $this->salesContext('manage');
         if (isset($context['error'])) {
             return $this->fail($context['error'], $context['status']);
         }
@@ -1004,7 +1032,7 @@ class SalesController extends BaseApiController
 
         $payload = $this->payload();
         $warehouseId = trim((string) ($payload['warehouse_id'] ?? '')) ?: ($sale['warehouse_id'] ?: null);
-        if (! $warehouseId) {
+        if (! $warehouseId || ! (new InventoryWarehouseModel())->where('company_id', $context['company']['id'])->find($warehouseId)) {
             return $this->fail('Debes seleccionar un deposito valido para reingresar stock.', 422);
         }
 
@@ -1014,7 +1042,7 @@ class SalesController extends BaseApiController
         }
 
         $db = db_connect();
-        $db->transStart();
+
         $returnNumber = $this->nextSequenceNumber($context['company']['id'], 'NC', 'NC');
         $returnId = (new SaleReturnModel())->insert([
             'sale_id' => $id,
@@ -1055,7 +1083,7 @@ class SalesController extends BaseApiController
         $this->syncReceivableForSale($id);
         $this->syncSaleCommission($context['company']['id'], $id);
         (new AccountingService())->syncSaleReturn($context['company']['id'], (string) $returnId, $this->apiUser()['id']);
-        $db->transComplete();
+
         if ($db->transStatus()) {
             $this->logAudit($context['company']['id'], 'sales', 'sale_return', (string) $returnId, 'create', null, (new SaleReturnModel())->find($returnId));
             $this->logDocumentEvent($context['company']['id'], 'sales', 'sale_return', (string) $returnId, 'registered', ['sale_id' => $id]);
@@ -1593,13 +1621,13 @@ class SalesController extends BaseApiController
     private function applyDiscountPolicies(string $companyId, array $items): array
     {
         $policyModel = new SalesDiscountPolicyModel();
-        
+
         // 1. Get quantity scale policies
         $qtyPolicies = $policyModel->where('company_id', $companyId)
             ->where('policy_type', 'quantity_scale')
             ->where('active', 1)
             ->findAll();
-            
+
         // 2. Get buy_x_pay_y policies
         $bogoPolicies = $policyModel->where('company_id', $companyId)
             ->where('policy_type', 'buy_x_pay_y')
@@ -1609,7 +1637,7 @@ class SalesController extends BaseApiController
         foreach ($items as &$item) {
             $qty = (float)($item['quantity'] ?? 0);
             $unitPrice = (float)($item['unit_price'] ?? 0);
-            
+
             $itemDiscountRate = 0.0;
             $itemFixedDiscount = 0.0;
 
@@ -1634,13 +1662,13 @@ class SalesController extends BaseApiController
             // Apply discounts to item totals
             $baseTotal = $qty * $unitPrice;
             $percentDiscountAmt = $baseTotal * ($itemDiscountRate / 100);
-            
+
             $item['discount_rate'] = max((float)($item['discount_rate'] ?? 0), $itemDiscountRate);
             $item['discount_amount'] = (float)($item['discount_amount'] ?? 0) + $percentDiscountAmt + $itemFixedDiscount;
-            
+
             $item['discount_amount'] = min($baseTotal, $item['discount_amount']);
             $item['subtotal'] = max(0, round(($qty * $unitPrice) - $item['discount_amount'], 2));
-            
+
             $taxRate = (float)($item['tax_rate'] ?? 0);
             $item['tax_total'] = round($item['subtotal'] * ($taxRate / 100), 2);
             $item['line_total'] = round($item['subtotal'] + $item['tax_total'], 2);
@@ -1727,7 +1755,22 @@ class SalesController extends BaseApiController
     private function applyReservedDelta(string $companyId, string $productId, ?string $warehouseId, float $delta): void { if ($warehouseId === null) { return; } $model = new InventoryStockLevelModel(); $product = (new InventoryProductModel())->find($productId); $row = $model->where('company_id', $companyId)->where('product_id', $productId)->where('warehouse_id', $warehouseId)->first(); if ($row) { $model->update($row['id'], ['reserved_quantity' => max(0, ((float) $row['reserved_quantity']) + $delta)]); return; } $model->insert(['company_id' => $companyId, 'product_id' => $productId, 'warehouse_id' => $warehouseId, 'quantity' => 0, 'reserved_quantity' => max(0, $delta), 'min_stock' => $product['min_stock'] ?? 0]); }
     private function registerInventoryMovement(array $payload): void { (new InventoryMovementModel())->insert(['company_id' => $payload['company_id'], 'product_id' => $payload['product_id'], 'movement_type' => $payload['movement_type'], 'quantity' => $payload['quantity'], 'unit_cost' => $payload['unit_cost'] ?? null, 'total_cost' => $payload['total_cost'] ?? null, 'source_warehouse_id' => $payload['source_warehouse_id'] ?? null, 'destination_warehouse_id' => $payload['destination_warehouse_id'] ?? null, 'performed_by' => $payload['performed_by'], 'occurred_at' => $payload['occurred_at'] ?? date('Y-m-d H:i:s'), 'reason' => $payload['reason'] ?? null, 'source_document' => $payload['source_document'] ?? null, 'notes' => $payload['notes'] ?? null]); }
 
-    private function confirmSaleTransaction(string $companyId, string $saleId)
+    private function confirmSaleTransaction(string $companyId, string $saleId, ?array $sale = null)
+    {
+        try {
+            return (new SalesIntegrityService())->locked(db_connect(), 'sales', $companyId, $saleId, ['draft'], function (array $locked) use ($companyId, $saleId) {
+                $result = $this->confirmSaleLocked($companyId, $saleId);
+                if ($result !== true) {
+                    throw new \RuntimeException($result);
+                }
+                return true;
+            });
+        } catch (\Throwable $e) {
+            return $e->getMessage();
+        }
+    }
+
+    private function confirmSaleLocked(string $companyId, string $saleId)
     {
         $sale = $this->ownedSale($companyId, $saleId);
         if (! $sale) { return 'Venta no disponible.'; }
@@ -1739,14 +1782,14 @@ class SalesController extends BaseApiController
         if (! $documentType) { return 'El comprobante seleccionado ya no esta disponible.'; }
         $allowNegative = (int) (($this->inventorySettings($companyId)['allow_negative_stock'] ?? 0)) === 1;
         $db = db_connect();
-        $db->transStart();
+
         $category = (string) ($documentType['category'] ?? 'invoice');
         if ($category === 'order') {
             $result = $this->reserveStockForSale($companyId, $sale, $items);
-            if ($result !== true) { $db->transRollback(); return $result; }
+            if ($result !== true) { return $result; }
         } elseif (in_array($category, ['delivery_note', 'invoice', 'ticket'], true) && (int) ($documentType['impacts_stock'] ?? 0) === 1) {
             $result = $this->deliverSaleStock($companyId, $sale, $items, $allowNegative, $category === 'delivery_note' ? 'REMITO' : 'VENTA');
-            if ($result !== true) { $db->transRollback(); return $result; }
+            if ($result !== true) { return $result; }
         }
         $update = ['status' => 'confirmed', 'confirmed_by' => $this->apiUser()['id'], 'confirmed_at' => date('Y-m-d H:i:s')];
         if ($category === 'delivery_note') { $update['delivered_by'] = $this->apiUser()['id']; $update['delivered_at'] = date('Y-m-d H:i:s'); }
@@ -1755,7 +1798,7 @@ class SalesController extends BaseApiController
         $this->syncCashMovementsForSale($companyId, $saleId);
         $this->syncSaleCommission($companyId, $saleId);
         (new AccountingService())->syncSale($companyId, $saleId, $this->apiUser()['id']);
-        $db->transComplete();
+
         return $db->transStatus() ? true : 'No se pudo confirmar la venta.';
     }
 
@@ -1835,6 +1878,7 @@ class SalesController extends BaseApiController
 
     private function restockDeliveredSale(string $companyId, array $sale, array $items, string $reason): void
     {
+        $items = (new SalesIntegrityService())->remainingItems($items);
         $sourceSale = ! empty($sale['source_sale_id']) ? $this->ownedSale($companyId, (string) $sale['source_sale_id']) : null;
         $sourceDocumentType = (! empty($sourceSale['document_type_id'])) ? (new SalesDocumentTypeModel())->find($sourceSale['document_type_id']) : null;
         if ((string) ($sourceDocumentType['category'] ?? '') === 'delivery_note' && ($sourceSale['status'] ?? '') === 'confirmed') { return; }
@@ -1850,15 +1894,19 @@ class SalesController extends BaseApiController
     {
         $saleItems = [];
         foreach ($this->saleItems($saleId) as $item) { $saleItems[$item['id']] = $item; }
+        $sale = (new SaleModel())->find($saleId);
+        $seen = [];
         $rows = [];
         foreach ($requested as $data) {
             $saleItemId = trim((string) ($data['sale_item_id'] ?? ''));
             $quantity = (float) ($data['quantity'] ?? 0);
             if ($saleItemId === '' || $quantity <= 0 || ! isset($saleItems[$saleItemId])) { continue; }
+            if (isset($seen[$saleItemId])) { throw new \RuntimeException('No se puede repetir un producto de la venta en la devolucion.'); }
+            $seen[$saleItemId] = true;
             $item = $saleItems[$saleItemId];
             $available = (float) $item['quantity'] - (float) ($item['returned_quantity'] ?? 0);
             if ($quantity > $available) { continue; }
-              $rows[] = ['sale_item_id' => $saleItemId, 'product_id' => $item['product_id'], 'product_type' => $item['product_type'] ?? 'simple', 'product_name' => $item['product_name'] ?? '', 'quantity' => $quantity, 'unit_price' => (float) $item['unit_price'], 'unit_cost' => (float) ($item['unit_cost'] ?? 0), 'already_returned' => (float) ($item['returned_quantity'] ?? 0), 'reason' => trim((string) ($data['reason'] ?? ''))];
+              $rows[] = ['sale_item_id' => $saleItemId, 'product_id' => $item['product_id'], 'product_type' => $item['product_type'] ?? 'simple', 'product_name' => $item['product_name'] ?? '', 'quantity' => $quantity, 'unit_price' => (new SalesIntegrityService())->returnUnitPrice($sale, $saleItems, $item), 'unit_cost' => (float) ($item['unit_cost'] ?? 0), 'already_returned' => (float) ($item['returned_quantity'] ?? 0), 'reason' => trim((string) ($data['reason'] ?? ''))];
         }
         return $rows;
     }
@@ -1954,7 +2002,7 @@ class SalesController extends BaseApiController
             return;
         }
 
-        $total = (float) ($sale['total'] ?? 0);
+        $total = ($sale['status'] ?? '') === 'cancelled' ? 0.0 : (new SalesIntegrityService())->netReceivableTotal($sale, $this->saleItems($saleId));
         $paid = (float) ($sale['paid_total'] ?? 0);
         $balance = max(0, round($total - $paid, 2));
         $status = ($sale['status'] ?? '') === 'cancelled' || ($sale['status'] ?? '') === 'returned_total'
@@ -2244,7 +2292,7 @@ class SalesController extends BaseApiController
         $db->transStart();
 
         $model = new VoucherSequenceModel();
-        
+
         $sequence = $model->db->query(
             "SELECT * FROM voucher_sequences WHERE company_id = ? AND document_type = ? FOR UPDATE",
             [$companyId, $documentType]
@@ -2259,7 +2307,7 @@ class SalesController extends BaseApiController
                 'current_number' => 1,
                 'active' => 1,
             ], true);
-            
+
             $sequence = $model->db->query(
                 "SELECT * FROM voucher_sequences WHERE id = ? FOR UPDATE",
                 [$id]

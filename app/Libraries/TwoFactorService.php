@@ -37,6 +37,11 @@ class TwoFactorService
 
     public function verify(string $secret, string $code, ?int $timestamp = null): bool
     {
+        if (! preg_match('/\A[A-Z2-7]{2,}={0,6}\z/i', $secret)
+            || ! preg_match('/\A[0-9]{6}\z/', $code)) {
+            return false;
+        }
+
         $timestamp = $timestamp ?? time();
         $counter   = intdiv($timestamp, $this->period);
 

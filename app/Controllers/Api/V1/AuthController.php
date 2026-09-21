@@ -174,6 +174,10 @@ class AuthController extends BaseApiController
             return $this->fail('No autenticado.', 401);
         }
 
+        if ((int) ($user['two_factor_enabled'] ?? 0) === 1) {
+            return $this->fail('Desactiva 2FA antes de configurar un nuevo dispositivo.', 409);
+        }
+
         $twoFactor = new TwoFactorService();
         $secret    = $twoFactor->generateSecret();
         $qrUri     = $twoFactor->getQrUri($secret, $user['email'] ?? $user['username']);
@@ -283,10 +287,12 @@ class AuthController extends BaseApiController
         $jwtData = $this->request->jwt_user ?? null;
 
         if ($jwtData && isset($jwtData['user_id'])) {
-            return (new UserModel())->findForAuthById($jwtData['user_id']);
+            return model(UserModel::class)->findForAuthById($jwtData['user_id']);
         }
 
         // Session user
-        return $this->authService()->user();
+        $userId = $this->authService()->user()['id'] ?? null;
+
+        return $userId ? model(UserModel::class)->findForAuthById($userId) : null;
     }
 }

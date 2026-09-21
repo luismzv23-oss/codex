@@ -2,6 +2,8 @@
 
 namespace App\Controllers;
 
+use App\Libraries\SalesIntegrityService;
+
 use App\Libraries\AccountingService;
 use App\Libraries\ArcaService;
 use App\Libraries\EventBus;
@@ -1664,7 +1666,7 @@ class SalesController extends BaseController
         $fromOrder = null;
         $fromOrderItems = [];
         if ($fromOrderId !== '') {
-            $fromOrder = db_connect()->table('sales_orders')->where('id', $fromOrderId)->get()->getRowArray();
+            $fromOrder = db_connect()->table('sales_orders')->where('id', $fromOrderId)->where('company_id', $context['company']['id'])->get()->getRowArray();
             if ($fromOrder) {
                 $fromOrderItems = db_connect()->table('sales_order_items')
                     ->where('sales_order_id', $fromOrderId)
@@ -1737,6 +1739,10 @@ class SalesController extends BaseController
         }
 
         $companyId = $context['company']['id'];
+        $fromOrderId = trim((string) $this->request->getPost('from_order_id'));
+        if ($fromOrderId !== '' && ! db_connect()->table('sales_orders')->where('company_id', $companyId)->where('id', $fromOrderId)->countAllResults()) {
+            return redirect()->back()->withInput()->with('error', 'Pedido no disponible.');
+        }
         $isAdmin = in_array($this->roleSlug(), ['superadmin', 'admin'], true);
         if ($isAdmin) {
             $formRegisterId = trim((string) $this->request->getPost('cash_register_id'));
@@ -1768,7 +1774,7 @@ class SalesController extends BaseController
 
         $fromOrderId = trim((string) $this->request->getPost('from_order_id'));
         if ($fromOrderId !== '') {
-            db_connect()->table('sales_orders')->where('id', $fromOrderId)
+            db_connect()->table('sales_orders')->where('id', $fromOrderId)->where('company_id', $context['company']['id'])
                 ->update(['converted_to_sale_id' => $saleId, 'updated_at' => date('Y-m-d H:i:s')]);
         }
 
@@ -1918,6 +1924,19 @@ class SalesController extends BaseController
     public function cancel(string $id)
     {
         $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) { return $context; }
+        try {
+            return (new SalesIntegrityService())->locked(db_connect(), 'sales', $context['company']['id'], $id, ['draft', 'confirmed', 'returned_partial'], function () use ($id) {
+                return $this->cancelLocked($id);
+            });
+        } catch (\Throwable $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+    }
+
+    private function cancelLocked(string $id)
+    {
+        $context = $this->salesContext('manage');
 
         if ($context instanceof RedirectResponse) {
             return $context;
@@ -1933,9 +1952,9 @@ class SalesController extends BaseController
         }
 
         $db = db_connect();
-        $db->transStart();
 
-        if (($sale['status'] ?? '') === 'confirmed') {
+
+        if (in_array($sale['status'] ?? '', ['confirmed', 'returned_partial'], true)) {
             $documentType = !empty($sale['document_type_id']) ? (new SalesDocumentTypeModel())->find($sale['document_type_id']) : null;
             $category = (string) ($documentType['category'] ?? 'invoice');
             $items = $this->saleItems($id);
@@ -1954,7 +1973,7 @@ class SalesController extends BaseController
             'cancellation_reason' => trim((string) $this->request->getPost('cancellation_reason')) ?: 'Cancelacion manual',
         ]);
 
-        $db->transComplete();
+
 
         if (!$db->transStatus()) {
             return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('error', 'No se pudo cancelar la venta.');
@@ -2073,6 +2092,19 @@ class SalesController extends BaseController
     public function storeReturn(string $id)
     {
         $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) { return $context; }
+        try {
+            return (new SalesIntegrityService())->locked(db_connect(), 'sales', $context['company']['id'], $id, ['confirmed', 'returned_partial'], function () use ($id) {
+                return $this->storeReturnLocked($id);
+            });
+        } catch (\Throwable $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+    }
+
+    private function storeReturnLocked(string $id)
+    {
+        $context = $this->salesContext('manage');
 
         if ($context instanceof RedirectResponse) {
             return $context;
@@ -2095,7 +2127,7 @@ class SalesController extends BaseController
 
         $returnNumber = $this->nextSequenceNumber($context['company']['id'], 'NC', 'NC');
         $db = db_connect();
-        $db->transStart();
+
 
         $returnTotal = 0.0;
         $returnId = (new SaleReturnModel())->insert([
@@ -2152,7 +2184,7 @@ class SalesController extends BaseController
 
         (new SaleReturnModel())->update($returnId, ['total' => $returnTotal]);
         $this->syncSaleReturnStatus($id);
-        $db->transComplete();
+
 
         if (!$db->transStatus()) {
             return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('error', 'No se pudo registrar la devolucion.');
@@ -2244,7 +2276,7 @@ class SalesController extends BaseController
         ], 'venta-' . $sale['sale_number'] . '.pdf');
     }
 
-    private function salesContext(string $requiredAccess = 'view')
+    protected function salesContext(string $requiredAccess = 'view')
     {
         $companyId = $this->resolveSalesCompanyId();
         if (!$companyId) {
@@ -2297,7 +2329,7 @@ class SalesController extends BaseController
                 'createCustomerForm', 'storeCustomer', 'pdf', 'convert', 'confirm', 'cancel', 
                 'authorizeArca', 'consultArca', 'createReturnForm', 'storeReturn'
             ];
-            
+
             if (!in_array($method, $allowedForVendedor, true)) {
                 if ($method === 'daily') {
                     return redirect()->to($this->salesRoute('ventas', $companyId));
@@ -3418,14 +3450,14 @@ class SalesController extends BaseController
         $isVendedorAccess = $this->roleSlug() === 'vendedor' || $accessLevel === 'vendedor';
         if ($isVendedorAccess) {
             $maxDiscount = (float) ($salesSettings['max_discount_vendedor'] ?? 10.0);
-            
+
             // Calculate effective discount percentage
             $grossTotal = $totals['subtotal'] + $totals['item_discount_total'] + $totals['global_discount_total'];
             $effectiveDiscountPercent = 0;
             if ($grossTotal > 0) {
                 $effectiveDiscountPercent = (($totals['item_discount_total'] + $totals['global_discount_total']) / $grossTotal) * 100;
             }
-            
+
             if ($effectiveDiscountPercent > $maxDiscount) {
                 return redirect()->back()->withInput()->with('error', 'El descuento aplicado supera el maximo permitido para su rol (' . number_format($maxDiscount, 2) . '%). Solicite autorizacion gerencial.');
             }
@@ -3586,13 +3618,13 @@ class SalesController extends BaseController
     private function applyDiscountPolicies(string $companyId, array $items): array
     {
         $policyModel = new SalesDiscountPolicyModel();
-        
+
         // 1. Get quantity scale policies
         $qtyPolicies = $policyModel->where('company_id', $companyId)
             ->where('policy_type', 'quantity_scale')
             ->where('active', 1)
             ->findAll();
-            
+
         // 2. Get buy_x_pay_y policies
         $bogoPolicies = $policyModel->where('company_id', $companyId)
             ->where('policy_type', 'buy_x_pay_y')
@@ -3602,7 +3634,7 @@ class SalesController extends BaseController
         foreach ($items as &$item) {
             $qty = (float)($item['quantity'] ?? 0);
             $unitPrice = (float)($item['unit_price'] ?? 0);
-            
+
             $itemDiscountRate = 0.0;
             $itemFixedDiscount = 0.0;
 
@@ -3627,13 +3659,13 @@ class SalesController extends BaseController
             // Apply discounts to item totals
             $baseTotal = $qty * $unitPrice;
             $percentDiscountAmt = $baseTotal * ($itemDiscountRate / 100);
-            
+
             $item['discount_rate'] = max((float)($item['discount_rate'] ?? 0), $itemDiscountRate);
             $item['discount_amount'] = (float)($item['discount_amount'] ?? 0) + $percentDiscountAmt + $itemFixedDiscount;
-            
+
             $item['discount_amount'] = min($baseTotal, $item['discount_amount']);
             $lineGross = max(0, round(($qty * $unitPrice) - $item['discount_amount'], 2));
-            
+
             $taxRate = (float)($item['tax_rate'] ?? 0);
             if ($taxRate > 0) {
                 $item['subtotal'] = round($lineGross / (1 + ($taxRate / 100)), 2);
@@ -3970,6 +4002,8 @@ class SalesController extends BaseController
             $saleItems[$item['id']] = $item;
         }
 
+        $sale = (new SaleModel())->find($saleId);
+        $seen = [];
         $rows = [];
         foreach ($requested as $saleItemId => $data) {
             $quantity = (float) ($data['quantity'] ?? 0);
@@ -3977,6 +4011,8 @@ class SalesController extends BaseController
                 continue;
             }
 
+            if (isset($seen[$saleItemId])) { throw new \RuntimeException('No se puede repetir un producto de la venta en la devolucion.'); }
+            $seen[$saleItemId] = true;
             $item = $saleItems[$saleItemId];
             $availableToReturn = (float) $item['quantity'] - (float) ($item['returned_quantity'] ?? 0);
             if ($quantity > $availableToReturn) {
@@ -3989,7 +4025,7 @@ class SalesController extends BaseController
                 'product_type' => $item['product_type'] ?? 'simple',
                 'product_name' => $item['product_name'] ?? '',
                 'quantity' => $quantity,
-                'unit_price' => (float) $item['unit_price'],
+                'unit_price' => (new SalesIntegrityService())->returnUnitPrice($sale, $saleItems, $item),
                 'unit_cost' => (float) ($item['unit_cost'] ?? 0),
                 'already_returned' => (float) ($item['returned_quantity'] ?? 0),
                 'reason' => trim((string) ($data['reason'] ?? '')),
@@ -4049,7 +4085,7 @@ class SalesController extends BaseController
             return;
         }
 
-        $total = (float) ($sale['total'] ?? 0);
+        $total = ($sale['status'] ?? '') === 'cancelled' ? 0.0 : (new SalesIntegrityService())->netReceivableTotal($sale, $this->saleItems($saleId));
         $paid = (float) ($sale['paid_total'] ?? 0);
         $balance = max(0, round($total - $paid, 2));
         $status = ($sale['status'] ?? '') === 'cancelled' || ($sale['status'] ?? '') === 'returned_total'
@@ -4153,8 +4189,9 @@ class SalesController extends BaseController
 
     private function lockStockLevel(string $companyId, string $productId, string $warehouseId): void
     {
-        db_connect()->query(
-            'SELECT id FROM inventory_stock_levels WHERE company_id = ? AND product_id = ? AND warehouse_id = ? FOR UPDATE',
+        $db = db_connect();
+        $db->query(
+            'SELECT id FROM ' . $db->protectIdentifiers($db->prefixTable('inventory_stock_levels')) . ' WHERE company_id = ? AND product_id = ? AND warehouse_id = ?' . ($db->DBDriver === 'SQLite3' ? '' : ' FOR UPDATE'),
             [$companyId, $productId, $warehouseId]
         );
     }
@@ -4210,6 +4247,21 @@ class SalesController extends BaseController
     private function confirmSaleTransaction(string $companyId, string $saleId, ?array $sale = null)
     {
         try {
+            return (new SalesIntegrityService())->locked(db_connect(), 'sales', $companyId, $saleId, ['draft'], function (array $locked) use ($companyId, $saleId) {
+                $result = $this->confirmSaleLocked($companyId, $saleId, $locked);
+                if ($result !== true) {
+                    throw new \RuntimeException($result);
+                }
+                return true;
+            });
+        } catch (\Throwable $e) {
+            return $e->getMessage();
+        }
+    }
+
+    private function confirmSaleLocked(string $companyId, string $saleId, ?array $sale = null)
+    {
+        try {
             $sale ??= $this->ownedSale($companyId, $saleId);
             if (!$sale) {
                 return 'Venta no disponible.';
@@ -4240,12 +4292,12 @@ class SalesController extends BaseController
             if ($customerId && !$isApproved) {
                 $customer = (new CustomerModel())->find($customerId);
                 $creditLimit = (float) ($customer['credit_limit'] ?? 0);
-                
+
                 if ($creditLimit > 0) {
                     $saleTotal = (float)($sale['total'] ?? 0);
                     $salePaid = (float)($sale['paid_total'] ?? 0);
                     $saleUnpaid = $saleTotal - $salePaid;
-                    
+
                     if ($saleUnpaid > 0) {
                         $currentDebt = (float) db_connect()->table('sales_receivables')
                             ->where('customer_id', $customerId)
@@ -4253,7 +4305,7 @@ class SalesController extends BaseController
                             ->whereIn('status', ['pending', 'partial'])
                             ->selectSum('balance_amount', 'amount')
                             ->get()->getRowArray()['amount'] ?? 0;
-                        
+
                         if (($currentDebt + $saleUnpaid) > $creditLimit) {
                             return 'Límite de crédito excedido. El cliente tiene una deuda actual de $' . number_format($currentDebt, 2, ',', '.') . ' y su límite es $' . number_format($creditLimit, 2, ',', '.') . '. Solicite autorizacion gerencial.';
                         }
@@ -4268,18 +4320,18 @@ class SalesController extends BaseController
 
             $allowNegative = (int) (($this->inventorySettings($companyId)['allow_negative_stock'] ?? 0)) === 1;
             $db = db_connect();
-            $db->transStart();
+
 
             if ($category === 'order') {
                 $result = $this->reserveStockForSale($companyId, $sale, $items);
                 if ($result !== true) {
-                    $db->transRollback();
+
                     return $result;
                 }
             } elseif (in_array($category, ['delivery_note', 'invoice', 'ticket'], true) && (int) ($documentType['impacts_stock'] ?? 0) === 1) {
                 $result = $this->deliverSaleStock($companyId, $sale, $items, $allowNegative, $category === 'delivery_note' ? 'REMITO' : 'VENTA');
                 if ($result !== true) {
-                    $db->transRollback();
+
                     return $result;
                 }
             }
@@ -4290,7 +4342,7 @@ class SalesController extends BaseController
             if (!empty($sale['cash_session_id'])) {
                 $session = $sessionModel->where('status', 'open')->find($sale['cash_session_id']);
             }
-            
+
             if (!$session) {
                 $service = new CashService();
                 $regId = $sale['cash_register_id'] ?: session()->get('active_cash_register_id');
@@ -4304,13 +4356,13 @@ class SalesController extends BaseController
                 if ($session) {
                     $sale['cash_register_id'] = $session['cash_register_id'];
                     $sale['cash_session_id'] = $session['id'];
-                    
+
                     (new SaleModel())->update($saleId, [
                         'cash_register_id' => $session['cash_register_id'],
                         'cash_session_id' => $session['id'],
                     ]);
                 } else {
-                    $db->transRollback();
+
                     return 'No se puede confirmar la venta. Debes abrir primero una sesión de caja operativa.';
                 }
             }
@@ -4333,9 +4385,9 @@ class SalesController extends BaseController
             $this->syncCashMovementsForSale($companyId, $saleId);
             $this->syncSaleCommission($companyId, $saleId);
             (new AccountingService())->syncSale($companyId, $saleId, $this->currentUser()['id']);
-            
+
             // Link to converted order
-            $order = $db->table('sales_orders')->where('converted_to_sale_id', $saleId)->get()->getRowArray();
+            $order = $db->table('sales_orders')->where('company_id', $companyId)->where('converted_to_sale_id', $saleId)->get()->getRowArray();
             if ($order) {
                 foreach ($items as $item) {
                     if (!empty($item['product_id'])) {
@@ -4347,16 +4399,16 @@ class SalesController extends BaseController
                     ->where('quantity > quantity_invoiced', null, false)
                     ->countAllResults();
                 $newStatus = $pending === 0 ? 'fulfilled' : 'partial';
-                $db->table('sales_orders')->where('id', $order['id'])->update(['status' => $newStatus, 'updated_at' => date('Y-m-d H:i:s')]);
+                $db->table('sales_orders')->where('id', $order['id'])->where('company_id', $companyId)->update(['status' => $newStatus, 'updated_at' => date('Y-m-d H:i:s')]);
             }
 
             EventBus::emit('sale.confirmed', ['company_id' => $companyId, 'sale' => (new SaleModel())->find($saleId), 'items' => (new SaleItemModel())->where('sale_id', $saleId)->findAll()]);
-            $db->transComplete();
+
 
             return $db->transStatus() ? true : 'No se pudo confirmar la venta.';
         } catch (\Throwable $e) {
             $db = db_connect();
-            $db->transRollback();
+
             return $e->getMessage();
         }
     }
@@ -4495,6 +4547,7 @@ class SalesController extends BaseController
 
     private function restockDeliveredSale(string $companyId, array $sale, array $items, string $reason): void
     {
+        $items = (new SalesIntegrityService())->remainingItems($items);
         $sourceSale = !empty($sale['source_sale_id']) ? $this->ownedSale($companyId, (string) $sale['source_sale_id']) : null;
         $sourceDocumentType = (!empty($sourceSale['document_type_id'])) ? (new SalesDocumentTypeModel())->find($sourceSale['document_type_id']) : null;
         $sourceCategory = (string) ($sourceDocumentType['category'] ?? '');
@@ -4533,7 +4586,7 @@ class SalesController extends BaseController
         $db->transStart();
 
         $model = new VoucherSequenceModel();
-        
+
         $sequence = $model->db->query(
             "SELECT * FROM voucher_sequences WHERE company_id = ? AND document_type = ? FOR UPDATE",
             [$companyId, $documentType]
@@ -4549,7 +4602,7 @@ class SalesController extends BaseController
                 'current_number' => 1,
                 'active' => 1,
             ], true);
-            
+
             $sequence = $model->db->query(
                 "SELECT * FROM voucher_sequences WHERE id = ? FOR UPDATE",
                 [$id]
@@ -4923,6 +4976,34 @@ class SalesController extends BaseController
     //  CICLO COMERCIAL: PRESUPUESTOS
     // ══════════════════════════════════════════════════════
 
+    private function validateCommercialReferences(string $companyId): ?string
+    {
+        $tables = [
+            'customer_id' => 'customers', 'sales_agent_id' => 'sales_agents',
+            'sales_zone_id' => 'sales_zones', 'sales_condition_id' => 'sales_conditions',
+            'price_list_id' => 'sales_price_lists', 'warehouse_id' => 'inventory_warehouses',
+            'sales_quote_id' => 'sales_quotes', 'sales_order_id' => 'sales_orders',
+        ];
+        $db = db_connect();
+        foreach ($tables as $field => $table) {
+            $id = trim((string) $this->request->getPost($field));
+            if ($id !== '' && ! $db->table($table)->where('id', $id)->where('company_id', $companyId)->countAllResults()) {
+                return 'Referencia no disponible para esta empresa: ' . $field;
+            }
+        }
+        foreach ((array) $this->request->getPost('items') as $item) {
+            $productId = trim((string) ($item['product_id'] ?? ''));
+            if ($productId !== '' && ! $db->table('inventory_products')->where('id', $productId)->where('company_id', $companyId)->countAllResults()) {
+                return 'Producto no disponible para esta empresa.';
+            }
+            $orderItemId = trim((string) ($item['sales_order_item_id'] ?? ''));
+            if ($orderItemId !== '' && ! $db->table('sales_order_items')->where('id', $orderItemId)->where('sales_order_id', (string) $this->request->getPost('sales_order_id'))->countAllResults()) {
+                return 'El renglon no pertenece al pedido seleccionado.';
+            }
+        }
+        return null;
+    }
+
     public function createQuoteForm()
     {
         $context = $this->salesContext('manage');
@@ -4948,6 +5029,8 @@ class SalesController extends BaseController
         $context = $this->salesContext('manage');
         if ($context instanceof RedirectResponse) return $context;
         $companyId = $context['company']['id'];
+        $referenceError = $this->validateCommercialReferences($companyId);
+        if ($referenceError !== null) { return redirect()->back()->withInput()->with('error', $referenceError); }
         $db = db_connect();
 
         $lastNum = $db->table('sales_quotes')->where('company_id', $companyId)->selectMax('quote_number')->get()->getRowArray();
@@ -4996,7 +5079,7 @@ class SalesController extends BaseController
             'price_list_id' => $this->request->getPost('price_list_id') ?: null,
             'notes' => $this->request->getPost('notes') ?: null,
             'internal_notes' => $this->request->getPost('internal_notes') ?: null,
-            'created_by' => $context['user']['id'], 'created_at' => date('Y-m-d H:i:s'),
+            'created_by' => $this->currentUser()['id'], 'created_at' => date('Y-m-d H:i:s'),
         ]);
 
         $sortOrder = 0;
@@ -5022,8 +5105,12 @@ class SalesController extends BaseController
         $context = $this->salesContext('manage');
         if ($context instanceof RedirectResponse) return $context;
 
-        db_connect()->table('sales_quotes')->where('id', $quoteId)->where('status', 'draft')
-            ->update(['status' => 'approved', 'approved_by' => $context['user']['id'], 'approved_at' => date('Y-m-d H:i:s')]);
+        db_connect()->table('sales_quotes')->where('id', $quoteId)->where('company_id', $context['company']['id'])->where('status', 'draft')
+            ->update(['status' => 'approved', 'approved_by' => $this->currentUser()['id'], 'approved_at' => date('Y-m-d H:i:s')]);
+
+        if (db_connect()->affectedRows() !== 1) {
+            return redirect()->back()->with('error', 'Presupuesto no disponible o ya aprobado.');
+        }
 
         return redirect()->to(site_url('ventas'))->with('message', 'Presupuesto aprobado.');
     }
@@ -5034,7 +5121,7 @@ class SalesController extends BaseController
         if ($context instanceof RedirectResponse) return $context;
         $companyId = $context['company']['id'];
 
-        $quote = db_connect()->table('sales_quotes')->where('id', $quoteId)->get()->getRowArray();
+        $quote = db_connect()->table('sales_quotes')->where('id', $quoteId)->where('company_id', $context['company']['id'])->get()->getRowArray();
         if (!$quote) return redirect()->to(site_url('ventas'))->with('error', 'Presupuesto no encontrado.');
 
         $quoteItems = db_connect()->table('sales_quote_items')->where('sales_quote_id', $quoteId)->orderBy('sort_order')->get()->getResultArray();
@@ -5082,6 +5169,8 @@ class SalesController extends BaseController
         $context = $this->salesContext('manage');
         if ($context instanceof RedirectResponse) return $context;
         $companyId = $context['company']['id'];
+        $referenceError = $this->validateCommercialReferences($companyId);
+        if ($referenceError !== null) { return redirect()->back()->withInput()->with('error', $referenceError); }
         $db = db_connect();
 
         $lastNum = $db->table('sales_orders')->where('company_id', $companyId)->selectMax('order_number')->get()->getRowArray();
@@ -5127,7 +5216,7 @@ class SalesController extends BaseController
             'sales_condition_id' => $this->request->getPost('sales_condition_id') ?: null,
             'notes' => $this->request->getPost('notes') ?: null,
             'internal_notes' => $this->request->getPost('internal_notes') ?: null,
-            'created_by' => $context['user']['id'], 'created_at' => date('Y-m-d H:i:s'),
+            'created_by' => $this->currentUser()['id'], 'created_at' => date('Y-m-d H:i:s'),
         ]);
 
         $sortOrder = 0;
@@ -5148,7 +5237,7 @@ class SalesController extends BaseController
 
         // Mark quote as converted
         if ($quoteId) {
-            $db->table('sales_quotes')->where('id', $quoteId)
+            $db->table('sales_quotes')->where('id', $quoteId)->where('company_id', $context['company']['id'])
                 ->update(['status' => 'converted', 'converted_to_order_id' => $orderId, 'updated_at' => date('Y-m-d H:i:s')]);
         }
 
@@ -5160,8 +5249,12 @@ class SalesController extends BaseController
         $context = $this->salesContext('manage');
         if ($context instanceof RedirectResponse) return $context;
 
-        db_connect()->table('sales_orders')->where('id', $orderId)->where('status', 'pending')
-            ->update(['status' => 'approved', 'approved_by' => $context['user']['id'], 'approved_at' => date('Y-m-d H:i:s')]);
+        db_connect()->table('sales_orders')->where('id', $orderId)->where('company_id', $context['company']['id'])->where('status', 'pending')
+            ->update(['status' => 'approved', 'approved_by' => $this->currentUser()['id'], 'approved_at' => date('Y-m-d H:i:s')]);
+
+        if (db_connect()->affectedRows() !== 1) {
+            return redirect()->back()->with('error', 'Pedido no disponible o ya aprobado.');
+        }
 
         return redirect()->to(site_url('ventas'))->with('message', 'Pedido aprobado.');
     }
@@ -5172,7 +5265,7 @@ class SalesController extends BaseController
         if ($context instanceof RedirectResponse) return $context;
         $companyId = $context['company']['id'];
 
-        $order = db_connect()->table('sales_orders')->where('id', $orderId)->get()->getRowArray();
+        $order = db_connect()->table('sales_orders')->where('id', $orderId)->where('company_id', $context['company']['id'])->get()->getRowArray();
         if (!$order) return redirect()->to(site_url('ventas'))->with('error', 'Pedido no encontrado.');
 
         $orderItems = db_connect()->table('sales_order_items')->where('sales_order_id', $orderId)->orderBy('sort_order')->get()->getResultArray();
@@ -5195,7 +5288,7 @@ class SalesController extends BaseController
         if ($context instanceof RedirectResponse) return $context;
         $companyId = $context['company']['id'];
 
-        $order = db_connect()->table('sales_orders')->where('id', $orderId)->get()->getRowArray();
+        $order = db_connect()->table('sales_orders')->where('id', $orderId)->where('company_id', $context['company']['id'])->get()->getRowArray();
         if (!$order) return redirect()->to(site_url('ventas'))->with('error', 'Pedido no encontrado.');
 
         // Redirect to sale creation form with from_order param
@@ -5229,6 +5322,8 @@ class SalesController extends BaseController
         $context = $this->salesContext('manage');
         if ($context instanceof RedirectResponse) return $context;
         $companyId = $context['company']['id'];
+        $referenceError = $this->validateCommercialReferences($companyId);
+        if ($referenceError !== null) { return redirect()->back()->withInput()->with('error', $referenceError); }
         $db = db_connect();
 
         $lastNum = $db->table('sales_delivery_notes')->where('company_id', $companyId)->selectMax('delivery_number')->get()->getRowArray();
@@ -5255,7 +5350,7 @@ class SalesController extends BaseController
             'customer_name_snapshot' => $customer['name'] ?? 'Consumidor Final',
             'customer_document_snapshot' => $customer['document_number'] ?? null,
             'notes' => $this->request->getPost('notes') ?: null,
-            'created_by' => $context['user']['id'], 'created_at' => date('Y-m-d H:i:s'),
+            'created_by' => $this->currentUser()['id'], 'created_at' => date('Y-m-d H:i:s'),
         ]);
 
         $items = (array)$this->request->getPost('items');
@@ -5289,9 +5384,9 @@ class SalesController extends BaseController
                 ->where('quantity > quantity_delivered', null, false)
                 ->countAllResults();
             if ($pending === 0) {
-                $db->table('sales_orders')->where('id', $salesOrderId)->update(['status' => 'fulfilled', 'updated_at' => date('Y-m-d H:i:s')]);
+                $db->table('sales_orders')->where('id', $salesOrderId)->where('company_id', $context['company']['id'])->update(['status' => 'fulfilled', 'updated_at' => date('Y-m-d H:i:s')]);
             } else {
-                $db->table('sales_orders')->where('id', $salesOrderId)->whereNotIn('status', ['fulfilled', 'cancelled'])
+                $db->table('sales_orders')->where('id', $salesOrderId)->where('company_id', $context['company']['id'])->whereNotIn('status', ['fulfilled', 'cancelled'])
                     ->update(['status' => 'partial', 'updated_at' => date('Y-m-d H:i:s')]);
             }
         }
@@ -5305,52 +5400,64 @@ class SalesController extends BaseController
         if ($context instanceof RedirectResponse) return $context;
         $companyId = $context['company']['id'];
         $db = db_connect();
-
-        $note = $db->table('sales_delivery_notes')->where('id', $noteId)->where('status', 'pending')->get()->getRowArray();
-        if (!$note) {
-            return redirect()->to(site_url('ventas'))->with('error', 'Remito no encontrado o ya despachado.');
+        try {
+            (new SalesIntegrityService())->locked($db, 'sales_delivery_notes', $companyId, $noteId, ['pending'], function (array $note) use ($db, $companyId, $noteId) {
+                $items = $db->table('sales_delivery_note_items')->where('sales_delivery_note_id', $noteId)->get()->getResultArray();
+                if ($items === []) {
+                    throw new \RuntimeException('El remito debe tener productos.');
+                }
+                $allowNegative = (int) ($this->inventorySettings($companyId)['allow_negative_stock'] ?? 0) === 1;
+                foreach ($items as $item) {
+                    $productId = (string) ($item['product_id'] ?? '');
+                    $warehouseId = $item['warehouse_id'] ?: ($note['warehouse_id'] ?? null);
+                    $quantity = (float) ($item['quantity'] ?? 0);
+                    $product = (new InventoryProductModel())->where('company_id', $companyId)->find($productId);
+                    if (! $product || ! $warehouseId || ! $this->ownedWarehouse($companyId, $warehouseId) || ! is_finite($quantity) || $quantity <= 0) {
+                        throw new \RuntimeException('Producto, deposito o cantidad del remito invalidos.');
+                    }
+                    $stockItems = [array_merge($item, ['product_type' => $product['product_type'] ?? 'simple'])];
+                    foreach ($this->aggregateStockRows($this->expandSaleItemsToStockRows($stockItems)) as $row) {
+                        $this->lockStockLevel($companyId, $row['product_id'], $warehouseId);
+                        if (! $this->canWithdraw($companyId, $row['product_id'], $warehouseId, (float) $row['quantity'], $allowNegative)) {
+                            throw new \RuntimeException('Stock insuficiente para despachar el remito.');
+                        }
+                        $this->applyStockDelta($companyId, $row['product_id'], $warehouseId, -(float) $row['quantity']);
+                        $this->registerInventoryMovement([
+                            'company_id' => $companyId,
+                            'product_id' => $row['product_id'],
+                            'source_warehouse_id' => $warehouseId,
+                            'movement_type' => 'egreso',
+                            'quantity' => (float) $row['quantity'],
+                            'performed_by' => $this->currentUser()['id'],
+                            'reason' => 'REMITO',
+                            'source_document' => $note['delivery_number'],
+                            'notes' => 'Despacho remito ' . $note['delivery_number'],
+                        ]);
+                    }
+                }
+                $db->table('sales_delivery_notes')->where('id', $noteId)->where('company_id', $companyId)
+                    ->update(['status' => 'dispatched', 'dispatched_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]);
+            });
+        } catch (\Throwable $e) {
+            return redirect()->back()->with('error', $e->getMessage());
         }
-
-        // Deduct inventory stock for each delivery note item
-        $warehouseId = $note['warehouse_id'] ?? null;
-        $items = $db->table('sales_delivery_note_items')->where('sales_delivery_note_id', $noteId)->get()->getResultArray();
-
-        foreach ($items as $item) {
-            $productId = $item['product_id'] ?? null;
-            $quantity = (float)($item['quantity'] ?? 0);
-            $itemWarehouse = $item['warehouse_id'] ?? $warehouseId;
-
-            if ($productId && $quantity > 0 && $itemWarehouse) {
-                $this->applyStockDelta($companyId, $productId, $itemWarehouse, -$quantity);
-                $this->registerInventoryMovement([
-                    'company_id'   => $companyId,
-                    'product_id'   => $productId,
-                    'warehouse_id' => $itemWarehouse,
-                    'movement_type' => 'delivery_note_dispatch',
-                    'quantity'     => -$quantity,
-                    'reference_type' => 'sales_delivery_note',
-                    'reference_id'   => $noteId,
-                    'notes'        => 'Despacho remito ' . ($note['delivery_number'] ?? $noteId),
-                    'created_by'   => $context['user']['id'],
-                ]);
-            }
-        }
-
-        $db->table('sales_delivery_notes')->where('id', $noteId)
-            ->update(['status' => 'dispatched', 'dispatched_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]);
-
-        return redirect()->to(site_url('ventas'))->with('message', 'Remito despachado y stock actualizado.');
+        return redirect()->to($this->salesRoute('ventas', $companyId))->with('message', 'Remito despachado y stock actualizado.');
     }
 
     public function deliverDeliveryNote(string $noteId)
     {
         $context = $this->salesContext('manage');
         if ($context instanceof RedirectResponse) return $context;
-
-        db_connect()->table('sales_delivery_notes')->where('id', $noteId)->whereIn('status', ['pending', 'dispatched'])
-            ->update(['status' => 'delivered', 'delivered_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]);
-
-        return redirect()->to(site_url('ventas'))->with('message', 'Remito entregado.');
+        $companyId = $context['company']['id'];
+        try {
+            (new SalesIntegrityService())->locked(db_connect(), 'sales_delivery_notes', $companyId, $noteId, ['dispatched'], function () use ($companyId, $noteId) {
+                db_connect()->table('sales_delivery_notes')->where('id', $noteId)->where('company_id', $companyId)
+                    ->update(['status' => 'delivered', 'delivered_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s')]);
+            });
+        } catch (\Throwable $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+        return redirect()->to($this->salesRoute('ventas', $companyId))->with('message', 'Remito entregado.');
     }
 
     public function testSequenceConcurrency()
@@ -5374,13 +5481,13 @@ class SalesController extends BaseController
             return $this->response->setJSON(['success' => false, 'message' => 'No active company found.']);
         }
         $db = db_connect();
-        
+
         $stockLevel = $db->table('inventory_stock_levels')
             ->where('company_id', $companyId)
             ->where('quantity >=', 10)
             ->get()
             ->getRowArray();
-            
+
         if (!$stockLevel) {
             $product = $db->table('inventory_products')->where('company_id', $companyId)->get()->getRowArray();
             if (!$product) {
@@ -5405,15 +5512,15 @@ class SalesController extends BaseController
                 ->get()
                 ->getRowArray();
         }
-        
+
         $productId = $stockLevel['product_id'];
         $warehouseId = $stockLevel['warehouse_id'];
-        
+
         $db->transStart();
-        
+
         $this->lockStockLevel($companyId, $productId, $warehouseId);
         $canReserve = $this->canReserve($companyId, $productId, $warehouseId, 1.0);
-        
+
         if ($canReserve) {
             $this->applyReservedDelta($companyId, $productId, $warehouseId, 1.0);
             $db->transComplete();

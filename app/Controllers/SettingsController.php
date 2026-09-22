@@ -3,13 +3,9 @@
 namespace App\Controllers;
 
 use App\Models\BranchModel;
-use App\Models\CompanySystemModel;
 use App\Models\CompanyModel;
 use App\Models\CurrencyModel;
-use App\Models\RoleModel;
 use App\Models\TaxModel;
-use App\Models\UserModel;
-use App\Models\UserSystemModel;
 use App\Models\VoucherSequenceModel;
 
 class SettingsController extends BaseController
@@ -29,7 +25,6 @@ class SettingsController extends BaseController
         }
 
         $branchModel = new BranchModel();
-        $branchModel->ensureMainBranch($companyId);
         $currencyModel = new CurrencyModel();
         $taxModel = new TaxModel();
         $voucherModel = new VoucherSequenceModel();
@@ -47,100 +42,41 @@ class SettingsController extends BaseController
 
     public function updateCompany()
     {
-        $companyId = $this->resolveCompanyId();
-        $company = $companyId ? (new CompanyModel())->find($companyId) : null;
-
-        if (! $companyId || ! $company) {
-            return redirect()->to('/configuracion')->with('error', 'Empresa no disponible.');
+        try {
+            $companyId = (string) $this->resolveCompanyId();
+            $service = new \App\Libraries\SettingsService();
+            $result = $service->company($companyId, (array) $this->request->getPost());
+            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.');
+        } catch (\Throwable $e) {
+            log_message('error', 'Configuracion: {message}', ['message' => $e->getMessage()]);
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
         }
-
-        $currencyCode = trim((string) $this->request->getPost('currency_code'));
-
-        if (! $this->isAllowedCurrencyCode($currencyCode, $companyId, $company['currency_code'] ?? null)) {
-            return redirect()->back()->withInput()->with('error', 'La moneda base seleccionada no pertenece a las monedas activas de la empresa.');
-        }
-
-        (new CompanyModel())->update($companyId, [
-            'name' => trim((string) $this->request->getPost('name')),
-            'legal_name' => trim((string) $this->request->getPost('legal_name')),
-            'tax_id' => trim((string) $this->request->getPost('tax_id')),
-            'email' => trim((string) $this->request->getPost('email')),
-            'phone' => trim((string) $this->request->getPost('phone')),
-            'address' => trim((string) $this->request->getPost('address')),
-            'currency_code' => trim((string) $this->request->getPost('currency_code')),
-        ]);
-
-        $maxCashRegistersVal = trim((string) ($this->request->getPost('max_cash_registers') ?? '0'));
-        $maxCashRegisters = max(0, (int) $maxCashRegistersVal);
-
-        $db = db_connect();
-        $existingSetting = $db->table('company_settings')
-            ->where('company_id', $companyId)
-            ->where('key', 'max_cash_registers')
-            ->get()->getRowArray();
-
-        if ($existingSetting) {
-            $db->table('company_settings')
-                ->where('id', $existingSetting['id'])
-                ->update([
-                    'value' => (string) $maxCashRegisters,
-                    'updated_at' => date('Y-m-d H:i:s'),
-                ]);
-        } else {
-            $db->table('company_settings')->insert([
-                'id' => app_uuid(),
-                'company_id' => $companyId,
-                'key' => 'max_cash_registers',
-                'value' => (string) $maxCashRegisters,
-                'created_at' => date('Y-m-d H:i:s'),
-                'updated_at' => date('Y-m-d H:i:s'),
-            ]);
-        }
-
-        return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Datos de la empresa actualizados.');
     }
-
 
     public function storeBranch()
     {
-        $companyId = $this->resolveCompanyId();
-        (new BranchModel())->insert([
-            'company_id' => $companyId,
-            'name' => trim((string) $this->request->getPost('name')),
-            'code' => trim((string) $this->request->getPost('code')),
-            'address' => trim((string) $this->request->getPost('address')),
-            'phone' => trim((string) $this->request->getPost('phone')),
-            'active' => $this->request->getPost('active') === '0' ? 0 : 1,
-        ]);
-
-        $this->syncAdminSystemAssignments($companyId);
-
-        return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Sucursal registrada.');
+        try {
+            $companyId = (string) $this->resolveCompanyId();
+            $service = new \App\Libraries\SettingsService();
+            $result = $service->branch($companyId, (array) $this->request->getPost());
+            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.');
+        } catch (\Throwable $e) {
+            log_message('error', 'Configuracion: {message}', ['message' => $e->getMessage()]);
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
+        }
     }
 
     public function storeTax()
     {
-        $companyId = $this->resolveCompanyId();
-        $isDefault = $this->request->getPost('is_default') === '1' ? 1 : 0;
-        $afipCode  = $this->request->getPost('afip_code');
-
-        $taxModel = new TaxModel();
-
-        if ($isDefault) {
-            $taxModel->where('company_id', $companyId)->set(['is_default' => 0])->update();
+        try {
+            $companyId = (string) $this->resolveCompanyId();
+            $service = new \App\Libraries\SettingsService();
+            $result = $service->tax($companyId, (array) $this->request->getPost());
+            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.');
+        } catch (\Throwable $e) {
+            log_message('error', 'Configuracion: {message}', ['message' => $e->getMessage()]);
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
         }
-
-        $taxModel->insert([
-            'company_id' => $companyId,
-            'name'       => trim((string) $this->request->getPost('name')),
-            'code'       => trim((string) $this->request->getPost('code')),
-            'rate'       => (float) $this->request->getPost('rate'),
-            'afip_code'  => ($afipCode !== '' && $afipCode !== null) ? (int) $afipCode : null,
-            'is_default' => $isDefault,
-            'active'     => $this->request->getPost('active') === '0' ? 0 : 1,
-        ]);
-
-        return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Impuesto registrado.');
     }
 
     public function editTaxForm(string $id)
@@ -164,107 +100,80 @@ class SettingsController extends BaseController
 
     public function updateTax(string $id)
     {
-        $companyId = $this->resolveCompanyId();
-        $taxModel  = new TaxModel();
-        $tax       = $taxModel->where('company_id', $companyId)->find($id);
-
-        if (! $tax) {
-            return redirect()->to('/configuracion?company_id=' . $companyId)->with('error', 'Impuesto no encontrado.');
+        try {
+            $companyId = (string) $this->resolveCompanyId();
+            $service = new \App\Libraries\SettingsService();
+            $result = $service->tax($companyId, (array) $this->request->getPost(), $id);
+            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.');
+        } catch (\Throwable $e) {
+            log_message('error', 'Configuracion: {message}', ['message' => $e->getMessage()]);
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
         }
-
-        $isDefault = $this->request->getPost('is_default') === '1' ? 1 : 0;
-        $afipCode  = $this->request->getPost('afip_code');
-
-        if ($isDefault) {
-            $taxModel->where('company_id', $companyId)->set(['is_default' => 0])->update();
-        }
-
-        $taxModel->update($id, [
-            'name'       => trim((string) $this->request->getPost('name')),
-            'code'       => trim((string) $this->request->getPost('code')),
-            'rate'       => (float) $this->request->getPost('rate'),
-            'afip_code'  => ($afipCode !== '' && $afipCode !== null) ? (int) $afipCode : null,
-            'is_default' => $isDefault,
-            'active'     => $this->request->getPost('active') === '0' ? 0 : 1,
-        ]);
-
-        return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Impuesto actualizado.');
     }
 
     public function setDefaultTax(string $id)
     {
-        $companyId = $this->resolveCompanyId();
-        $taxModel  = new TaxModel();
-        $tax       = $taxModel->where('company_id', $companyId)->find($id);
-
-        if (! $tax) {
-            return redirect()->to('/configuracion?company_id=' . $companyId)->with('error', 'Impuesto no encontrado.');
+        try {
+            $companyId = (string) $this->resolveCompanyId();
+            $service = new \App\Libraries\SettingsService();
+            $service->taxAction($companyId, $id, 'default');
+            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.');
+        } catch (\Throwable $e) {
+            log_message('error', 'Configuracion: {message}', ['message' => $e->getMessage()]);
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
         }
-
-        $taxModel->setDefault($id, $companyId);
-
-        return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Impuesto predeterminado actualizado.');
     }
 
     public function deleteTax(string $id)
     {
-        $companyId = $this->resolveCompanyId();
-        $taxModel  = new TaxModel();
-        $tax       = $taxModel->where('company_id', $companyId)->find($id);
-
-        if (! $tax) {
-            return redirect()->to('/configuracion?company_id=' . $companyId)->with('error', 'Impuesto no encontrado.');
+        try {
+            $companyId = (string) $this->resolveCompanyId();
+            $service = new \App\Libraries\SettingsService();
+            $service->taxAction($companyId, $id, 'delete');
+            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.');
+        } catch (\Throwable $e) {
+            log_message('error', 'Configuracion: {message}', ['message' => $e->getMessage()]);
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
         }
-
-        $taxModel->delete($id);
-
-        return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Impuesto eliminado.');
     }
 
     public function toggleTax(string $id)
     {
-        $companyId = $this->resolveCompanyId();
-        $taxModel  = new TaxModel();
-        $tax       = $taxModel->where('company_id', $companyId)->find($id);
-
-        if (! $tax) {
-            return redirect()->to('/configuracion?company_id=' . $companyId)->with('error', 'Impuesto no encontrado.');
+        try {
+            $companyId = (string) $this->resolveCompanyId();
+            $service = new \App\Libraries\SettingsService();
+            $service->taxAction($companyId, $id, 'toggle');
+            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.');
+        } catch (\Throwable $e) {
+            log_message('error', 'Configuracion: {message}', ['message' => $e->getMessage()]);
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
         }
-
-        $newActive = $tax['active'] ? 0 : 1;
-        $taxModel->update($id, ['active' => $newActive]);
-
-        return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Estado del impuesto actualizado.');
     }
-
 
     public function storeCurrency()
     {
-        (new CurrencyModel())->insert([
-            'company_id' => $this->resolveCompanyId(),
-            'code' => strtoupper(trim((string) $this->request->getPost('code'))),
-            'name' => trim((string) $this->request->getPost('name')),
-            'symbol' => trim((string) $this->request->getPost('symbol')),
-            'exchange_rate' => (float) $this->request->getPost('exchange_rate'),
-            'is_default' => $this->request->getPost('is_default') === '1' ? 1 : 0,
-            'active' => $this->request->getPost('active') === '0' ? 0 : 1,
-        ]);
-
-        return $this->popupOrRedirect('/configuracion?company_id=' . $this->resolveCompanyId(), 'Moneda registrada.');
+        try {
+            $companyId = (string) $this->resolveCompanyId();
+            $service = new \App\Libraries\SettingsService();
+            $result = $service->currency($companyId, (array) $this->request->getPost());
+            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.');
+        } catch (\Throwable $e) {
+            log_message('error', 'Configuracion: {message}', ['message' => $e->getMessage()]);
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
+        }
     }
 
     public function storeVoucherSequence()
     {
-        (new VoucherSequenceModel())->insert([
-            'company_id' => $this->resolveCompanyId(),
-            'branch_id' => $this->request->getPost('branch_id') ?: null,
-            'document_type' => trim((string) $this->request->getPost('document_type')),
-            'prefix' => trim((string) $this->request->getPost('prefix')),
-            'current_number' => (int) $this->request->getPost('current_number'),
-            'active' => $this->request->getPost('active') === '0' ? 0 : 1,
-        ]);
-
-        return $this->popupOrRedirect('/configuracion?company_id=' . $this->resolveCompanyId(), 'Numeracion registrada.');
+        try {
+            $companyId = (string) $this->resolveCompanyId();
+            $service = new \App\Libraries\SettingsService();
+            $result = $service->sequence($companyId, (array) $this->request->getPost());
+            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.');
+        } catch (\Throwable $e) {
+            log_message('error', 'Configuracion: {message}', ['message' => $e->getMessage()]);
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
+        }
     }
 
     public function editCompanyForm()
@@ -351,56 +260,7 @@ class SettingsController extends BaseController
         return $this->companyId();
     }
 
-    private function syncAdminSystemAssignments(?string $companyId): void
-    {
-        if (! $companyId) {
-            return;
-        }
 
-        $adminRole = (new RoleModel())->findBySlug('admin');
-        if (! $adminRole) {
-            return;
-        }
-
-        $adminUser = (new UserModel())
-            ->where('company_id', $companyId)
-            ->where('role_id', $adminRole['id'])
-            ->first();
-
-        if (! $adminUser) {
-            return;
-        }
-
-        $assignments = (new CompanySystemModel())
-            ->where('company_id', $companyId)
-            ->where('active', 1)
-            ->findAll();
-
-        $userSystemModel = new UserSystemModel();
-        foreach ($assignments as $assignment) {
-            $existing = $userSystemModel
-                ->where('company_id', $companyId)
-                ->where('user_id', $adminUser['id'])
-                ->where('system_id', $assignment['system_id'])
-                ->first();
-
-            if ($existing) {
-                $userSystemModel->update($existing['id'], [
-                    'access_level' => 'manage',
-                    'active' => 1,
-                ]);
-                continue;
-            }
-
-            $userSystemModel->insert([
-                'company_id' => $companyId,
-                'user_id' => $adminUser['id'],
-                'system_id' => $assignment['system_id'],
-                'access_level' => 'manage',
-                'active' => 1,
-            ]);
-        }
-    }
 
     public function ticketSettingsForm()
     {
@@ -497,85 +357,15 @@ class SettingsController extends BaseController
 
     public function updateTicketSettings()
     {
-        $companyId = $this->resolveCompanyId();
-        $company = $companyId ? (new CompanyModel())->find($companyId) : null;
-
-        if (! $companyId || ! $company) {
-            return redirect()->to('/configuracion')->with('error', 'Empresa no disponible.');
+        try {
+            $companyId = (string) $this->resolveCompanyId();
+            $service = new \App\Libraries\SettingsService();
+            $service->tickets($companyId, (array) $this->request->getPost(), in_array($this->currentUser()['role_slug'] ?? '', ['admin', 'superadmin'], true));
+            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.');
+        } catch (\Throwable $e) {
+            log_message('error', 'Configuracion: {message}', ['message' => $e->getMessage()]);
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
         }
-
-        $currentUser = auth_user();
-        $isAdminOrSuperadmin = in_array($currentUser['role_slug'] ?? null, ['admin', 'superadmin'], true);
-
-        $db = db_connect();
-        $subKeys = [
-            'header_title',
-            'company_subtitle',
-            'company_address',
-            'company_phone',
-            'footer_notes',
-            'paper_width',
-            'font_size',
-            'font_family',
-            'bold_top_left',
-            'bold_top_right',
-            'custom_text_top_left',
-            'custom_text_top_right',
-            'custom_text_bottom_left',
-            'custom_text_bottom_right',
-            'show_sku',
-            'show_brand',
-            'show_item_breakdown',
-            'show_customer',
-            'show_user',
-        ];
-
-        $prefixes = ['ticket_pos_', 'ticket_kiosk_'];
-
-        foreach ($prefixes as $prefix) {
-            foreach ($subKeys as $subKey) {
-                $key = $prefix . $subKey;
-
-                // Restrict custom fields and font family modification to admin and superadmin roles
-                if (!$isAdminOrSuperadmin && in_array($subKey, ['custom_text_top_left', 'custom_text_top_right', 'bold_top_left', 'bold_top_right', 'font_family'], true)) {
-                    continue;
-                }
-
-                if (in_array($subKey, ['show_sku', 'show_brand', 'show_item_breakdown', 'show_customer', 'show_user', 'bold_top_left', 'bold_top_right'], true)) {
-                    $value = $this->request->getPost($key) === '1' ? '1' : '0';
-                } else {
-                    $rawVal = $this->request->getPost($key);
-                    if ($rawVal === null) {
-                        continue;
-                    }
-                    $value = trim((string) $rawVal);
-                }
-
-                $existing = $db->table('company_settings')
-                    ->where('company_id', $companyId)
-                    ->where('key', $key)
-                    ->get()->getRowArray();
-
-                if ($existing) {
-                    $db->table('company_settings')
-                        ->where('id', $existing['id'])
-                        ->update([
-                            'value' => $value,
-                            'updated_at' => date('Y-m-d H:i:s'),
-                        ]);
-                } else {
-                    $db->table('company_settings')->insert([
-                        'id' => app_uuid(),
-                        'company_id' => $companyId,
-                        'key' => $key,
-                        'value' => $value,
-                        'created_at' => date('Y-m-d H:i:s'),
-                        'updated_at' => date('Y-m-d H:i:s'),
-                    ]);
-                }
-            }
-        }
-
-        return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion de impresion de tickets actualizada correctamente.');
     }
+
 }

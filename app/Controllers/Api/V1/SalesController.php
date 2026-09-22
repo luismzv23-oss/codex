@@ -1043,7 +1043,7 @@ class SalesController extends BaseApiController
 
         $db = db_connect();
 
-        $returnNumber = $this->nextSequenceNumber($context['company']['id'], 'NC', 'NC');
+        $returnNumber = $this->nextSequenceNumber($context['company']['id'], 'NC', 'NC', $sale['branch_id'] ?? null);
         $returnId = (new SaleReturnModel())->insert([
             'sale_id' => $id,
             'warehouse_id' => $warehouseId,
@@ -1483,7 +1483,7 @@ class SalesController extends BaseApiController
     private function salesProductCatalog(string $companyId): array
     {
         $products = (new InventoryProductModel())->where('company_id', $companyId)->where('active', 1)->orderBy('name', 'ASC')->findAll();
-        $stockRows = db_connect()->table('inventory_stock_levels')->select('product_id, warehouse_id, quantity, reserved_quantity')->where('company_id', $companyId)->get()->getResultArray();
+        $stockRows = db_connect()->table('inventory_stock_levels')->select('product_id, warehouse_id, SUM(quantity) AS quantity, SUM(reserved_quantity) AS reserved_quantity', false)->where('company_id', $companyId)->groupBy('product_id, warehouse_id')->get()->getResultArray();
         $stockMap = [];
         foreach ($stockRows as $row) {
             $stockMap[$row['product_id']][$row['warehouse_id']] = ['stock' => (float) $row['quantity'], 'reserved' => (float) ($row['reserved_quantity'] ?? 0), 'available' => ((float) $row['quantity']) - ((float) ($row['reserved_quantity'] ?? 0))];
@@ -1749,10 +1749,27 @@ class SalesController extends BaseApiController
     }
 
     private function inventorySettings(string $companyId): array { return (new InventorySettingModel())->where('company_id', $companyId)->first() ?? []; }
-    private function canReserve(string $companyId, string $productId, ?string $warehouseId, float $quantity): bool { if ($warehouseId === null) { return false; } $row = (new InventoryStockLevelModel())->where('company_id', $companyId)->where('product_id', $productId)->where('warehouse_id', $warehouseId)->first(); return (((float) ($row['quantity'] ?? 0)) - ((float) ($row['reserved_quantity'] ?? 0))) >= $quantity; }
-    private function canWithdraw(string $companyId, string $productId, ?string $warehouseId, float $quantity, bool $allowNegative, ?string $ignoreSaleId = null): bool { if ($allowNegative || $warehouseId === null) { return true; } $row = (new InventoryStockLevelModel())->where('company_id', $companyId)->where('product_id', $productId)->where('warehouse_id', $warehouseId)->first(); $available = (((float) ($row['quantity'] ?? 0)) - ((float) ($row['reserved_quantity'] ?? 0))); if ($ignoreSaleId) { $available += (float) ((new InventoryReservationModel())->selectSum('quantity', 'qty')->where('company_id', $companyId)->where('warehouse_id', $warehouseId)->where('product_id', $productId)->where('sale_id', $ignoreSaleId)->where('status', 'active')->first()['qty'] ?? 0); } return $available >= $quantity; }
-    private function applyStockDelta(string $companyId, string $productId, ?string $warehouseId, float $delta): void { if ($warehouseId === null) { return; } $model = new InventoryStockLevelModel(); $product = (new InventoryProductModel())->find($productId); $row = $model->where('company_id', $companyId)->where('product_id', $productId)->where('warehouse_id', $warehouseId)->first(); if ($row) { $model->update($row['id'], ['quantity' => ((float) $row['quantity']) + $delta]); return; } $model->insert(['company_id' => $companyId, 'product_id' => $productId, 'warehouse_id' => $warehouseId, 'quantity' => $delta, 'reserved_quantity' => 0, 'min_stock' => $product['min_stock'] ?? 0]); }
-    private function applyReservedDelta(string $companyId, string $productId, ?string $warehouseId, float $delta): void { if ($warehouseId === null) { return; } $model = new InventoryStockLevelModel(); $product = (new InventoryProductModel())->find($productId); $row = $model->where('company_id', $companyId)->where('product_id', $productId)->where('warehouse_id', $warehouseId)->first(); if ($row) { $model->update($row['id'], ['reserved_quantity' => max(0, ((float) $row['reserved_quantity']) + $delta)]); return; } $model->insert(['company_id' => $companyId, 'product_id' => $productId, 'warehouse_id' => $warehouseId, 'quantity' => 0, 'reserved_quantity' => max(0, $delta), 'min_stock' => $product['min_stock'] ?? 0]); }
+    private function canReserve(string $companyId, string $productId, ?string $warehouseId, float $quantity): bool {
+        return $warehouseId !== null && (new \App\Libraries\InventoryIntegrityService())->available($companyId, $productId, $warehouseId) >= $quantity;
+    }
+    private function canWithdraw(string $companyId, string $productId, ?string $warehouseId, float $quantity, bool $allowNegative, ?string $ignoreSaleId = null): bool {
+        if ($warehouseId === null) { return false; }
+        $available = (new \App\Libraries\InventoryIntegrityService())->available($companyId, $productId, $warehouseId);
+        if ($ignoreSaleId) {
+            $available += (float) ((new InventoryReservationModel())->selectSum('quantity', 'qty')->where('company_id', $companyId)->where('warehouse_id', $warehouseId)->where('product_id', $productId)->where('sale_id', $ignoreSaleId)->where('status', 'active')->first()['qty'] ?? 0);
+        }
+        return $allowNegative || $available >= $quantity;
+    }
+    private function applyStockDelta(string $companyId, string $productId, ?string $warehouseId, float $delta): void {
+        if ($warehouseId !== null) {
+            (new \App\Libraries\InventoryIntegrityService())->changeStock($companyId, $productId, $warehouseId, $delta);
+        }
+    }
+    private function applyReservedDelta(string $companyId, string $productId, ?string $warehouseId, float $delta): void {
+        if ($warehouseId !== null) {
+            (new \App\Libraries\InventoryIntegrityService())->changeReserved($companyId, $productId, $warehouseId, $delta);
+        }
+    }
     private function registerInventoryMovement(array $payload): void { (new InventoryMovementModel())->insert(['company_id' => $payload['company_id'], 'product_id' => $payload['product_id'], 'movement_type' => $payload['movement_type'], 'quantity' => $payload['quantity'], 'unit_cost' => $payload['unit_cost'] ?? null, 'total_cost' => $payload['total_cost'] ?? null, 'source_warehouse_id' => $payload['source_warehouse_id'] ?? null, 'destination_warehouse_id' => $payload['destination_warehouse_id'] ?? null, 'performed_by' => $payload['performed_by'], 'occurred_at' => $payload['occurred_at'] ?? date('Y-m-d H:i:s'), 'reason' => $payload['reason'] ?? null, 'source_document' => $payload['source_document'] ?? null, 'notes' => $payload['notes'] ?? null]); }
 
     private function confirmSaleTransaction(string $companyId, string $saleId, ?array $sale = null)
@@ -2151,10 +2168,7 @@ class SalesController extends BaseApiController
 
     private function lockStockLevel(string $companyId, string $productId, string $warehouseId): void
     {
-        db_connect()->query(
-            'SELECT id FROM inventory_stock_levels WHERE company_id = ? AND product_id = ? AND warehouse_id = ? FOR UPDATE',
-            [$companyId, $productId, $warehouseId]
-        );
+        (new \App\Libraries\InventoryIntegrityService())->balances($companyId, $productId, $warehouseId);
     }
 
     private function csvResponse(array $rows, string $filename)
@@ -2233,7 +2247,7 @@ class SalesController extends BaseApiController
     private function createDraftFromSource(string $companyId, array $sourceSale, array $targetDocument): string
     {
         $pointOfSale = $this->defaultPointOfSale($companyId, $targetDocument['channel'] ?? 'standard');
-        $saleNumber = $this->nextSequenceNumber($companyId, $targetDocument['sequence_key'], $targetDocument['default_prefix'] ?: 'DOC');
+        $saleNumber = $this->nextSequenceNumber($companyId, $targetDocument['sequence_key'], $targetDocument['default_prefix'] ?: 'DOC', $sourceSale['branch_id'] ?? null);
         $sourceItems = $this->saleItems($sourceSale['id']);
         $sourceDocument = ! empty($sourceSale['document_type_id']) ? (new SalesDocumentTypeModel())->find($sourceSale['document_type_id']) : null;
 
@@ -2286,40 +2300,11 @@ class SalesController extends BaseApiController
         return $saleId;
     }
 
-    private function nextSequenceNumber(string $companyId, string $documentType, string $defaultPrefix): string
+    private function nextSequenceNumber(string $companyId, string $documentType, string $defaultPrefix, ?string $branchId = null): string
     {
-        $db = db_connect();
-        $db->transStart();
-
-        $model = new VoucherSequenceModel();
-
-        $sequence = $model->db->query(
-            "SELECT * FROM voucher_sequences WHERE company_id = ? AND document_type = ? FOR UPDATE",
-            [$companyId, $documentType]
-        )->getRowArray();
-
-        if (!$sequence) {
-            $id = $model->insert([
-                'company_id' => $companyId,
-                'branch_id' => null,
-                'document_type' => $documentType,
-                'prefix' => $defaultPrefix,
-                'current_number' => 1,
-                'active' => 1,
-            ], true);
-
-            $sequence = $model->db->query(
-                "SELECT * FROM voucher_sequences WHERE id = ? FOR UPDATE",
-                [$id]
-            )->getRowArray();
-        }
-
-        $number = (int) ($sequence['current_number'] ?? 1);
-        $formatted = strtoupper(trim((string) ($sequence['prefix'] ?? $defaultPrefix))) . '-' . str_pad((string) $number, 8, '0', STR_PAD_LEFT);
-        $model->update($sequence['id'], ['current_number' => $number + 1]);
-
-        $db->transComplete();
-
-        return $formatted;
+        $user = $this->apiUser();
+        $branchId = $branchId ?? (($user['company_id'] ?? null) === $companyId ? ($user['branch_id'] ?? null) : null);
+        return (new \App\Libraries\VoucherSequenceService())->next($companyId, $documentType, $defaultPrefix, $branchId, false);
     }
+
 }

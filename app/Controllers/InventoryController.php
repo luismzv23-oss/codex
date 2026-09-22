@@ -2,6 +2,8 @@
 
 namespace App\Controllers;
 
+use App\Libraries\InventoryIntegrityService;
+
 use App\Models\BranchModel;
 use App\Models\CompanyModel;
 use App\Models\CompanySystemModel;
@@ -1515,6 +1517,19 @@ class InventoryController extends BaseController
     public function storeMovement()
     {
         $context = $this->inventoryContext('manage');
+        if ($context instanceof RedirectResponse) { return $context; }
+        try {
+            return (new InventoryIntegrityService())->transaction($context['company']['id'], function () {
+                return $this->storeMovementLocked();
+            });
+        } catch (\Throwable $e) {
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
+        }
+    }
+
+    private function storeMovementLocked()
+    {
+        $context = $this->inventoryContext('manage');
 
         if ($context instanceof RedirectResponse) {
             return $context;
@@ -1529,7 +1544,7 @@ class InventoryController extends BaseController
         $destinationWarehouseId = trim((string) $this->request->getPost('destination_warehouse_id')) ?: null;
         $destinationLocationId = trim((string) $this->request->getPost('destination_location_id')) ?: null;
         $adjustmentMode = trim((string) $this->request->getPost('adjustment_mode')) ?: null;
-        
+
         $unitCostRaw = $this->request->getPost('unit_cost');
         $unitCost = $unitCostRaw !== null && $unitCostRaw !== '' ? (float) str_replace([' ', ','], ['', '.'], (string) $unitCostRaw) : null;
         $totalCost = $unitCost !== null ? round($unitCost * $quantity, 2) : null;
@@ -1607,6 +1622,14 @@ class InventoryController extends BaseController
             return redirect()->back()->withInput()->with('error', 'El ajuste requiere deposito y modo de ajuste.');
         }
 
+        $integrity = new InventoryIntegrityService();
+        $integrity->validatePlace($companyId, $sourceWarehouseId, $sourceLocationId);
+        $integrity->validatePlace($companyId, $destinationWarehouseId, $destinationLocationId);
+        $integrity->validateTrace($companyId, $productId, array_merge((array) $this->request->getPost(), [
+            'movement_type' => $movementType, 'adjustment_mode' => $adjustmentMode, 'quantity' => $quantity,
+            'source_warehouse_id' => $sourceWarehouseId, 'source_location_id' => $sourceLocationId,
+        ]));
+
         $settings = $this->inventorySettings($companyId);
         $allowNegative = match ($movementType) {
             'transferencia' => $this->allowsNegativeFor('transfer', $settings),
@@ -1616,7 +1639,7 @@ class InventoryController extends BaseController
 
         try {
             $db = db_connect();
-            $db->transStart();
+
 
             if ($movementType === 'ingreso') {
                 $this->applyStockDelta($companyId, $productId, $destinationWarehouseId, $quantity, $destinationLocationId);
@@ -1624,7 +1647,7 @@ class InventoryController extends BaseController
 
             if ($movementType === 'egreso') {
                 if (! $this->canWithdraw($companyId, $productId, $sourceWarehouseId, $quantity, $allowNegative, $sourceLocationId)) {
-                    $db->transRollback();
+                    throw new \RuntimeException('La operacion no pudo completarse; no se modifico el stock.');
 
                     return redirect()->back()->withInput()->with('error', 'No hay stock suficiente en el deposito origen.');
                 }
@@ -1634,7 +1657,7 @@ class InventoryController extends BaseController
 
             if ($movementType === 'transferencia') {
                 if (! $this->canWithdraw($companyId, $productId, $sourceWarehouseId, $quantity, $allowNegative, $sourceLocationId)) {
-                    $db->transRollback();
+                    throw new \RuntimeException('La operacion no pudo completarse; no se modifico el stock.');
 
                     return redirect()->back()->withInput()->with('error', 'No hay stock suficiente en el deposito origen para transferir.');
                 }
@@ -1645,7 +1668,7 @@ class InventoryController extends BaseController
 
             if ($movementType === 'ajuste') {
                 if ($adjustmentMode === 'decrease' && ! $this->canWithdraw($companyId, $productId, $sourceWarehouseId, $quantity, $allowNegative, $sourceLocationId)) {
-                    $db->transRollback();
+                    throw new \RuntimeException('La operacion no pudo completarse; no se modifico el stock.');
 
                     return redirect()->back()->withInput()->with('error', 'No hay stock suficiente para ajustar a la baja.');
                 }
@@ -1691,7 +1714,7 @@ class InventoryController extends BaseController
                 'occurred_at' => $occurredAt,
             ]);
 
-            $db->transComplete();
+
 
             if (! $db->transStatus()) {
                 $dbErr = $db->error();
@@ -1699,11 +1722,7 @@ class InventoryController extends BaseController
                 return redirect()->back()->withInput()->with('error', $errDetail);
             }
         } catch (\Throwable $e) {
-            if (isset($db)) {
-                $db->transRollback();
-            }
-
-            return redirect()->back()->withInput()->with('error', $e->getMessage());
+            throw $e;
         }
 
         $productRow = null;
@@ -1751,6 +1770,19 @@ class InventoryController extends BaseController
     public function storeReservation()
     {
         $context = $this->inventoryContext('manage');
+        if ($context instanceof RedirectResponse) { return $context; }
+        try {
+            return (new InventoryIntegrityService())->transaction($context['company']['id'], function () {
+                return $this->storeReservationLocked();
+            });
+        } catch (\Throwable $e) {
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
+        }
+    }
+
+    private function storeReservationLocked()
+    {
+        $context = $this->inventoryContext('manage');
 
         if ($context instanceof RedirectResponse) {
             return $context;
@@ -1774,7 +1806,7 @@ class InventoryController extends BaseController
         }
 
         $db = db_connect();
-        $db->transStart();
+
 
         $this->applyReservedDelta($companyId, $productId, $warehouseId, $quantity);
 
@@ -1790,7 +1822,7 @@ class InventoryController extends BaseController
             'reserved_at' => date('Y-m-d H:i:s'),
         ]);
 
-        $db->transComplete();
+
 
         if (! $db->transStatus()) {
             return redirect()->back()->withInput()->with('error', 'No se pudo registrar la reserva.');
@@ -1800,6 +1832,19 @@ class InventoryController extends BaseController
     }
 
     public function releaseReservation(string $id)
+    {
+        $context = $this->inventoryContext('manage');
+        if ($context instanceof RedirectResponse) { return $context; }
+        try {
+            return (new InventoryIntegrityService())->transaction($context['company']['id'], function () use ($id) {
+                return $this->releaseReservationLocked($id);
+            });
+        } catch (\Throwable $e) {
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
+        }
+    }
+
+    private function releaseReservationLocked(string $id)
     {
         $context = $this->inventoryContext('manage');
 
@@ -1814,7 +1859,7 @@ class InventoryController extends BaseController
         }
 
         $db = db_connect();
-        $db->transStart();
+
 
         $this->applyReservedDelta(
             $context['company']['id'],
@@ -1829,7 +1874,7 @@ class InventoryController extends BaseController
             'released_at' => date('Y-m-d H:i:s'),
         ]);
 
-        $db->transComplete();
+
 
         if (! $db->transStatus()) {
             if ($this->isAjaxRequest()) {
@@ -1877,6 +1922,19 @@ class InventoryController extends BaseController
     public function storeAssembly()
     {
         $context = $this->inventoryContext('manage');
+        if ($context instanceof RedirectResponse) { return $context; }
+        try {
+            return (new InventoryIntegrityService())->transaction($context['company']['id'], function () {
+                return $this->storeAssemblyLocked();
+            });
+        } catch (\Throwable $e) {
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
+        }
+    }
+
+    private function storeAssemblyLocked()
+    {
+        $context = $this->inventoryContext('manage');
         if ($context instanceof RedirectResponse) {
             return $context;
         }
@@ -1902,14 +1960,14 @@ class InventoryController extends BaseController
         $assemblyNumber = 'ENS-' . date('YmdHis');
         try {
             $db = db_connect();
-            $db->transStart();
+
 
             $totalCost = 0.0;
             foreach ($components as $component) {
                 $componentQty = (float) ($component['quantity'] ?? 0) * $quantity;
                 if ($assemblyType === 'assembly') {
                     if (! $this->canWithdraw($companyId, (string) $component['component_product_id'], $warehouseId, $componentQty, $allowNegative, null)) {
-                        $db->transRollback();
+                        throw new \RuntimeException('La operacion no pudo completarse; no se modifico el stock.');
                         return redirect()->back()->withInput()->with('error', 'No hay stock suficiente para consumir los componentes del ensamble.');
                     }
 
@@ -1976,7 +2034,7 @@ class InventoryController extends BaseController
                 $this->createCostLayer($companyId, $productId, $warehouseId, null, $productMovementId, 'assembly_output', $quantity, $unitCost, $totalCost, $issuedAt);
             } else {
                 if (! $this->canWithdraw($companyId, $productId, $warehouseId, $quantity, $allowNegative, null)) {
-                    $db->transRollback();
+                    throw new \RuntimeException('La operacion no pudo completarse; no se modifico el stock.');
                     return redirect()->back()->withInput()->with('error', 'No hay stock suficiente del producto principal para desensamblar.');
                 }
                 $this->applyStockDelta($companyId, $productId, $warehouseId, $quantity * -1);
@@ -2026,15 +2084,12 @@ class InventoryController extends BaseController
                 ]);
             }
 
-            $db->transComplete();
+
             if (! $db->transStatus()) {
                 return redirect()->back()->withInput()->with('error', 'No se pudo registrar el ensamble.');
             }
         } catch (\Exception $e) {
-            if (isset($db)) {
-                $db->transRollback();
-            }
-            return redirect()->back()->withInput()->with('error', $e->getMessage());
+            throw $e;
         }
 
         return $this->popupOrRedirect($this->inventoryRoute('inventario/configuracion', $companyId), 'Proceso de ensamble registrado correctamente.');
@@ -2059,6 +2114,19 @@ class InventoryController extends BaseController
     public function storeClosure()
     {
         $context = $this->inventoryContext('manage');
+        if ($context instanceof RedirectResponse) { return $context; }
+        try {
+            return (new InventoryIntegrityService())->transaction($context['company']['id'], function () {
+                return $this->storeClosureLocked();
+            });
+        } catch (\Throwable $e) {
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
+        }
+    }
+
+    private function storeClosureLocked()
+    {
+        $context = $this->inventoryContext('manage');
         if ($context instanceof RedirectResponse) {
             return $context;
         }
@@ -2076,6 +2144,10 @@ class InventoryController extends BaseController
             return redirect()->back()->withInput()->with('error', 'El deposito seleccionado no existe.');
         }
 
+        if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $startDate) || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $endDate)
+            || strtotime($startDate) === false || strtotime($endDate) === false || $startDate > $endDate) {
+            throw new \RuntimeException('El intervalo de fechas del cierre es invalido.');
+        }
         $model = new InventoryPeriodClosureModel();
         $duplicate = $model->where('company_id', $companyId)->where('period_code', $periodCode);
         $duplicate = $warehouseId ? $duplicate->where('warehouse_id', $warehouseId) : $duplicate->where('warehouse_id', null);
@@ -2117,6 +2189,19 @@ class InventoryController extends BaseController
     public function storeRevaluation()
     {
         $context = $this->inventoryContext('manage');
+        if ($context instanceof RedirectResponse) { return $context; }
+        try {
+            return (new InventoryIntegrityService())->transaction($context['company']['id'], function () {
+                return $this->storeRevaluationLocked();
+            });
+        } catch (\Throwable $e) {
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
+        }
+    }
+
+    private function storeRevaluationLocked()
+    {
+        $context = $this->inventoryContext('manage');
         if ($context instanceof RedirectResponse) {
             return $context;
         }
@@ -2137,13 +2222,7 @@ class InventoryController extends BaseController
             return redirect()->back()->withInput()->with('error', 'No se permiten registrar revalorizaciones de stock en un periodo cerrado.');
         }
 
-        $stockSnapshot = (new InventoryStockLevelModel())
-            ->where('company_id', $companyId)
-            ->where('product_id', $productId)
-            ->where('warehouse_id', $warehouseId)
-            ->first();
-
-        $quantitySnapshot = (float) ($stockSnapshot['quantity'] ?? 0);
+        $quantitySnapshot = (new InventoryIntegrityService())->quantity($companyId, $productId, $warehouseId);
         if ($quantitySnapshot <= 0) {
             return redirect()->back()->withInput()->with('error', 'No hay stock disponible para revalorizar en ese deposito.');
         }
@@ -2169,7 +2248,7 @@ class InventoryController extends BaseController
 
         $db = db_connect();
         try {
-            $db->transStart();
+
 
             foreach ($layers as $layer) {
                 $remaining = (float) ($layer['remaining_quantity'] ?? 0);
@@ -2193,26 +2272,23 @@ class InventoryController extends BaseController
             ], true);
 
             // Sync accounting
-            $syncRes = (new AccountingService())->syncRevaluation($companyId, $revalId, $this->currentUser()['id']);
+            $syncRes = service('accounting')->syncRevaluation($companyId, $revalId, $this->currentUser()['id']);
             if (!$syncRes['ok']) {
                 throw new \RuntimeException("Error al sincronizar contabilidad: " . ($syncRes['error'] ?? 'desconocido'));
             }
 
-            $db->transComplete();
+
             if (! $db->transStatus()) {
                 return redirect()->back()->withInput()->with('error', 'No se pudo registrar la revalorizacion.');
             }
         } catch (\Exception $e) {
-            if (isset($db)) {
-                $db->transRollback();
-            }
-            return redirect()->back()->withInput()->with('error', $e->getMessage());
+            throw $e;
         }
 
         return $this->popupOrRedirect($this->inventoryRoute('inventario/configuracion', $companyId), 'Revalorizacion registrada correctamente.');
     }
 
-    private function inventoryContext(string $requiredAccess = 'view')
+    protected function inventoryContext(string $requiredAccess = 'view')
     {
         $companyId = $this->resolveInventoryCompanyId();
 
@@ -2911,22 +2987,9 @@ class InventoryController extends BaseController
 
     private function canWithdraw(string $companyId, string $productId, ?string $warehouseId, float $quantity, bool $allowNegative, ?string $locationId = null): bool
     {
-        if ($allowNegative || $warehouseId === null) {
-            return true;
-        }
-
-        $builder = (new InventoryStockLevelModel())
-            ->where('company_id', $companyId)
-            ->where('product_id', $productId)
-            ->where('warehouse_id', $warehouseId);
-
-        if ($locationId !== null) {
-            $builder->where('location_id', $locationId);
-        }
-
-        $stockLevel = $builder->first();
-
-        return (((float) ($stockLevel['quantity'] ?? 0)) - ((float) ($stockLevel['reserved_quantity'] ?? 0))) >= $quantity;
+        if ($warehouseId === null) { return false; }
+        $available = (new InventoryIntegrityService())->available($companyId, $productId, $warehouseId, $locationId);
+        return $allowNegative || $available >= $quantity;
     }
 
     private function allowsNegativeFor(string $operation, array $settings): bool
@@ -2945,88 +3008,21 @@ class InventoryController extends BaseController
 
     private function canReserve(string $companyId, string $productId, ?string $warehouseId, float $quantity): bool
     {
-        if ($warehouseId === null) {
-            return false;
-        }
-
-        $stockLevel = (new InventoryStockLevelModel())
-            ->where('company_id', $companyId)
-            ->where('product_id', $productId)
-            ->where('warehouse_id', $warehouseId)
-            ->first();
-
-        return (((float) ($stockLevel['quantity'] ?? 0)) - ((float) ($stockLevel['reserved_quantity'] ?? 0))) >= $quantity;
+        return $warehouseId !== null && (new InventoryIntegrityService())->available($companyId, $productId, $warehouseId) >= $quantity;
     }
 
     private function applyStockDelta(string $companyId, string $productId, ?string $warehouseId, float $delta, ?string $locationId = null): void
     {
-        if ($warehouseId === null) {
-            return;
+        if ($warehouseId !== null) {
+            (new InventoryIntegrityService())->changeStock($companyId, $productId, $warehouseId, $delta, $locationId);
         }
-
-        $stockLevelModel = new InventoryStockLevelModel();
-        $product = (new InventoryProductModel())->find($productId);
-
-        $existing = $stockLevelModel
-            ->where('company_id', $companyId)
-            ->where('product_id', $productId)
-            ->where('warehouse_id', $warehouseId)
-            ->first();
-
-        if ($existing) {
-            $updateData = [
-                'quantity' => ((float) $existing['quantity']) + $delta,
-            ];
-            if (! empty($locationId)) {
-                $updateData['location_id'] = $locationId;
-            }
-            $stockLevelModel->update($existing['id'], $updateData);
-
-            return;
-        }
-
-        $stockLevelModel->insert([
-            'company_id' => $companyId,
-            'product_id' => $productId,
-            'warehouse_id' => $warehouseId,
-            'location_id' => ! empty($locationId) ? $locationId : null,
-            'quantity' => $delta,
-            'reserved_quantity' => 0,
-            'min_stock' => $product['min_stock'] ?? 0,
-        ]);
     }
 
     private function applyReservedDelta(string $companyId, string $productId, ?string $warehouseId, float $delta): void
     {
-        if ($warehouseId === null) {
-            return;
+        if ($warehouseId !== null) {
+            (new InventoryIntegrityService())->changeReserved($companyId, $productId, $warehouseId, $delta);
         }
-
-        $stockLevelModel = new InventoryStockLevelModel();
-        $product = (new InventoryProductModel())->find($productId);
-        $existing = $stockLevelModel
-            ->where('company_id', $companyId)
-            ->where('product_id', $productId)
-            ->where('warehouse_id', $warehouseId)
-            ->first();
-
-        if ($existing) {
-            $next = max(0, ((float) $existing['reserved_quantity']) + $delta);
-            $stockLevelModel->update($existing['id'], [
-                'reserved_quantity' => $next,
-            ]);
-
-            return;
-        }
-
-        $stockLevelModel->insert([
-            'company_id' => $companyId,
-            'product_id' => $productId,
-            'warehouse_id' => $warehouseId,
-            'quantity' => 0,
-            'reserved_quantity' => max(0, $delta),
-            'min_stock' => $product['min_stock'] ?? 0,
-        ]);
     }
 
     private function requestKitItems(string $companyId, string $productId): array
@@ -3072,364 +3068,19 @@ class InventoryController extends BaseController
 
     private function syncAdvancedInventoryArtifacts(string $companyId, string $productId, string $movementId, array $payload): void
     {
-        $movementType = (string) ($payload['movement_type'] ?? '');
-        $adjustmentMode = (string) ($payload['adjustment_mode'] ?? '');
-        $quantity = (float) ($payload['quantity'] ?? 0);
-        $unitCost = (float) ($payload['unit_cost'] ?? 0);
-        $totalCost = (float) ($payload['total_cost'] ?? ($unitCost * $quantity));
-        $occurredAt = (string) ($payload['occurred_at'] ?? date('Y-m-d H:i:s'));
-        $lotNumber = trim((string) ($payload['lot_number'] ?? ''));
-        $serialNumber = trim((string) ($payload['serial_number'] ?? ''));
-        $expirationDate = trim((string) ($payload['expiration_date'] ?? '')) ?: null;
-
-        $direction = 0;
-        $warehouseId = null;
-        $locationId = null;
-
-        if ($movementType === 'ingreso') {
-            $direction = 1;
-            $warehouseId = $payload['destination_warehouse_id'] ?? null;
-            $locationId = $payload['destination_location_id'] ?? null;
-        } elseif ($movementType === 'egreso') {
-            $direction = -1;
-            $warehouseId = $payload['source_warehouse_id'] ?? null;
-            $locationId = $payload['source_location_id'] ?? null;
-        } elseif ($movementType === 'transferencia') {
-            $sourceWarehouseId = (string) ($payload['source_warehouse_id'] ?? '');
-            $sourceLocationId = $payload['source_location_id'] ?? null;
-            $destinationWarehouseId = (string) ($payload['destination_warehouse_id'] ?? '');
-            $destinationLocationId = $payload['destination_location_id'] ?? null;
-
-            $consumption = $this->consumeCostLayers(
-                $companyId,
-                $productId,
-                $sourceWarehouseId,
-                $sourceLocationId,
-                $quantity,
-                $occurredAt,
-                $movementId,
-                'transfer_out'
-            );
-
-            $unitCost = $consumption['unit_cost'];
-            $totalCost = $consumption['total_cost'];
-
-            (new InventoryMovementModel())->update($movementId, [
-                'unit_cost' => $unitCost,
-                'total_cost' => $totalCost,
-            ]);
-
-            $this->syncLotBalance($companyId, $productId, $sourceWarehouseId, $sourceLocationId, $lotNumber, $expirationDate, $quantity * -1);
-            $this->syncLotBalance($companyId, $productId, $destinationWarehouseId, $destinationLocationId, $lotNumber, $expirationDate, $quantity);
-            $this->syncSerialRecord($companyId, $productId, $serialNumber, $destinationWarehouseId, $destinationLocationId, $lotNumber, $expirationDate, 'available', $movementId);
-            if ($unitCost > 0) {
-                $this->createCostLayer($companyId, $productId, $destinationWarehouseId, $destinationLocationId, $movementId, 'transfer_in', $quantity, $unitCost, $totalCost, $occurredAt);
-            }
-            return;
-        } elseif ($movementType === 'ajuste') {
-            $direction = $adjustmentMode === 'increase' ? 1 : -1;
-            $warehouseId = $payload['source_warehouse_id'] ?? null;
-            $locationId = $payload['source_location_id'] ?? null;
-        }
-
-        if ($lotNumber !== '' && $warehouseId) {
-            $this->syncLotBalance($companyId, $productId, (string) $warehouseId, $locationId, $lotNumber, $expirationDate, $quantity * $direction);
-        }
-
-        if ($serialNumber !== '') {
-            $this->syncSerialRecord(
-                $companyId,
-                $productId,
-                $serialNumber,
-                $warehouseId ? (string) $warehouseId : null,
-                $locationId,
-                $lotNumber !== '' ? $lotNumber : null,
-                $expirationDate,
-                $direction >= 0 ? 'available' : 'consumed',
-                $movementId
-            );
-        }
-
-        if ($direction > 0 && $unitCost > 0 && $warehouseId) {
-            $this->createCostLayer($companyId, $productId, (string) $warehouseId, $locationId, $movementId, 'entry', $quantity, $unitCost, $totalCost, $occurredAt);
-            return;
-        }
-
-        if ($direction < 0 && $warehouseId) {
-            $layerType = $movementType === 'egreso'
-                ? 'consumption'
-                : ($movementType === 'ajuste' ? 'adjustment_out' : 'consumption');
-
-            $consumption = $this->consumeCostLayers(
-                $companyId,
-                $productId,
-                (string) $warehouseId,
-                $locationId,
-                $quantity,
-                $occurredAt,
-                $movementId,
-                $layerType
-            );
-
-            (new InventoryMovementModel())->update($movementId, [
-                'unit_cost' => $consumption['unit_cost'],
-                'total_cost' => $consumption['total_cost'],
-            ]);
-        }
+        (new \App\Libraries\InventoryArtifactService())->sync($companyId, $productId, $movementId, $payload);
     }
 
-    private function syncLotBalance(string $companyId, string $productId, string $warehouseId, ?string $locationId, string $lotNumber, ?string $expirationDate, float $delta): void
-    {
-        if ($lotNumber === '' || $warehouseId === '') {
-            return;
-        }
 
-        $model = new InventoryLotModel();
-        $lot = $model
-            ->where('company_id', $companyId)
-            ->where('product_id', $productId)
-            ->where('warehouse_id', $warehouseId)
-            ->where('location_id', $locationId)
-            ->where('lot_number', $lotNumber)
-            ->first();
-
-        if ($lot) {
-            $balance = max(0, ((float) $lot['quantity_balance']) + $delta);
-            $model->update($lot['id'], [
-                'expiration_date' => $expirationDate ?: $lot['expiration_date'],
-                'quantity_balance' => $balance,
-                'status' => $balance > 0 ? 'active' : 'closed',
-            ]);
-            return;
-        }
-
-        if ($delta <= 0) {
-            return;
-        }
-
-        $model->insert([
-            'company_id' => $companyId,
-            'product_id' => $productId,
-            'warehouse_id' => $warehouseId,
-            'location_id' => $locationId,
-            'lot_number' => $lotNumber,
-            'expiration_date' => $expirationDate,
-            'quantity_balance' => $delta,
-            'status' => 'active',
-        ]);
-    }
-
-    private function syncSerialRecord(string $companyId, string $productId, string $serialNumber, ?string $warehouseId, ?string $locationId, ?string $lotNumber, ?string $expirationDate, string $status, string $movementId): void
-    {
-        if ($serialNumber === '') {
-            return;
-        }
-
-        $model = new InventorySerialModel();
-        $serial = $model
-            ->where('company_id', $companyId)
-            ->where('product_id', $productId)
-            ->where('serial_number', $serialNumber)
-            ->first();
-
-        $payload = [
-            'warehouse_id' => $warehouseId,
-            'location_id' => $locationId,
-            'lot_number' => $lotNumber,
-            'expiration_date' => $expirationDate,
-            'status' => $status,
-            'last_movement_id' => $movementId,
-        ];
-
-        if ($serial) {
-            $model->update($serial['id'], $payload);
-            return;
-        }
-
-        $model->insert(array_merge($payload, [
-            'company_id' => $companyId,
-            'product_id' => $productId,
-            'serial_number' => $serialNumber,
-        ]));
-    }
 
     private function createCostLayer(string $companyId, string $productId, string $warehouseId, ?string $locationId, string $movementId, string $layerType, float $quantity, float $unitCost, float $totalCost, string $occurredAt): void
     {
-        (new InventoryCostLayerModel())->insert([
-            'company_id' => $companyId,
-            'product_id' => $productId,
-            'warehouse_id' => $warehouseId,
-            'location_id' => $locationId,
-            'movement_id' => $movementId,
-            'layer_type' => $layerType,
-            'quantity' => $quantity,
-            'remaining_quantity' => $quantity,
-            'unit_cost' => $unitCost,
-            'total_cost' => $totalCost,
-            'occurred_at' => $occurredAt,
-        ]);
-    }
-
-    private function valuationMethod(string $companyId): string
-    {
-        $method = strtolower((string) ($this->inventorySettings($companyId)['valuation_method'] ?? 'weighted_average'));
-
-        return in_array($method, ['fifo', 'lifo', 'weighted_average'], true) ? $method : 'weighted_average';
-    }
-
-    private function fallbackUnitCost(string $companyId, string $productId, string $warehouseId, ?string $locationId): float
-    {
-        $snapshot = $this->openLayerSnapshot($companyId, $productId, $warehouseId, $locationId);
-
-        if ($snapshot['quantity'] > 0 && $snapshot['value'] > 0) {
-            return $snapshot['value'] / $snapshot['quantity'];
-        }
-
-        $product = (new InventoryProductModel())->find($productId);
-
-        return (float) ($product['cost_price'] ?? 0);
-    }
-
-    private function openLayerSnapshot(string $companyId, string $productId, string $warehouseId, ?string $locationId): array
-    {
-        $builder = db_connect()->table('inventory_cost_layers')
-            ->select('COALESCE(SUM(remaining_quantity), 0) AS quantity, COALESCE(SUM(total_cost), 0) AS value', false)
-            ->where('company_id', $companyId)
-            ->where('product_id', $productId)
-            ->where('warehouse_id', $warehouseId)
-            ->where('remaining_quantity >', 0);
-
-        if ($locationId === null) {
-            $builder->where('location_id', null);
-        } else {
-            $builder->where('location_id', $locationId);
-        }
-
-        $row = $builder->get()->getRowArray() ?? [];
-
-        return [
-            'quantity' => (float) ($row['quantity'] ?? 0),
-            'value' => (float) ($row['value'] ?? 0),
-        ];
+        (new \App\Libraries\InventoryArtifactService())->createCostLayer($companyId, $productId, $warehouseId, $locationId, $movementId, $layerType, $quantity, $unitCost, $totalCost, $occurredAt);
     }
 
     private function consumeCostLayers(string $companyId, string $productId, string $warehouseId, ?string $locationId, float $quantity, string $occurredAt, string $movementId, string $layerType): array
     {
-        $model = new InventoryCostLayerModel();
-        $method = $this->valuationMethod($companyId);
-        $builder = $model
-            ->where('company_id', $companyId)
-            ->where('product_id', $productId)
-            ->where('warehouse_id', $warehouseId)
-            ->where('remaining_quantity >', 0);
-
-        if ($locationId === null) {
-            $builder->where('location_id', null);
-        } else {
-            $builder->where('location_id', $locationId);
-        }
-
-        if ($method === 'lifo') {
-            $builder->orderBy('occurred_at', 'DESC')->orderBy('created_at', 'DESC');
-        } else {
-            $builder->orderBy('occurred_at', 'ASC')->orderBy('created_at', 'ASC');
-        }
-
-        $layers = $builder->findAll();
-        $remaining = $quantity;
-        $totalCost = 0.0;
-
-        if ($method === 'weighted_average' && $layers !== []) {
-            $totalQty = 0.0;
-            foreach ($layers as $layer) {
-                $totalQty += (float) ($layer['remaining_quantity'] ?? 0);
-            }
-
-            if ($totalQty > 0) {
-                $consumed = 0.0;
-                $layerCount = count($layers);
-
-                foreach ($layers as $index => $layer) {
-                    $layerRemaining = (float) ($layer['remaining_quantity'] ?? 0);
-                    if ($layerRemaining <= 0) {
-                        continue;
-                    }
-
-                    if ($index === $layerCount - 1) {
-                        $consumeQty = max(0, min($remaining, $layerRemaining));
-                    } else {
-                        $ratioQty = round($quantity * ($layerRemaining / $totalQty), 6);
-                        $consumeQty = max(0, min($ratioQty, $layerRemaining, $remaining));
-                    }
-
-                    if ($consumeQty <= 0) {
-                        continue;
-                    }
-
-                    $remaining -= $consumeQty;
-                    $consumed += $consumeQty;
-                    $totalCost += $consumeQty * (float) ($layer['unit_cost'] ?? 0);
-                    $newRemaining = max(0, $layerRemaining - $consumeQty);
-
-                    $model->update($layer['id'], [
-                        'remaining_quantity' => $newRemaining,
-                        'total_cost' => $newRemaining * (float) ($layer['unit_cost'] ?? 0),
-                    ]);
-                }
-            }
-        } else {
-            foreach ($layers as $layer) {
-                if ($remaining <= 0) {
-                    break;
-                }
-
-                $layerRemaining = (float) ($layer['remaining_quantity'] ?? 0);
-                if ($layerRemaining <= 0) {
-                    continue;
-                }
-
-                $consumeQty = min($remaining, $layerRemaining);
-                $remaining -= $consumeQty;
-                $totalCost += $consumeQty * (float) ($layer['unit_cost'] ?? 0);
-                $newRemaining = max(0, $layerRemaining - $consumeQty);
-
-                $model->update($layer['id'], [
-                    'remaining_quantity' => $newRemaining,
-                    'total_cost' => $newRemaining * (float) ($layer['unit_cost'] ?? 0),
-                ]);
-            }
-        }
-
-        $coveredQuantity = max(0.0, $quantity - $remaining);
-        $fallbackUnitCost = $this->fallbackUnitCost($companyId, $productId, $warehouseId, $locationId);
-
-        if ($remaining > 0) {
-            $totalCost += $remaining * $fallbackUnitCost;
-        }
-
-        $unitCost = $quantity > 0 ? $totalCost / $quantity : 0.0;
-
-        $this->createCostLayer(
-            $companyId,
-            $productId,
-            $warehouseId,
-            $locationId,
-            $movementId,
-            $layerType,
-            $quantity,
-            $unitCost,
-            $totalCost,
-            $occurredAt
-        );
-
-        (new InventoryCostLayerModel())->where('movement_id', $movementId)->where('layer_type', $layerType)->set(['remaining_quantity' => 0])->update();
-
-        return [
-            'covered_quantity' => $coveredQuantity,
-            'fallback_quantity' => $remaining,
-            'unit_cost' => $unitCost,
-            'total_cost' => $totalCost,
-        ];
+        return (new \App\Libraries\InventoryArtifactService())->consumeCostLayers($companyId, $productId, $warehouseId, $locationId, $quantity, $occurredAt, $movementId, $layerType);
     }
 
     private function syncProductMinimums(string $companyId, string $productId, float $minimum): void

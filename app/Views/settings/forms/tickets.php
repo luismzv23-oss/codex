@@ -93,7 +93,7 @@ $disabledAttr = !$isAdminOrSuperadmin ? 'disabled' : '';
                                             <label class="form-label small text-secondary mb-1">Cabecera Izquierda (Superior Izq.)</label>
                                             <input type="text" name="ticket_pos_custom_text_top_left" id="pos_custom_text_top_left" class="form-control form-control-sm ticket-input" value="<?= esc($posSettings['custom_text_top_left'] ?? '') ?>" placeholder="Ej: IVA Responsable Inscripto" <?= $disabledAttr ?>>
                                             <div class="form-check form-switch mt-1">
-                                                <input class="form-check-input ticket-input" type="checkbox" name="ticket_pos_bold_top_left" id="pos_bold_top_left" value="1" <?= (int) ($posSettings['bold_top_left'] ?? 1) === 1 ? 'checked' : '' ?> <?= $disabledAttr ?>>
+                                                <input type="hidden" name="ticket_pos_bold_top_left" value="0" <?= $disabledAttr ?>><input class="form-check-input ticket-input" type="checkbox" name="ticket_pos_bold_top_left" id="pos_bold_top_left" value="1" <?= (int) ($posSettings['bold_top_left'] ?? 1) === 1 ? 'checked' : '' ?> <?= $disabledAttr ?>>
                                                 <label class="form-check-label small text-secondary" for="pos_bold_top_left">Texto en negrita</label>
                                             </div>
                                         </div>
@@ -101,7 +101,7 @@ $disabledAttr = !$isAdminOrSuperadmin ? 'disabled' : '';
                                             <label class="form-label small text-secondary mb-1">Cabecera Derecha (Superior Der.)</label>
                                             <input type="text" name="ticket_pos_custom_text_top_right" id="pos_custom_text_top_right" class="form-control form-control-sm ticket-input" value="<?= esc($posSettings['custom_text_top_right'] ?? '') ?>" placeholder="Ej: CUIT: 30-11223344-5" <?= $disabledAttr ?>>
                                             <div class="form-check form-switch mt-1">
-                                                <input class="form-check-input ticket-input" type="checkbox" name="ticket_pos_bold_top_right" id="pos_bold_top_right" value="1" <?= (int) ($posSettings['bold_top_right'] ?? 0) === 1 ? 'checked' : '' ?> <?= $disabledAttr ?>>
+                                                <input type="hidden" name="ticket_pos_bold_top_right" value="0" <?= $disabledAttr ?>><input class="form-check-input ticket-input" type="checkbox" name="ticket_pos_bold_top_right" id="pos_bold_top_right" value="1" <?= (int) ($posSettings['bold_top_right'] ?? 0) === 1 ? 'checked' : '' ?> <?= $disabledAttr ?>>
                                                 <label class="form-check-label small text-secondary" for="pos_bold_top_right">Texto en negrita</label>
                                             </div>
                                         </div>
@@ -121,31 +121,31 @@ $disabledAttr = !$isAdminOrSuperadmin ? 'disabled' : '';
                                     <div class="row g-2 mt-1">
                                         <div class="col-md-6">
                                             <div class="form-check form-switch">
-                                                <input class="form-check-input ticket-input" type="checkbox" name="ticket_pos_show_sku" id="pos_show_sku" value="1" <?= (int) ($posSettings['show_sku'] ?? 1) === 1 ? 'checked' : '' ?>>
+                                                <input type="hidden" name="ticket_pos_show_sku" value="0" ><input class="form-check-input ticket-input" type="checkbox" name="ticket_pos_show_sku" id="pos_show_sku" value="1" <?= (int) ($posSettings['show_sku'] ?? 1) === 1 ? 'checked' : '' ?>>
                                                 <label class="form-check-label" for="pos_show_sku">Mostrar SKU del producto</label>
                                             </div>
                                         </div>
                                         <div class="col-md-6">
                                             <div class="form-check form-switch">
-                                                <input class="form-check-input ticket-input" type="checkbox" name="ticket_pos_show_brand" id="pos_show_brand" value="1" <?= (int) ($posSettings['show_brand'] ?? 1) === 1 ? 'checked' : '' ?>>
+                                                <input type="hidden" name="ticket_pos_show_brand" value="0" ><input class="form-check-input ticket-input" type="checkbox" name="ticket_pos_show_brand" id="pos_show_brand" value="1" <?= (int) ($posSettings['show_brand'] ?? 1) === 1 ? 'checked' : '' ?>>
                                                 <label class="form-check-label" for="pos_show_brand">Mostrar Marca del producto</label>
                                             </div>
                                         </div>
                                         <div class="col-md-6">
                                             <div class="form-check form-switch">
-                                                <input class="form-check-input ticket-input" type="checkbox" name="ticket_pos_show_item_breakdown" id="pos_show_item_breakdown" value="1" <?= (int) ($posSettings['show_item_breakdown'] ?? 1) === 1 ? 'checked' : '' ?>>
+                                                <input type="hidden" name="ticket_pos_show_item_breakdown" value="0" ><input class="form-check-input ticket-input" type="checkbox" name="ticket_pos_show_item_breakdown" id="pos_show_item_breakdown" value="1" <?= (int) ($posSettings['show_item_breakdown'] ?? 1) === 1 ? 'checked' : '' ?>>
                                                 <label class="form-check-label" for="pos_show_item_breakdown">Mostrar desglose de cantidades (2 x $100)</label>
                                             </div>
                                         </div>
                                         <div class="col-md-6">
                                             <div class="form-check form-switch">
-                                                <input class="form-check-input ticket-input" type="checkbox" name="ticket_pos_show_customer" id="pos_show_customer" value="1" <?= (int) ($posSettings['show_customer'] ?? 1) === 1 ? 'checked' : '' ?>>
+                                                <input type="hidden" name="ticket_pos_show_customer" value="0" ><input class="form-check-input ticket-input" type="checkbox" name="ticket_pos_show_customer" id="pos_show_customer" value="1" <?= (int) ($posSettings['show_customer'] ?? 1) === 1 ? 'checked' : '' ?>>
                                                 <label class="form-check-label" for="pos_show_customer">Mostrar datos del cliente</label>
                                             </div>
                                         </div>
                                         <div class="col-md-6">
                                             <div class="form-check form-switch">
-                                                <input class="form-check-input ticket-input" type="checkbox" name="ticket_pos_show_user" id="pos_show_user" value="1" <?= (int) ($posSettings['show_user'] ?? 1) === 1 ? 'checked' : '' ?>>
+                                                <input type="hidden" name="ticket_pos_show_user" value="0" ><input class="form-check-input ticket-input" type="checkbox" name="ticket_pos_show_user" id="pos_show_user" value="1" <?= (int) ($posSettings['show_user'] ?? 1) === 1 ? 'checked' : '' ?>>
                                                 <label class="form-check-label" for="pos_show_user">Mostrar cajero/vendedor emisor</label>
                                             </div>
                                         </div>
@@ -205,7 +205,7 @@ $disabledAttr = !$isAdminOrSuperadmin ? 'disabled' : '';
                                             <label class="form-label small text-secondary mb-1">Cabecera Izquierda (Superior Izq.)</label>
                                             <input type="text" name="ticket_kiosk_custom_text_top_left" id="kiosk_custom_text_top_left" class="form-control form-control-sm ticket-input" value="<?= esc($kioskSettings['custom_text_top_left'] ?? '') ?>" placeholder="Ej: IVA Responsable Inscripto" <?= $disabledAttr ?>>
                                             <div class="form-check form-switch mt-1">
-                                                <input class="form-check-input ticket-input" type="checkbox" name="ticket_kiosk_bold_top_left" id="kiosk_bold_top_left" value="1" <?= (int) ($kioskSettings['bold_top_left'] ?? 1) === 1 ? 'checked' : '' ?> <?= $disabledAttr ?>>
+                                                <input type="hidden" name="ticket_kiosk_bold_top_left" value="0" <?= $disabledAttr ?>><input class="form-check-input ticket-input" type="checkbox" name="ticket_kiosk_bold_top_left" id="kiosk_bold_top_left" value="1" <?= (int) ($kioskSettings['bold_top_left'] ?? 1) === 1 ? 'checked' : '' ?> <?= $disabledAttr ?>>
                                                 <label class="form-check-label small text-secondary" for="kiosk_bold_top_left">Texto en negrita</label>
                                             </div>
                                         </div>
@@ -213,7 +213,7 @@ $disabledAttr = !$isAdminOrSuperadmin ? 'disabled' : '';
                                             <label class="form-label small text-secondary mb-1">Cabecera Derecha (Superior Der.)</label>
                                             <input type="text" name="ticket_kiosk_custom_text_top_right" id="kiosk_custom_text_top_right" class="form-control form-control-sm ticket-input" value="<?= esc($kioskSettings['custom_text_top_right'] ?? '') ?>" placeholder="Ej: CUIT: 30-11223344-5" <?= $disabledAttr ?>>
                                             <div class="form-check form-switch mt-1">
-                                                <input class="form-check-input ticket-input" type="checkbox" name="ticket_kiosk_bold_top_right" id="kiosk_bold_top_right" value="1" <?= (int) ($kioskSettings['bold_top_right'] ?? 0) === 1 ? 'checked' : '' ?> <?= $disabledAttr ?>>
+                                                <input type="hidden" name="ticket_kiosk_bold_top_right" value="0" <?= $disabledAttr ?>><input class="form-check-input ticket-input" type="checkbox" name="ticket_kiosk_bold_top_right" id="kiosk_bold_top_right" value="1" <?= (int) ($kioskSettings['bold_top_right'] ?? 0) === 1 ? 'checked' : '' ?> <?= $disabledAttr ?>>
                                                 <label class="form-check-label small text-secondary" for="kiosk_bold_top_right">Texto en negrita</label>
                                             </div>
                                         </div>
@@ -224,31 +224,31 @@ $disabledAttr = !$isAdminOrSuperadmin ? 'disabled' : '';
                                     <div class="row g-2 mt-1">
                                         <div class="col-md-6">
                                             <div class="form-check form-switch">
-                                                <input class="form-check-input ticket-input" type="checkbox" name="ticket_kiosk_show_sku" id="kiosk_show_sku" value="1" <?= (int) ($kioskSettings['show_sku'] ?? 1) === 1 ? 'checked' : '' ?>>
+                                                <input type="hidden" name="ticket_kiosk_show_sku" value="0" ><input class="form-check-input ticket-input" type="checkbox" name="ticket_kiosk_show_sku" id="kiosk_show_sku" value="1" <?= (int) ($kioskSettings['show_sku'] ?? 1) === 1 ? 'checked' : '' ?>>
                                                 <label class="form-check-label" for="kiosk_show_sku">Mostrar SKU del producto</label>
                                             </div>
                                         </div>
                                         <div class="col-md-6">
                                             <div class="form-check form-switch">
-                                                <input class="form-check-input ticket-input" type="checkbox" name="ticket_kiosk_show_brand" id="kiosk_show_brand" value="1" <?= (int) ($kioskSettings['show_brand'] ?? 1) === 1 ? 'checked' : '' ?>>
+                                                <input type="hidden" name="ticket_kiosk_show_brand" value="0" ><input class="form-check-input ticket-input" type="checkbox" name="ticket_kiosk_show_brand" id="kiosk_show_brand" value="1" <?= (int) ($kioskSettings['show_brand'] ?? 1) === 1 ? 'checked' : '' ?>>
                                                 <label class="form-check-label" for="kiosk_show_brand">Mostrar Marca del producto</label>
                                             </div>
                                         </div>
                                         <div class="col-md-6">
                                             <div class="form-check form-switch">
-                                                <input class="form-check-input ticket-input" type="checkbox" name="ticket_kiosk_show_item_breakdown" id="kiosk_show_item_breakdown" value="1" <?= (int) ($kioskSettings['show_item_breakdown'] ?? 1) === 1 ? 'checked' : '' ?>>
+                                                <input type="hidden" name="ticket_kiosk_show_item_breakdown" value="0" ><input class="form-check-input ticket-input" type="checkbox" name="ticket_kiosk_show_item_breakdown" id="kiosk_show_item_breakdown" value="1" <?= (int) ($kioskSettings['show_item_breakdown'] ?? 1) === 1 ? 'checked' : '' ?>>
                                                 <label class="form-check-label" for="kiosk_show_item_breakdown">Mostrar desglose de cantidades (2 x $100)</label>
                                             </div>
                                         </div>
                                         <div class="col-md-6">
                                             <div class="form-check form-switch">
-                                                <input class="form-check-input ticket-input" type="checkbox" name="ticket_kiosk_show_customer" id="kiosk_show_customer" value="1" <?= (int) ($kioskSettings['show_customer'] ?? 1) === 1 ? 'checked' : '' ?>>
+                                                <input type="hidden" name="ticket_kiosk_show_customer" value="0" ><input class="form-check-input ticket-input" type="checkbox" name="ticket_kiosk_show_customer" id="kiosk_show_customer" value="1" <?= (int) ($kioskSettings['show_customer'] ?? 1) === 1 ? 'checked' : '' ?>>
                                                 <label class="form-check-label" for="kiosk_show_customer">Mostrar datos del cliente</label>
                                             </div>
                                         </div>
                                         <div class="col-md-6">
                                             <div class="form-check form-switch">
-                                                <input class="form-check-input ticket-input" type="checkbox" name="ticket_kiosk_show_user" id="kiosk_show_user" value="1" <?= (int) ($kioskSettings['show_user'] ?? 1) === 1 ? 'checked' : '' ?>>
+                                                <input type="hidden" name="ticket_kiosk_show_user" value="0" ><input class="form-check-input ticket-input" type="checkbox" name="ticket_kiosk_show_user" id="kiosk_show_user" value="1" <?= (int) ($kioskSettings['show_user'] ?? 1) === 1 ? 'checked' : '' ?>>
                                                 <label class="form-check-label" for="kiosk_show_user">Mostrar cajero/vendedor emisor</label>
                                             </div>
                                         </div>

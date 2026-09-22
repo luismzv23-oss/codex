@@ -2,6 +2,9 @@
 # Operating Specific Junk Files
 #-------------------------
 
+# Local database backups
+/writable/backups/
+
 # OS X
 .DS_Store
 .AppleDouble

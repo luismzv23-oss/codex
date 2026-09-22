@@ -29,90 +29,67 @@ class SettingsController extends BaseApiController
 
     public function updateCompany()
     {
-        $companyId = $this->resolveCompanyId();
-        $payload = $this->payload();
-        $model = new CompanyModel();
-        $row = $model->find($companyId);
-
-        if (! $row) {
-            return $this->fail('Empresa no disponible.', 404);
+        try {
+            $companyId = (string) $this->resolveCompanyId();
+            $service = new \App\Libraries\SettingsService();
+            $result = $service->company($companyId, $this->payload());
+            return $this->success($result, 200);
+        } catch (\Throwable $e) {
+            log_message('error', 'Configuracion: {message}', ['message' => $e->getMessage()]);
+            return $this->fail($e->getMessage(), 422);
         }
-
-        $model->update($companyId, [
-            'name' => trim((string) ($payload['name'] ?? $row['name'])),
-            'legal_name' => trim((string) ($payload['legal_name'] ?? $row['legal_name'])),
-            'tax_id' => trim((string) ($payload['tax_id'] ?? $row['tax_id'])),
-            'email' => trim((string) ($payload['email'] ?? $row['email'])),
-            'phone' => trim((string) ($payload['phone'] ?? $row['phone'])),
-            'address' => trim((string) ($payload['address'] ?? $row['address'])),
-            'currency_code' => trim((string) ($payload['currency_code'] ?? $row['currency_code'])),
-        ]);
-
-        return $this->success($model->find($companyId));
     }
 
     public function storeBranch()
     {
-        $payload = $this->payload();
-        $model = new BranchModel();
-        $id = $model->insert([
-            'company_id' => $this->resolveCompanyId(),
-            'name' => trim((string) ($payload['name'] ?? '')),
-            'code' => trim((string) ($payload['code'] ?? '')),
-            'address' => trim((string) ($payload['address'] ?? '')),
-            'phone' => trim((string) ($payload['phone'] ?? '')),
-            'active' => array_key_exists('active', $payload) ? (int) $payload['active'] : 1,
-        ], true);
-
-        return $this->success($model->find($id), 201);
+        try {
+            $companyId = (string) $this->resolveCompanyId();
+            $service = new \App\Libraries\SettingsService();
+            $result = $service->branch($companyId, $this->payload());
+            return $this->success($result, 201);
+        } catch (\Throwable $e) {
+            log_message('error', 'Configuracion: {message}', ['message' => $e->getMessage()]);
+            return $this->fail($e->getMessage(), 422);
+        }
     }
 
     public function storeTax()
     {
-        $payload = $this->payload();
-        $model = new TaxModel();
-        $id = $model->insert([
-            'company_id' => $this->resolveCompanyId(),
-            'name' => trim((string) ($payload['name'] ?? '')),
-            'code' => trim((string) ($payload['code'] ?? '')),
-            'rate' => (float) ($payload['rate'] ?? 0),
-            'active' => array_key_exists('active', $payload) ? (int) $payload['active'] : 1,
-        ], true);
-
-        return $this->success($model->find($id), 201);
+        try {
+            $companyId = (string) $this->resolveCompanyId();
+            $service = new \App\Libraries\SettingsService();
+            $result = $service->tax($companyId, $this->payload());
+            return $this->success($result, 201);
+        } catch (\Throwable $e) {
+            log_message('error', 'Configuracion: {message}', ['message' => $e->getMessage()]);
+            return $this->fail($e->getMessage(), 422);
+        }
     }
 
     public function storeCurrency()
     {
-        $payload = $this->payload();
-        $model = new CurrencyModel();
-        $id = $model->insert([
-            'company_id' => $this->resolveCompanyId(),
-            'code' => strtoupper(trim((string) ($payload['code'] ?? ''))),
-            'name' => trim((string) ($payload['name'] ?? '')),
-            'symbol' => trim((string) ($payload['symbol'] ?? '')),
-            'exchange_rate' => (float) ($payload['exchange_rate'] ?? 1),
-            'is_default' => ! empty($payload['is_default']) ? 1 : 0,
-            'active' => array_key_exists('active', $payload) ? (int) $payload['active'] : 1,
-        ], true);
-
-        return $this->success($model->find($id), 201);
+        try {
+            $companyId = (string) $this->resolveCompanyId();
+            $service = new \App\Libraries\SettingsService();
+            $result = $service->currency($companyId, $this->payload());
+            return $this->success($result, 201);
+        } catch (\Throwable $e) {
+            log_message('error', 'Configuracion: {message}', ['message' => $e->getMessage()]);
+            return $this->fail($e->getMessage(), 422);
+        }
     }
 
     public function storeVoucherSequence()
     {
-        $payload = $this->payload();
-        $model = new VoucherSequenceModel();
-        $id = $model->insert([
-            'company_id' => $this->resolveCompanyId(),
-            'branch_id' => $payload['branch_id'] ?? null,
-            'document_type' => trim((string) ($payload['document_type'] ?? '')),
-            'prefix' => trim((string) ($payload['prefix'] ?? '')),
-            'current_number' => (int) ($payload['current_number'] ?? 1),
-            'active' => array_key_exists('active', $payload) ? (int) $payload['active'] : 1,
-        ], true);
-
-        return $this->success($model->find($id), 201);
+        try {
+            $companyId = (string) $this->resolveCompanyId();
+            $service = new \App\Libraries\SettingsService();
+            $result = $service->sequence($companyId, $this->payload());
+            return $this->success($result, 201);
+        } catch (\Throwable $e) {
+            log_message('error', 'Configuracion: {message}', ['message' => $e->getMessage()]);
+            return $this->fail($e->getMessage(), 422);
+        }
     }
 
     private function resolveCompanyId(): ?string

@@ -28,8 +28,9 @@ class TaxModel extends BaseUuidModel
 
     public function setDefault(string $taxId, string $companyId): bool
     {
-        $this->where('company_id', $companyId)->set(['is_default' => 0])->update();
-        return (bool) $this->update($taxId, ['is_default' => 1]);
+        (new \App\Libraries\SettingsService())->taxAction($companyId, $taxId, 'default');
+        return true;
     }
+
 }
 

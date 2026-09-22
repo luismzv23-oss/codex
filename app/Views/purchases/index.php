@@ -163,13 +163,13 @@
                 <p class="text-secondary mb-3">Base financiera inicial del circuito de compras.</p>
                 <div class="table-responsive">
                     <table class="table align-middle mb-0" id="payables-table">
-                        <thead><tr><th>Cuenta</th><th>Proveedor</th><th>Recepcion</th><th>Estado</th><th>Saldo</th><th></th></tr></thead>
+                        <thead><tr><th>Cuenta</th><th>Proveedor</th><th>Recepcion</th><th>Estado</th><th>Saldo (negativo: a favor)</th><th></th></tr></thead>
                         <tbody>
                         <?php foreach ($payables as $payable): ?>
                             <tr class="data-row" data-supplier="<?= esc($payable['supplier_name']) ?>" data-number="<?= esc($payable['payable_number']) ?>">
                                 <td><?= esc($payable['payable_number']) ?><div class="small text-secondary"><?= esc(! empty($payable['due_date']) ? date('d/m/Y H:i', strtotime($payable['due_date'])) : '-') ?></div></td>
                                 <td><?= esc($payable['supplier_name']) ?></td>
-                                <td><?= esc($payable['receipt_number']) ?></td>
+                                <td><?= esc($payable['receipt_number'] ?: 'Factura directa') ?></td>
                                 <td><?= esc($payable['status']) ?></td>
                                 <td><?= number_format((float) $payable['balance_amount'], 2, ',', '.') ?></td>
                                 <td class="text-end">

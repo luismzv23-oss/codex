@@ -3,6 +3,8 @@
 namespace App\Controllers;
 
 use App\Libraries\AccountingService;
+use App\Libraries\PurchaseIntegrityService;
+use App\Libraries\InventoryIntegrityService;
 use App\Libraries\EventBus;
 use App\Libraries\CashService;
 use App\Models\BranchModel;
@@ -303,6 +305,18 @@ class PurchasesController extends BaseController
     public function storeReceipt()
     {
         $context = $this->purchaseContext('manage');
+        if ($context instanceof RedirectResponse) { return $context; }
+        try {
+            return (new InventoryIntegrityService())->transaction($context['company']['id'], fn() => $this->storeReceiptLocked());
+        } catch (\Throwable $e) {
+            log_message('error', 'Compras: {message}', ['message' => $e->getMessage()]);
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
+        }
+    }
+
+    private function storeReceiptLocked()
+    {
+        $context = $this->purchaseContext('manage');
         if ($context instanceof RedirectResponse) {
             return $context;
         }
@@ -320,11 +334,13 @@ class PurchasesController extends BaseController
             return redirect()->back()->withInput()->with('error', 'Debes recepcionar al menos una linea de producto.');
         }
 
+        (new PurchaseIntegrityService())->validateReceipt($companyId, $order, $rows);
+
         $db = db_connect();
         $db->transStart();
 
         $totals = $this->purchaseTotals($rows);
-        $receiptNumber = $this->nextSequenceNumber($companyId, 'RCOMPRA', 'REC');
+        $receiptNumber = $this->nextSequenceNumber($companyId, 'RCOMPRA', 'REC', $order['branch_id'] ?? null);
         $receiptId = (new PurchaseReceiptModel())->insert([
             'company_id' => $companyId,
             'branch_id' => $order['branch_id'] ?? null,
@@ -405,7 +421,7 @@ class PurchasesController extends BaseController
             'company_id' => $companyId,
             'supplier_id' => $order['supplier_id'],
             'purchase_receipt_id' => $receiptId,
-            'payable_number' => $this->nextSequenceNumber($companyId, 'PAGCP', 'CXP'),
+            'payable_number' => $this->nextSequenceNumber($companyId, 'PAGCP', 'CXP', $order['branch_id'] ?? null),
             'status' => $totals['total'] > 0 ? 'pending' : 'paid',
             'currency_code' => $order['currency_code'],
             'total_amount' => $totals['total'],
@@ -414,7 +430,7 @@ class PurchasesController extends BaseController
             'due_date' => $this->payableDueDate((string) $order['supplier_id']),
         ]);
 
-        (new AccountingService())->syncPurchaseReceipt($companyId, (string) $receiptId, $this->currentUser()['id']);
+        service('accounting')->syncPurchaseReceipt($companyId, (string) $receiptId, $this->currentUser()['id']);
         EventBus::emit('inventory.stock_received', ['company_id' => $companyId, 'receipt_id' => $receiptId]);
 
         $db->transComplete();
@@ -452,6 +468,18 @@ class PurchasesController extends BaseController
     public function storeReturn()
     {
         $context = $this->purchaseContext('manage');
+        if ($context instanceof RedirectResponse) { return $context; }
+        try {
+            return (new InventoryIntegrityService())->transaction($context['company']['id'], fn() => $this->storeReturnLocked());
+        } catch (\Throwable $e) {
+            log_message('error', 'Compras: {message}', ['message' => $e->getMessage()]);
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
+        }
+    }
+
+    private function storeReturnLocked()
+    {
+        $context = $this->purchaseContext('manage');
         if ($context instanceof RedirectResponse) {
             return $context;
         }
@@ -468,11 +496,13 @@ class PurchasesController extends BaseController
             return redirect()->back()->withInput()->with('error', 'Debes indicar al menos una linea para devolver.');
         }
 
+        (new PurchaseIntegrityService())->validateReturn($companyId, $receipt, $rows);
+
         $db = db_connect();
         $db->transStart();
 
         $totals = $this->purchaseTotals($rows);
-        $returnNumber = $this->nextSequenceNumber($companyId, 'DEVPROV', 'DVP');
+        $returnNumber = $this->nextSequenceNumber($companyId, 'DEVPROV', 'DVP', $receipt['branch_id'] ?? null);
         $returnId = (new PurchaseReturnModel())->insert([
             'company_id' => $companyId,
             'branch_id' => $receipt['branch_id'] ?? null,
@@ -493,7 +523,7 @@ class PurchasesController extends BaseController
         $returnItemModel = new PurchaseReturnItemModel();
         foreach ($rows as $row) {
             $returnItemModel->insert(array_merge($row, ['purchase_return_id' => $returnId]));
-            $this->applyStockDelta($companyId, (string) $row['product_id'], (string) $receipt['warehouse_id'], ((float) $row['quantity']) * -1);
+            $this->applyStockDelta($companyId, (string) $row['product_id'], (string) $receipt['warehouse_id'], ((float) $row['quantity']) * -1, ! empty($row['lot_number']) || ! empty($row['serial_number']));
             $this->registerInventoryMovement([
                 'company_id' => $companyId,
                 'product_id' => $row['product_id'],
@@ -504,6 +534,9 @@ class PurchasesController extends BaseController
                 'source_warehouse_id' => $receipt['warehouse_id'],
                 'performed_by' => $this->currentUser()['id'],
                 'reason' => 'devolucion_proveedor',
+                'lot_number' => $row['lot_number'] ?? null,
+                'serial_number' => $row['serial_number'] ?? null,
+                'expiration_date' => $row['expiration_date'] ?? null,
                 'source_document' => $returnNumber,
                 'notes' => trim((string) $this->request->getPost('reason')) ?: 'Devolucion a proveedor',
             ]);
@@ -511,7 +544,7 @@ class PurchasesController extends BaseController
 
         $this->applyReturnToPayable($companyId, $receiptId, $totals['total']);
 
-        (new AccountingService())->syncPurchaseReturn($companyId, (string) $returnId, $this->currentUser()['id']);
+        service('accounting')->syncPurchaseReturn($companyId, (string) $returnId, $this->currentUser()['id']);
 
         $db->transComplete();
         if (! $db->transStatus()) {
@@ -557,7 +590,7 @@ class PurchasesController extends BaseController
         $fromReceiptItems = [];
 
         if ($fromReceiptId !== '') {
-            $fromReceipt = db_connect()->table('purchase_receipts')->where('id', $fromReceiptId)->get()->getRowArray();
+            $fromReceipt = db_connect()->table('purchase_receipts')->where('company_id', $context['company']['id'])->where('id', $fromReceiptId)->get()->getRowArray();
             if ($fromReceipt) {
                 $fromReceiptItems = db_connect()->table('purchase_receipt_items')
                     ->where('purchase_receipt_id', $fromReceiptId)
@@ -582,6 +615,18 @@ class PurchasesController extends BaseController
     public function storeInvoice()
     {
         $context = $this->purchaseContext('manage');
+        if ($context instanceof RedirectResponse) { return $context; }
+        try {
+            return (new InventoryIntegrityService())->transaction($context['company']['id'], fn() => $this->storeInvoiceLocked());
+        } catch (\Throwable $e) {
+            log_message('error', 'Compras: {message}', ['message' => $e->getMessage()]);
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
+        }
+    }
+
+    private function storeInvoiceLocked()
+    {
+        $context = $this->purchaseContext('manage');
         if ($context instanceof RedirectResponse) {
             return $context;
         }
@@ -600,32 +645,10 @@ class PurchasesController extends BaseController
 
         $purchaseReceiptId = trim((string) $this->request->getPost('purchase_receipt_id')) ?: null;
 
-        if ($purchaseReceiptId) {
-            $receiptItems = db_connect()->table('purchase_receipt_items')->where('purchase_receipt_id', $purchaseReceiptId)->get()->getResultArray();
-            foreach ($rows as $row) {
-                if (empty($row['product_id'])) continue;
-                $receivedQty = 0;
-                foreach ($receiptItems as $ri) {
-                    if ($ri['product_id'] === $row['product_id']) {
-                        $receivedQty += (float)$ri['quantity'];
-                    }
-                }
-                
-                $alreadyInvoiced = db_connect()->table('purchase_invoice_items')
-                    ->join('purchase_invoices', 'purchase_invoices.id = purchase_invoice_items.purchase_invoice_id')
-                    ->where('purchase_invoices.purchase_receipt_id', $purchaseReceiptId)
-                    ->where('purchase_invoice_items.product_id', $row['product_id'])
-                    ->selectSum('purchase_invoice_items.quantity', 'total_invoiced')
-                    ->get()->getRowArray()['total_invoiced'] ?? 0;
-
-                if (($alreadyInvoiced + $row['quantity']) > $receivedQty) {
-                    return redirect()->back()->withInput()->with('error', "La cantidad facturada excede la cantidad recepcionada. Verifique las cantidades (3-Way Matching).");
-                }
-            }
-        }
-
         $currencyCode = trim((string) $this->request->getPost('currency_code')) ?: 'ARS';
-        $exchangeRate = max(0.000001, (float) $this->request->getPost('exchange_rate'));
+        $exchangeRate = (float) ($this->request->getPost('exchange_rate') ?: 1);
+        if (! is_finite($exchangeRate) || $exchangeRate <= 0) { throw new \RuntimeException('Tipo de cambio invalido.'); }
+        (new PurchaseIntegrityService())->validateInvoice($companyId, $supplierId, $purchaseReceiptId, $currencyCode, $rows);
         $totals = $this->purchaseTotals($rows);
         $invoiceId = (new PurchaseInvoiceModel())->insert([
             'company_id' => $companyId,
@@ -661,19 +684,7 @@ class PurchasesController extends BaseController
             }
         }
 
-        if ($purchaseReceiptId) {
-            $receiptItems = db_connect()->table('purchase_receipt_items')->where('purchase_receipt_id', $purchaseReceiptId)->get()->getResultArray();
-            $totalReceived = array_sum(array_column($receiptItems, 'quantity'));
-            
-            $totalInvoiced = db_connect()->table('purchase_invoice_items')
-                ->join('purchase_invoices', 'purchase_invoices.id = purchase_invoice_items.purchase_invoice_id')
-                ->where('purchase_invoices.purchase_receipt_id', $purchaseReceiptId)
-                ->selectSum('purchase_invoice_items.quantity', 'total_invoiced')
-                ->get()->getRowArray()['total_invoiced'] ?? 0;
-
-            $newStatus = ($totalInvoiced >= $totalReceived && $totalReceived > 0) ? 'invoiced_total' : 'invoiced_partial';
-            db_connect()->table('purchase_receipts')->where('id', $purchaseReceiptId)->update(['status' => $newStatus, 'updated_at' => date('Y-m-d H:i:s')]);
-        }
+        (new PurchaseIntegrityService())->syncInvoice($companyId, (string) $invoiceId);
 
         return $this->popupOrRedirect($this->purchaseRoute('compras', $companyId), 'Factura proveedor registrada correctamente.');
     }
@@ -690,12 +701,25 @@ class PurchasesController extends BaseController
             'companyId' => $context['company']['id'],
             'suppliers' => $this->supplierOptions($context['company']['id']),
             'invoices' => $this->invoiceRows($context['company']['id']),
+            'returns' => (new PurchaseReturnModel())->where('company_id', $context['company']['id'])->where('status !=', 'cancelled')->findAll(),
             'formAction' => site_url('compras/notas-credito'),
             'isPopup' => $this->isPopupRequest(),
         ]);
     }
 
     public function storeCreditNote()
+    {
+        $context = $this->purchaseContext('manage');
+        if ($context instanceof RedirectResponse) { return $context; }
+        try {
+            return (new InventoryIntegrityService())->transaction($context['company']['id'], fn() => $this->storeCreditNoteLocked());
+        } catch (\Throwable $e) {
+            log_message('error', 'Compras: {message}', ['message' => $e->getMessage()]);
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
+        }
+    }
+
+    private function storeCreditNoteLocked()
     {
         $context = $this->purchaseContext('manage');
         if ($context instanceof RedirectResponse) {
@@ -705,16 +729,20 @@ class PurchasesController extends BaseController
         $companyId = $context['company']['id'];
         $supplierId = trim((string) $this->request->getPost('supplier_id'));
         $invoiceId = trim((string) $this->request->getPost('purchase_invoice_id')) ?: null;
-        $amount = (float) $this->request->getPost('amount');
+        $amount = round((float) $this->request->getPost('amount'), 2);
         $creditNoteNumber = trim((string) $this->request->getPost('credit_note_number'));
         if (! $this->ownedSupplier($companyId, $supplierId) || $amount <= 0 || $creditNoteNumber === '') {
             return redirect()->back()->withInput()->with('error', 'Debes indicar proveedor, monto y numero de nota.');
         }
 
+        $returnId = trim((string) $this->request->getPost('purchase_return_id')) ?: null;
+        (new PurchaseIntegrityService())->validateCredit($companyId, $supplierId, $invoiceId, $amount, $returnId);
+
         (new PurchaseCreditNoteModel())->insert([
             'company_id' => $companyId,
             'supplier_id' => $supplierId,
             'purchase_invoice_id' => $invoiceId,
+            'purchase_return_id' => $returnId,
             'credit_note_number' => $creditNoteNumber,
             'amount' => $amount,
             'issue_date' => trim((string) $this->request->getPost('issue_date')) ?: date('Y-m-d H:i:s'),
@@ -723,10 +751,24 @@ class PurchasesController extends BaseController
             'created_by' => $this->currentUser()['id'],
         ]);
 
+        (new PurchaseIntegrityService())->syncInvoice($companyId, (string) $invoiceId);
+
         return $this->popupOrRedirect($this->purchaseRoute('compras', $companyId), 'Nota de credito registrada correctamente.');
     }
 
     public function storePayment()
+    {
+        $context = $this->purchaseContext('manage');
+        if ($context instanceof RedirectResponse) { return $context; }
+        try {
+            return (new InventoryIntegrityService())->transaction($context['company']['id'], fn() => $this->storePaymentLocked());
+        } catch (\Throwable $e) {
+            log_message('error', 'Compras: {message}', ['message' => $e->getMessage()]);
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
+        }
+    }
+
+    private function storePaymentLocked()
     {
         $context = $this->purchaseContext('manage');
         if ($context instanceof RedirectResponse) {
@@ -736,13 +778,13 @@ class PurchasesController extends BaseController
         $companyId = $context['company']['id'];
         $payableId = trim((string) $this->request->getPost('purchase_payable_id'));
         $payable = $this->ownedPayable($companyId, $payableId);
-        $amount = (float) $this->request->getPost('amount');
+        $amount = round((float) $this->request->getPost('amount'), 2);
 
         if (! $payable) {
             return redirect()->back()->withInput()->with('error', 'La cuenta a pagar no existe.');
         }
 
-        if ($amount <= 0 || $amount > (float) ($payable['balance_amount'] ?? 0)) {
+        if (! is_finite($amount) || $amount <= 0 || $amount > (float) ($payable['balance_amount'] ?? 0)) {
             return redirect()->back()->withInput()->with('error', 'El pago debe ser mayor a cero y no puede superar el saldo pendiente.');
         }
 
@@ -753,8 +795,11 @@ class PurchasesController extends BaseController
         $gatewayId = trim((string) $this->request->getPost('gateway_id')) ?: null;
         $cashCheckId = trim((string) $this->request->getPost('cash_check_id')) ?: null;
         $currencyCode = trim((string) $this->request->getPost('currency_code')) ?: 'ARS';
-        $exchangeRate = max(0.000001, (float) $this->request->getPost('exchange_rate'));
+        $exchangeRate = (float) ($this->request->getPost('exchange_rate') ?: 1);
+        if (! is_finite($exchangeRate) || $exchangeRate <= 0) { throw new \RuntimeException('Tipo de cambio invalido.'); }
         $externalReference = trim((string) $this->request->getPost('external_reference')) ?: null;
+
+        $cashSession = (new PurchaseIntegrityService())->paymentSession($companyId, $payable, $currencyCode, $gatewayId, $cashCheckId);
 
         $paymentId = (new PurchasePaymentModel())->insert([
             'company_id' => $companyId,
@@ -774,9 +819,8 @@ class PurchasesController extends BaseController
             'created_by' => $this->currentUser()['id'],
         ], true);
 
-        $cashSession = (new CashService())->activeSessionForChannel($companyId, 'general');
         if ($cashSession) {
-            (new CashService())->registerMovement([
+            $cashMovementId = (new CashService())->registerMovement([
                 'company_id' => $companyId,
                 'cash_register_id' => $cashSession['cash_register_id'],
                 'cash_session_id' => $cashSession['id'],
@@ -787,12 +831,15 @@ class PurchasesController extends BaseController
                 'amount' => -1 * $amount,
                 'reference_type' => 'purchase_payment',
                 'reference_id' => $paymentId,
-                'reference_number' => $payable['document_number'] ?? null,
+                'reference_number' => $payable['payable_number'],
                 'external_reference' => $externalReference,
                 'occurred_at' => trim((string) $this->request->getPost('paid_at')) ?: date('Y-m-d H:i:s'),
+                'currency_code' => $currencyCode,
+                'exchange_rate' => $exchangeRate,
                 'notes' => 'Pago a proveedor',
                 'created_by' => $this->currentUser()['id'],
             ]);
+            if (! $cashMovementId) { throw new \RuntimeException('No se pudo registrar el egreso de caja.'); }
         }
 
         if ($currencyCode !== 'ARS' && abs($exchangeRate - 1) > 0.000001) {
@@ -815,7 +862,7 @@ class PurchasesController extends BaseController
             'status' => $balance <= 0 ? 'paid' : 'partial',
         ]);
 
-        (new AccountingService())->syncPurchasePayment($companyId, (string) $paymentId, $this->currentUser()['id']);
+        service('accounting')->syncPurchasePayment($companyId, (string) $paymentId, $this->currentUser()['id']);
         EventBus::emit('purchase.payment_made', ['company_id' => $companyId, 'payment_id' => $paymentId, 'amount' => $amount, 'supplier_id' => $payable['supplier_id']]);
 
         $db->transComplete();
@@ -826,7 +873,7 @@ class PurchasesController extends BaseController
         return $this->popupOrRedirect($this->purchaseRoute('compras', $companyId), 'Pago registrado correctamente.');
     }
 
-    private function purchaseContext(string $requiredAccess = 'view')
+    protected function purchaseContext(string $requiredAccess = 'view')
     {
         $companyId = $this->resolvePurchaseCompanyId();
         if (! $companyId) {
@@ -963,7 +1010,7 @@ class PurchasesController extends BaseController
 
     private function payableRows(string $companyId): array
     {
-        return db_connect()->table('purchase_payables pp')->select('pp.*, s.name AS supplier_name, pr.receipt_number')->join('suppliers s', 's.id = pp.supplier_id')->join('purchase_receipts pr', 'pr.id = pp.purchase_receipt_id')->where('pp.company_id', $companyId)->orderBy('pp.created_at', 'DESC')->get()->getResultArray();
+        return db_connect()->table('purchase_payables pp')->select('pp.*, s.name AS supplier_name, pr.receipt_number')->join('suppliers s', 's.id = pp.supplier_id')->join('purchase_receipts pr', 'pr.id = pp.purchase_receipt_id', 'left')->where('pp.company_id', $companyId)->orderBy('pp.created_at', 'DESC')->get()->getResultArray();
     }
 
     private function invoiceRows(string $companyId): array
@@ -1040,11 +1087,12 @@ class PurchasesController extends BaseController
             $unitCost = (float) ($costs[$index] ?? 0);
             $taxRate = (float) ($rates[$index] ?? 0);
             $description = trim((string) $description);
-            if ($description === '' || $quantity <= 0) {
-                continue;
+            if ($description === '' && $quantity == 0) { continue; }
+            if ($description === '' || ! is_finite($quantity) || ! is_finite($unitCost) || ! is_finite($taxRate) || $quantity <= 0 || $unitCost < 0 || $taxRate < 0) {
+                throw new \RuntimeException('La linea de factura contiene cantidad, costo o impuesto invalido.');
             }
             if ($productId && ! $this->validCompanyProduct($companyId, $productId)) {
-                $productId = null;
+                throw new \RuntimeException('El producto no pertenece a la empresa.');
             }
             $net = round($quantity * $unitCost, 2);
             $taxAmount = round($net * ($taxRate / 100), 2);
@@ -1076,16 +1124,19 @@ class PurchasesController extends BaseController
         foreach ($itemIds as $index => $orderItemId) {
             $orderItemId = trim((string) $orderItemId);
             $quantity = (float) ($quantities[$index] ?? 0);
+            if ($quantity == 0) { continue; }
+            if (! is_finite($quantity) || $quantity < 0) { throw new \RuntimeException('Cantidad invalida.'); }
             $orderItem = $orderItemId !== '' ? $orderItemModel->find($orderItemId) : null;
             if (! $orderItem || (string) ($orderItem['purchase_order_id'] ?? '') !== $orderId || $quantity <= 0) {
-                continue;
+                throw new \RuntimeException('La linea o cantidad solicitada no es valida.');
             }
             $pending = (float) ($orderItem['quantity'] ?? 0) - (float) ($orderItem['received_quantity'] ?? 0);
             if ($quantity > $pending) {
-                continue;
+                throw new \RuntimeException('La linea o cantidad solicitada no es valida.');
             }
             $unitCost = (float) ($costs[$index] ?? $orderItem['unit_cost'] ?? 0);
             $taxRate = (float) ($rates[$index] ?? $orderItem['tax_rate'] ?? 0);
+            if (! is_finite($unitCost) || ! is_finite($taxRate) || $unitCost < 0 || $taxRate < 0) { throw new \RuntimeException('Costo o impuesto invalido.'); }
             $net = round($quantity * $unitCost, 2);
             $taxAmount = round($net * ($taxRate / 100), 2);
             $rows[] = ['purchase_order_item_id' => $orderItemId, 'product_id' => $orderItem['product_id'], 'quantity' => $quantity, 'unit_cost' => $unitCost, 'tax_rate' => $taxRate, 'tax_amount' => $taxAmount, 'line_total' => round($net + $taxAmount, 2), 'lot_number' => trim((string) ($lots[$index] ?? '')), 'serial_number' => trim((string) ($serials[$index] ?? '')), 'expiration_date' => trim((string) ($expirations[$index] ?? '')) ?: null];
@@ -1102,13 +1153,15 @@ class PurchasesController extends BaseController
         foreach ($itemIds as $index => $receiptItemId) {
             $receiptItemId = trim((string) $receiptItemId);
             $quantity = (float) ($quantities[$index] ?? 0);
+            if ($quantity == 0) { continue; }
+            if (! is_finite($quantity) || $quantity < 0) { throw new \RuntimeException('Cantidad invalida.'); }
             $receiptItem = $receiptItemId !== '' ? $receiptItemModel->find($receiptItemId) : null;
             if (! $receiptItem || (string) ($receiptItem['purchase_receipt_id'] ?? '') !== $receiptId || $quantity <= 0 || $quantity > (float) ($receiptItem['quantity'] ?? 0)) {
-                continue;
+                throw new \RuntimeException('La linea o cantidad solicitada no es valida.');
             }
             $net = round($quantity * (float) $receiptItem['unit_cost'], 2);
             $taxAmount = round($net * (((float) $receiptItem['tax_rate']) / 100), 2);
-            $rows[] = ['purchase_receipt_item_id' => $receiptItemId, 'product_id' => $receiptItem['product_id'], 'quantity' => $quantity, 'unit_cost' => (float) $receiptItem['unit_cost'], 'tax_rate' => (float) $receiptItem['tax_rate'], 'tax_amount' => $taxAmount, 'line_total' => round($net + $taxAmount, 2)];
+            $rows[] = ['purchase_receipt_item_id' => $receiptItemId, 'product_id' => $receiptItem['product_id'], 'quantity' => $quantity, 'unit_cost' => (float) $receiptItem['unit_cost'], 'tax_rate' => (float) $receiptItem['tax_rate'], 'tax_amount' => $taxAmount, 'line_total' => round($net + $taxAmount, 2), 'lot_number' => $receiptItem['lot_number'] ?? null, 'serial_number' => $receiptItem['serial_number'] ?? null, 'expiration_date' => $receiptItem['expiration_date'] ?? null];
         }
         return $rows;
     }
@@ -1124,39 +1177,11 @@ class PurchasesController extends BaseController
         return ['subtotal' => round($subtotal, 2), 'tax_total' => round($taxTotal, 2), 'total' => round($subtotal + $taxTotal, 2)];
     }
 
-    private function nextSequenceNumber(string $companyId, string $documentType, string $prefix): string
+    private function nextSequenceNumber(string $companyId, string $documentType, string $defaultPrefix, ?string $branchId = null): string
     {
-        $db = db_connect();
-        $db->transStart();
-
-        $sequenceModel = new VoucherSequenceModel();
-        
-        $builder = $sequenceModel->db->table('voucher_sequences')
-            ->where('company_id', $companyId)
-            ->where('document_type', $documentType);
-        $sql = $builder->getCompiledSelect() . ' FOR UPDATE';
-        $sequence = $sequenceModel->db->query($sql)->getRowArray();
-
-        if (!$sequence) {
-            $this->ensurePurchaseDefaults($companyId);
-            
-            $builder = $sequenceModel->db->table('voucher_sequences')
-                ->where('company_id', $companyId)
-                ->where('document_type', $documentType);
-            $sql = $builder->getCompiledSelect() . ' FOR UPDATE';
-            $sequence = $sequenceModel->db->query($sql)->getRowArray();
-        }
-
-        $current = (int) ($sequence['current_number'] ?? 1);
-        $formatted = strtoupper($prefix) . '-' . str_pad((string) $current, 8, '0', STR_PAD_LEFT);
-        
-        if (!empty($sequence['id'])) {
-            $sequenceModel->update($sequence['id'], ['current_number' => $current + 1]);
-        }
-
-        $db->transComplete();
-
-        return $formatted;
+        $user = $this->currentUser();
+        $branchId = $branchId ?? (($user['company_id'] ?? null) === $companyId ? ($user['branch_id'] ?? null) : null);
+        return (new \App\Libraries\VoucherSequenceService())->next($companyId, $documentType, $defaultPrefix, $branchId, false);
     }
 
     private function validCompanyProduct(string $companyId, string $productId): bool
@@ -1208,34 +1233,30 @@ class PurchasesController extends BaseController
 
     private function applyReturnToPayable(string $companyId, string $receiptId, float $returnTotal): void
     {
-        $payableModel = new PurchasePayableModel();
-        $payable = $payableModel->where('company_id', $companyId)->where('purchase_receipt_id', $receiptId)->first();
-        if (! $payable) {
-            return;
-        }
-        $newTotal = max(0, (float) ($payable['total_amount'] ?? 0) - $returnTotal);
-        $paid = min((float) ($payable['paid_amount'] ?? 0), $newTotal);
-        $balance = max(0, $newTotal - $paid);
-        $payableModel->update($payable['id'], ['total_amount' => $newTotal, 'paid_amount' => $paid, 'balance_amount' => $balance, 'status' => $newTotal <= 0 ? 'cancelled' : ($balance <= 0 ? 'paid' : ($paid > 0 ? 'partial' : 'pending'))]);
+        (new PurchaseIntegrityService())->syncReceipt($companyId, $receiptId);
     }
 
-    private function applyStockDelta(string $companyId, string $productId, ?string $warehouseId, float $delta): void
+    private function applyStockDelta(string $companyId, string $productId, ?string $warehouseId, float $delta, bool $unlocatedTrace = false): void
     {
-        if ($warehouseId === null) {
-            return;
+        $integrity = new InventoryIntegrityService();
+        $integrity->validatePlace($companyId, $warehouseId, null);
+        if (! $warehouseId || ($delta < 0 && $integrity->available($companyId, $productId, $warehouseId) + 0.000001 < -$delta)) {
+            throw new \RuntimeException('Stock disponible insuficiente para devolver al proveedor.');
         }
-        $stockLevelModel = new InventoryStockLevelModel();
-        $product = (new InventoryProductModel())->find($productId);
-        $existing = $stockLevelModel->where('company_id', $companyId)->where('product_id', $productId)->where('warehouse_id', $warehouseId)->first();
-        if ($existing) {
-            $stockLevelModel->update($existing['id'], ['quantity' => ((float) $existing['quantity']) + $delta]);
-            return;
+        if ($delta < 0 && $unlocatedTrace) {
+            $integrity->withdrawUnlocated($companyId, $productId, $warehouseId, -$delta);
+        } else {
+            $integrity->changeStock($companyId, $productId, $warehouseId, $delta);
         }
-        $stockLevelModel->insert(['company_id' => $companyId, 'product_id' => $productId, 'warehouse_id' => $warehouseId, 'quantity' => $delta, 'reserved_quantity' => 0, 'min_stock' => $product['min_stock'] ?? 0]);
     }
 
     private function registerInventoryMovement(array $payload): void
     {
-        (new InventoryMovementModel())->insert(['company_id' => $payload['company_id'], 'product_id' => $payload['product_id'], 'movement_type' => $payload['movement_type'], 'quantity' => $payload['quantity'], 'unit_cost' => $payload['unit_cost'] ?? null, 'total_cost' => $payload['total_cost'] ?? null, 'adjustment_mode' => $payload['adjustment_mode'] ?? null, 'source_warehouse_id' => $payload['source_warehouse_id'] ?? null, 'destination_warehouse_id' => $payload['destination_warehouse_id'] ?? null, 'performed_by' => $payload['performed_by'], 'occurred_at' => $payload['occurred_at'] ?? date('Y-m-d H:i:s'), 'reason' => $payload['reason'] ?? null, 'source_document' => $payload['source_document'] ?? null, 'lot_number' => $payload['lot_number'] ?? null, 'serial_number' => $payload['serial_number'] ?? null, 'expiration_date' => $payload['expiration_date'] ?? null, 'notes' => $payload['notes'] ?? null]);
+        $payload['occurred_at'] = $payload['occurred_at'] ?? date('Y-m-d H:i:s');
+        (new InventoryIntegrityService())->validateTrace($payload['company_id'], $payload['product_id'], $payload);
+        $id = (new InventoryMovementModel())->insert($payload, true);
+        if (! $id) { throw new \RuntimeException('No se pudo registrar el movimiento de inventario.'); }
+        (new \App\Libraries\InventoryArtifactService())->sync($payload['company_id'], $payload['product_id'], (string) $id, $payload);
     }
+
 }

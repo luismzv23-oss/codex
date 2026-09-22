@@ -2125,7 +2125,7 @@ class SalesController extends BaseController
             return redirect()->back()->withInput()->with('error', 'Debes indicar al menos una cantidad a devolver.');
         }
 
-        $returnNumber = $this->nextSequenceNumber($context['company']['id'], 'NC', 'NC');
+        $returnNumber = $this->nextSequenceNumber($context['company']['id'], 'NC', 'NC', $sale['branch_id'] ?? null);
         $db = db_connect();
 
 
@@ -2769,7 +2769,7 @@ class SalesController extends BaseController
     private function createDraftFromSource(string $companyId, array $sourceSale, array $targetDocument): string
     {
         $pointOfSale = $this->defaultPointOfSale($companyId, $targetDocument['channel'] ?? 'standard');
-        $saleNumber = $this->nextSequenceNumber($companyId, $targetDocument['sequence_key'], $targetDocument['default_prefix'] ?: 'DOC');
+        $saleNumber = $this->nextSequenceNumber($companyId, $targetDocument['sequence_key'], $targetDocument['default_prefix'] ?: 'DOC', $sourceSale['branch_id'] ?? null);
         $sourceItems = $this->saleItems($sourceSale['id']);
         $sourceDocument = !empty($sourceSale['document_type_id']) ? (new SalesDocumentTypeModel())->find($sourceSale['document_type_id']) : null;
 
@@ -3364,10 +3364,11 @@ class SalesController extends BaseController
             ->findAll();
 
         $stockRows = db_connect()->table('inventory_stock_levels s')
-            ->select('s.product_id, s.warehouse_id, s.quantity, s.reserved_quantity')
+            ->select('s.product_id, s.warehouse_id, SUM(s.quantity) AS quantity, SUM(s.reserved_quantity) AS reserved_quantity', false)
             ->join('inventory_warehouses w', 'w.id = s.warehouse_id')
             ->where('s.company_id', $companyId)
             ->where('w.active', 1)
+            ->groupBy('s.product_id, s.warehouse_id')
             ->get()
             ->getResultArray();
 
@@ -4189,11 +4190,7 @@ class SalesController extends BaseController
 
     private function lockStockLevel(string $companyId, string $productId, string $warehouseId): void
     {
-        $db = db_connect();
-        $db->query(
-            'SELECT id FROM ' . $db->protectIdentifiers($db->prefixTable('inventory_stock_levels')) . ' WHERE company_id = ? AND product_id = ? AND warehouse_id = ?' . ($db->DBDriver === 'SQLite3' ? '' : ' FOR UPDATE'),
-            [$companyId, $productId, $warehouseId]
-        );
+        (new \App\Libraries\InventoryIntegrityService())->balances($companyId, $productId, $warehouseId);
     }
 
     private function resolveCashSession(string $companyId, string $channel): ?array
@@ -4580,64 +4577,18 @@ class SalesController extends BaseController
         }
     }
 
-    private function nextSequenceNumber(string $companyId, string $documentType, string $defaultPrefix): string
+    private function nextSequenceNumber(string $companyId, string $documentType, string $defaultPrefix, ?string $branchId = null): string
     {
-        $db = db_connect();
-        $db->transStart();
-
-        $model = new VoucherSequenceModel();
-
-        $sequence = $model->db->query(
-            "SELECT * FROM voucher_sequences WHERE company_id = ? AND document_type = ? FOR UPDATE",
-            [$companyId, $documentType]
-        )->getRowArray();
-
-        if (!$sequence) {
-            $branch = (new BranchModel())->where('company_id', $companyId)->where('code', 'MAIN')->first();
-            $id = $model->insert([
-                'company_id' => $companyId,
-                'branch_id' => $branch['id'] ?? null,
-                'document_type' => $documentType,
-                'prefix' => $defaultPrefix,
-                'current_number' => 1,
-                'active' => 1,
-            ], true);
-
-            $sequence = $model->db->query(
-                "SELECT * FROM voucher_sequences WHERE id = ? FOR UPDATE",
-                [$id]
-            )->getRowArray();
-        }
-
-        $number = (int) ($sequence['current_number'] ?? 1);
-        $formatted = strtoupper(trim((string) ($sequence['prefix'] ?? $defaultPrefix))) . '-' . str_pad((string) $number, 8, '0', STR_PAD_LEFT);
-        $model->update($sequence['id'], ['current_number' => $number + 1]);
-
-        $db->transComplete();
-
-        return $formatted;
+        $user = $this->currentUser();
+        $branchId = $branchId ?? (($user['company_id'] ?? null) === $companyId ? ($user['branch_id'] ?? null) : null);
+        return (new \App\Libraries\VoucherSequenceService())->next($companyId, $documentType, $defaultPrefix, $branchId, false);
     }
 
-    private function previewSequenceNumber(string $companyId, string $documentType, string $defaultPrefix): string
+    private function previewSequenceNumber(string $companyId, string $documentType, string $defaultPrefix, ?string $branchId = null): string
     {
-        $model = new VoucherSequenceModel();
-        $sequence = $model->where('company_id', $companyId)->where('document_type', $documentType)->first();
-
-        if (!$sequence) {
-            $branch = (new BranchModel())->where('company_id', $companyId)->where('code', 'MAIN')->first();
-            $id = $model->insert([
-                'company_id' => $companyId,
-                'branch_id' => $branch['id'] ?? null,
-                'document_type' => $documentType,
-                'prefix' => $defaultPrefix,
-                'current_number' => 1,
-                'active' => 1,
-            ], true);
-            $sequence = $model->find($id);
-        }
-
-        $number = (int) ($sequence['current_number'] ?? 1);
-        return strtoupper(trim((string) ($sequence['prefix'] ?? $defaultPrefix))) . '-' . str_pad((string) $number, 8, '0', STR_PAD_LEFT);
+        $user = $this->currentUser();
+        $branchId = $branchId ?? (($user['company_id'] ?? null) === $companyId ? ($user['branch_id'] ?? null) : null);
+        return (new \App\Libraries\VoucherSequenceService())->next($companyId, $documentType, $defaultPrefix, $branchId, true);
     }
 
     private function ensureConsumerFinalCustomer(string $companyId): array
@@ -4832,104 +4783,31 @@ class SalesController extends BaseController
 
     private function canReserve(string $companyId, string $productId, ?string $warehouseId, float $quantity): bool
     {
-        if ($warehouseId === null) {
-            return false;
-        }
-
-        $row = (new InventoryStockLevelModel())
-            ->where('company_id', $companyId)
-            ->where('product_id', $productId)
-            ->where('warehouse_id', $warehouseId)
-            ->first();
-
-        return (((float) ($row['quantity'] ?? 0)) - ((float) ($row['reserved_quantity'] ?? 0))) >= $quantity;
+        return $warehouseId !== null && (new \App\Libraries\InventoryIntegrityService())->available($companyId, $productId, $warehouseId) >= $quantity;
     }
 
     private function canWithdraw(string $companyId, string $productId, ?string $warehouseId, float $quantity, bool $allowNegative, ?string $ignoreSaleId = null): bool
     {
-        if ($allowNegative || $warehouseId === null) {
-            return true;
-        }
-
-        $row = (new InventoryStockLevelModel())
-            ->where('company_id', $companyId)
-            ->where('product_id', $productId)
-            ->where('warehouse_id', $warehouseId)
-            ->first();
-
-        $available = ((float) ($row['quantity'] ?? 0)) - ((float) ($row['reserved_quantity'] ?? 0));
+        if ($warehouseId === null) { return false; }
+        $available = (new \App\Libraries\InventoryIntegrityService())->available($companyId, $productId, $warehouseId);
         if ($ignoreSaleId) {
-            $available += (float) ((new InventoryReservationModel())
-                ->selectSum('quantity', 'qty')
-                ->where('company_id', $companyId)
-                ->where('warehouse_id', $warehouseId)
-                ->where('product_id', $productId)
-                ->where('sale_id', $ignoreSaleId)
-                ->where('status', 'active')
-                ->first()['qty'] ?? 0);
+            $available += (float) ((new InventoryReservationModel())->selectSum('quantity', 'qty')->where('company_id', $companyId)->where('warehouse_id', $warehouseId)->where('product_id', $productId)->where('sale_id', $ignoreSaleId)->where('status', 'active')->first()['qty'] ?? 0);
         }
-
-        return $available >= $quantity;
+        return $allowNegative || $available >= $quantity;
     }
 
     private function applyStockDelta(string $companyId, string $productId, ?string $warehouseId, float $delta): void
     {
-        if ($warehouseId === null) {
-            return;
+        if ($warehouseId !== null) {
+            (new \App\Libraries\InventoryIntegrityService())->changeStock($companyId, $productId, $warehouseId, $delta);
         }
-
-        $stockLevelModel = new InventoryStockLevelModel();
-        $product = (new InventoryProductModel())->find($productId);
-        $existing = $stockLevelModel
-            ->where('company_id', $companyId)
-            ->where('product_id', $productId)
-            ->where('warehouse_id', $warehouseId)
-            ->first();
-
-        if ($existing) {
-            $stockLevelModel->update($existing['id'], ['quantity' => ((float) $existing['quantity']) + $delta]);
-            return;
-        }
-
-        $stockLevelModel->insert([
-            'company_id' => $companyId,
-            'product_id' => $productId,
-            'warehouse_id' => $warehouseId,
-            'quantity' => $delta,
-            'reserved_quantity' => 0,
-            'min_stock' => $product['min_stock'] ?? 0,
-        ]);
     }
 
     private function applyReservedDelta(string $companyId, string $productId, ?string $warehouseId, float $delta): void
     {
-        if ($warehouseId === null) {
-            return;
+        if ($warehouseId !== null) {
+            (new \App\Libraries\InventoryIntegrityService())->changeReserved($companyId, $productId, $warehouseId, $delta);
         }
-
-        $stockLevelModel = new InventoryStockLevelModel();
-        $product = (new InventoryProductModel())->find($productId);
-        $existing = $stockLevelModel
-            ->where('company_id', $companyId)
-            ->where('product_id', $productId)
-            ->where('warehouse_id', $warehouseId)
-            ->first();
-
-        if ($existing) {
-            $stockLevelModel->update($existing['id'], [
-                'reserved_quantity' => max(0, ((float) $existing['reserved_quantity']) + $delta),
-            ]);
-            return;
-        }
-
-        $stockLevelModel->insert([
-            'company_id' => $companyId,
-            'product_id' => $productId,
-            'warehouse_id' => $warehouseId,
-            'quantity' => 0,
-            'reserved_quantity' => max(0, $delta),
-            'min_stock' => $product['min_stock'] ?? 0,
-        ]);
     }
 
     private function registerInventoryMovement(array $payload): void

@@ -12,6 +12,7 @@ class InventoryPeriodClosureModel extends BaseUuidModel
 
     public static function isPeriodClosed(string $companyId, string $date, ?string $warehouseId = null): bool
     {
+        $date = substr(str_replace('T', ' ', $date), 0, 10);
         $db = db_connect();
         $builder = $db->table('inventory_period_closures')
             ->where('company_id', $companyId)
@@ -24,6 +25,8 @@ class InventoryPeriodClosureModel extends BaseUuidModel
                 ->where('warehouse_id', $warehouseId)
                 ->orWhere('warehouse_id', null)
                 ->groupEnd();
+        } else {
+            $builder->where('warehouse_id', null);
         }
 
         return $builder->countAllResults() > 0;

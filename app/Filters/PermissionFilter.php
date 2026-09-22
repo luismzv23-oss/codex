@@ -38,7 +38,7 @@ class PermissionFilter implements FilterInterface
                 if (!$hasCaja) {
                     return redirect()->to('/ventas')->with('error', 'No tienes acceso al sistema de Caja.');
                 }
-            } else if (strpos($uri, 'ventas') !== 0 && strpos($uri, 'logout') !== 0) {
+            } else if (! in_array($uri, ['dashboard', 'sistemas'], true) && strpos($uri, 'ventas') !== 0 && strpos($uri, 'logout') !== 0) {
                  return redirect()->to('/ventas');
             }
         }

@@ -67,8 +67,8 @@ $taxData = $tax ?? [];
             </div>
 
             <div class="col-12 d-flex gap-2 pt-2">
-                <button type="submit" class="btn btn-dark icon-btn" title="Guardar" aria-label="Guardar"><i class="bi bi-check-lg"></i> Guardar</button>
-                <button type="button" class="btn btn-outline-secondary icon-btn" title="Cancelar" aria-label="Cancelar" onclick="window.parent.postMessage({type:'codex-popup-close',redirectUrl:<?= json_encode(site_url('configuracion?company_id=' . $companyId)) ?>}, window.location.origin)"><i class="bi bi-x-lg"></i> Cancelar</button>
+                <button type="submit" class="btn btn-dark icon-btn" title="Guardar" aria-label="Guardar"><i class="bi bi-check-lg"></i></button>
+                <button type="button" class="btn btn-outline-secondary icon-btn" title="Cancelar" aria-label="Cancelar" onclick="window.parent.postMessage({type:'codex-popup-close',redirectUrl:<?= json_encode(site_url('configuracion?company_id=' . $companyId)) ?>}, window.location.origin)"><i class="bi bi-x-lg"></i></button>
             </div>
         </form>
     </div>

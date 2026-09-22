@@ -1,9 +1,11 @@
 <?= $this->extend('layouts/app') ?>
 
 <?= $this->section('content') ?>
+<link rel="stylesheet" href="<?= base_url('assets/css/settings-workspace.css') ?>">
+<section class="st" id="settings-workspace" aria-label="Configuración de la empresa">
 <div class="mb-4">
-    <h1 class="h2 mb-1">Configuracion</h1>
-    <p class="text-secondary mb-0">Parametros centrales por empresa: datos, sucursales, impuestos, monedas y numeraciones.</p>
+    <h1 class="h2 mb-1">Configuración</h1>
+    <p class="text-secondary mb-0">Organiza los datos y parámetros de tu empresa desde un solo lugar.</p>
 </div>
 
 <?php if (! empty($companies)): ?>
@@ -11,8 +13,8 @@
         <div class="card-body">
             <form method="get" action="<?= site_url('configuracion') ?>" class="row g-3 align-items-end">
                 <div class="col-md-6">
-                    <label class="form-label">Empresa activa</label>
-                    <select name="company_id" class="form-select">
+                    <label class="form-label" for="st-company">Empresa activa</label>
+                    <select id="st-company" name="company_id" class="form-select">
                         <?php foreach ($companies as $companyOption): ?>
                             <option value="<?= esc($companyOption['id']) ?>" <?= ($company['id'] ?? '') === $companyOption['id'] ? 'selected' : '' ?>><?= esc($companyOption['name']) ?></option>
                         <?php endforeach; ?>
@@ -32,8 +34,8 @@
             <div class="card-body p-4">
                 <div class="d-flex justify-content-between align-items-start mb-3">
                     <div>
-                        <h2 class="h4 mb-1">Configuracion por sistema</h2>
-                        <p class="text-secondary mb-0">La empresa centraliza su base y cada sistema consume esta configuracion de forma integrada.</p>
+                        <h2 class="h4 mb-1">Configuración por sistema</h2>
+                        <p class="text-secondary mb-0">Accede a las opciones de cada módulo para adaptar tu operación.</p>
                     </div>
                 </div>
                 <div class="row g-3">
@@ -42,9 +44,9 @@
                             <div class="d-flex justify-content-between align-items-start gap-3">
                                 <div>
                                     <div class="fw-semibold">Inventario</div>
-                                    <div class="small text-secondary">Depositos, alertas, stock negativo y politicas operativas.</div>
+                                    <div class="small text-secondary">Depósitos, alertas, stock negativo y políticas operativas.</div>
                                 </div>
-                                <a href="<?= site_url('inventario/configuracion?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-outline-dark btn-sm">Configuracion</a>
+                                <a href="<?= site_url('inventario/configuracion?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-outline-dark btn-sm" title="Configurar inventario" aria-label="Configurar inventario"><i class="bi bi-gear" aria-hidden="true"></i></a>
                             </div>
                         </div>
                     </div>
@@ -53,9 +55,9 @@
                             <div class="d-flex justify-content-between align-items-start gap-3">
                                 <div>
                                     <div class="fw-semibold">Ventas</div>
-                                    <div class="small text-secondary">Argentina ARCA, monedas habilitadas, facturacion estandar y kiosco.</div>
+                                    <div class="small text-secondary">Argentina ARCA, monedas habilitadas, facturación estándar y kiosco.</div>
                                 </div>
-                                <a href="<?= site_url('ventas/configuracion?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-outline-dark btn-sm">Configuracion</a>
+                                <a href="<?= site_url('ventas/configuracion?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-outline-dark btn-sm" title="Configurar ventas" aria-label="Configurar ventas"><i class="bi bi-gear" aria-hidden="true"></i></a>
                             </div>
                         </div>
                     </div>
@@ -66,7 +68,7 @@
                                     <div class="fw-semibold">Impresión y Tickets</div>
                                     <div class="small text-secondary">Diseño de comprobantes, ancho de papel, cabeceras y leyendas.</div>
                                 </div>
-                                <a href="<?= site_url('configuracion/tickets?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-outline-dark btn-sm" data-popup="true" data-popup-title="Configuracion de Impresion y Tickets" data-popup-subtitle="Personalizar cabeceras, pie de pagina, dimensiones y visibilidad de datos.">Configuracion</a>
+                                <a href="<?= site_url('configuracion/tickets?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-outline-dark btn-sm" data-popup="true" data-popup-title="Configuración de Impresion y Tickets" data-popup-subtitle="Personalizar cabeceras, pie de pagina, dimensiones y visibilidad de datos." title="Configurar impresión y tickets" aria-label="Configurar impresión y tickets"><i class="bi bi-gear" aria-hidden="true"></i></a>
                             </div>
                         </div>
                     </div>
@@ -80,7 +82,7 @@
                 <div class="d-flex justify-content-between align-items-start mb-3">
                     <div>
                         <h2 class="h4 mb-1">Datos de la empresa</h2>
-                        <p class="text-secondary mb-0">Configuracion general de la empresa activa.</p>
+                        <p class="text-secondary mb-0">Configuración general de la empresa activa.</p>
                     </div>
                     <?php if (auth_can('settings.manage')): ?>
                         <a href="<?= site_url('configuracion/empresa/editar?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-dark icon-btn" data-popup="true" data-popup-title="Editar empresa" data-popup-subtitle="Actualizar datos principales de la empresa activa." title="Editar empresa" aria-label="Editar empresa"><i class="bi bi-pencil-square"></i></a>
@@ -88,8 +90,8 @@
                 </div>
                 <dl class="row mb-0">
                     <dt class="col-md-3">Nombre</dt><dd class="col-md-9"><?= esc($company['name'] ?? '') ?></dd>
-                    <dt class="col-md-3">Razon social</dt><dd class="col-md-9"><?= esc($company['legal_name'] ?? '-') ?></dd>
-                    <dt class="col-md-3">Cuit</dt><dd class="col-md-9"><?= esc($company['tax_id'] ?? '-') ?></dd>
+                    <dt class="col-md-3">Razón social</dt><dd class="col-md-9"><?= esc($company['legal_name'] ?? '-') ?></dd>
+                    <dt class="col-md-3">CUIT</dt><dd class="col-md-9"><?= esc($company['tax_id'] ?? '-') ?></dd>
                     <dt class="col-md-3">Moneda base</dt><dd class="col-md-9"><?= esc($company['currency_code'] ?? '-') ?></dd>
                 </dl>
             </div>
@@ -105,11 +107,11 @@
                         <a href="<?= site_url('configuracion/sucursales/nueva?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-dark btn-sm icon-btn" data-popup="true" data-popup-title="Nueva sucursal" data-popup-subtitle="Registrar una sucursal para la empresa activa." title="Nueva sucursal" aria-label="Nueva sucursal"><i class="bi bi-plus-lg"></i></a>
                     <?php endif; ?>
                 </div>
-                <ul class="list-group list-group-flush">
+                <ul class="list-group list-group-flush" id="st-branches" data-st-pagination="5" aria-label="Sucursales">
                     <?php foreach ($branches as $branch): ?>
                         <li class="list-group-item px-0 d-flex justify-content-between"><span><?= esc($branch['name']) ?> <span class="text-secondary">(<?= esc($branch['code']) ?>)</span></span><span><?= (int) $branch['active'] === 1 ? 'Activa' : 'Inactiva' ?></span></li>
                     <?php endforeach; ?>
-                </ul>
+                <?php if (empty($branches)): ?><li class="list-group-item st-empty" data-st-empty>No hay registros para mostrar.</li><?php endif; ?></ul>
             </div>
         </div>
     </div>
@@ -123,7 +125,7 @@
                         <a href="<?= site_url('configuracion/impuestos/nuevo?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-dark btn-sm icon-btn" data-popup="true" data-popup-title="Nuevo impuesto" data-popup-subtitle="Registrar un impuesto para la empresa activa." title="Nuevo impuesto" aria-label="Nuevo impuesto"><i class="bi bi-plus-lg"></i></a>
                     <?php endif; ?>
                 </div>
-                <ul class="list-group list-group-flush">
+                <ul class="list-group list-group-flush" id="st-taxes" data-st-pagination="5" aria-label="Impuestos">
                     <?php foreach ($taxes as $tax): ?>
                         <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
                             <div>
@@ -146,7 +148,7 @@
                                             <button type="submit" class="btn btn-sm btn-outline-warning icon-btn" title="Establecer como predeterminado" aria-label="Predeterminado"><i class="bi bi-star"></i></button>
                                         </form>
                                     <?php else: ?>
-                                        <button type="button" class="btn btn-sm btn-warning icon-btn" title="Impuesto predeterminado" disabled><i class="bi bi-star-fill text-dark"></i></button>
+                                        <button type="button" class="btn btn-sm btn-warning icon-btn" title="Impuesto predeterminado" aria-label="Impuesto predeterminado" disabled><i class="bi bi-star-fill text-dark"></i></button>
                                     <?php endif; ?>
                                     <a href="<?= site_url('configuracion/impuestos/' . $tax['id'] . '/editar?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-sm btn-outline-dark icon-btn" data-popup="true" data-popup-title="Editar impuesto" data-popup-subtitle="Modificar parametria del impuesto." title="Editar" aria-label="Editar"><i class="bi bi-pencil"></i></a>
                                     <form method="post" action="<?= site_url('configuracion/impuestos/' . $tax['id'] . '/eliminar') ?>" class="d-inline" onsubmit="return confirm('¿Seguro que deseas eliminar este impuesto?')">
@@ -158,7 +160,7 @@
                             </div>
                         </li>
                     <?php endforeach; ?>
-                </ul>
+                <?php if (empty($taxes)): ?><li class="list-group-item st-empty" data-st-empty>No hay registros para mostrar.</li><?php endif; ?></ul>
 
             </div>
         </div>
@@ -173,8 +175,7 @@
                         <a href="<?= site_url('configuracion/monedas/nueva?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-dark btn-sm icon-btn" data-popup="true" data-popup-title="Nueva moneda" data-popup-subtitle="Registrar una moneda disponible para la empresa activa." title="Nueva moneda" aria-label="Nueva moneda"><i class="bi bi-plus-lg"></i></a>
                     <?php endif; ?>
                 </div>
-                <?php if (! empty($currencies)): ?>
-                    <ul class="list-group list-group-flush">
+                    <ul class="list-group list-group-flush" id="st-currencies" data-st-pagination="5" aria-label="Monedas">
                         <?php foreach ($currencies as $currency): ?>
                             <li class="list-group-item px-0">
                                 <div class="d-flex justify-content-between align-items-start gap-3">
@@ -184,7 +185,7 @@
                                             <span class="text-secondary">(<?= esc($currency['code']) ?>)</span>
                                         </div>
                                         <div class="small text-secondary">
-                                            Simbolo: <?= esc($currency['symbol'] ?: '-') ?> | Tasa: <?= esc(number_format((float) ($currency['exchange_rate'] ?? 0), 4, ',', '.')) ?>
+                                            Símbolo: <?= esc($currency['symbol'] ?: '-') ?> | Tasa: <?= esc(number_format((float) ($currency['exchange_rate'] ?? 0), 4, ',', '.')) ?>
                                         </div>
                                     </div>
                                     <div class="text-end">
@@ -201,10 +202,7 @@
                                 </div>
                             </li>
                         <?php endforeach; ?>
-                    </ul>
-                <?php else: ?>
-                    <div class="text-secondary">No hay monedas registradas para esta empresa.</div>
-                <?php endif; ?>
+                    <?php if (empty($currencies)): ?><li class="list-group-item st-empty" data-st-empty>No hay registros para mostrar.</li><?php endif; ?></ul>
             </div>
         </div>
     </div>
@@ -213,18 +211,20 @@
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body p-4">
                 <div class="d-flex justify-content-between align-items-start mb-3">
-                    <h2 class="h4 mb-0">Numeracion de comprobantes</h2>
+                    <h2 class="h4 mb-0">Numeración de comprobantes</h2>
                     <?php if (auth_can('voucher_sequences.manage')): ?>
                         <a href="<?= site_url('configuracion/numeraciones/nueva?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-dark btn-sm icon-btn" data-popup="true" data-popup-title="Nueva numeracion" data-popup-subtitle="Registrar una numeracion de comprobantes para la empresa activa." title="Nueva numeracion" aria-label="Nueva numeracion"><i class="bi bi-plus-lg"></i></a>
                     <?php endif; ?>
                 </div>
-                <ul class="list-group list-group-flush">
+                <ul class="list-group list-group-flush" id="st-sequences" data-st-pagination="5" aria-label="Numeración de comprobantes">
                     <?php foreach ($voucherSequences as $sequence): ?>
                         <li class="list-group-item px-0 d-flex justify-content-between"><span><?= esc($sequence['document_type']) ?> <span class="text-secondary"><?= esc($sequence['prefix'] ?? '') ?></span></span><span>#<?= esc((string) $sequence['current_number']) ?></span></li>
                     <?php endforeach; ?>
-                </ul>
+                <?php if (empty($voucherSequences)): ?><li class="list-group-item st-empty" data-st-empty>No hay registros para mostrar.</li><?php endif; ?></ul>
             </div>
         </div>
     </div>
 </div>
+</section>
+<script src="<?= base_url('assets/js/settings-pagination.js') ?>" defer></script>
 <?= $this->endSection() ?>

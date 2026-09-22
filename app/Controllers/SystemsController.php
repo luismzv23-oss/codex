@@ -25,10 +25,10 @@ class SystemsController extends BaseController
             'companies' => $this->isSuperadmin() ? $companyModel->orderBy('name', 'ASC')->findAll() : [],
             'selectedCompanyId' => $selectedCompanyId,
             'selectedCompany' => $selectedCompany,
-            'catalogSystems' => $this->catalogSystems(),
+            'catalogSystems' => $this->isSuperadmin() ? $this->catalogSystems() : [],
             'accessibleSystems' => $this->accessibleSystems($selectedCompanyId),
-            'companyAssignments' => $selectedCompanyId ? $this->companyAssignments($selectedCompanyId) : [],
-            'operatorAssignments' => $selectedCompanyId ? $this->operatorAssignments($selectedCompanyId) : [],
+            'companyAssignments' => $selectedCompanyId && $this->canManageSystems() ? $this->companyAssignments($selectedCompanyId) : [],
+            'operatorAssignments' => $selectedCompanyId && $this->canManageSystems() ? $this->operatorAssignments($selectedCompanyId) : [],
         ]);
     }
 
@@ -409,6 +409,10 @@ class SystemsController extends BaseController
             ->where('systems.active', 1)
             ->orderBy('systems.name', 'ASC')
             ->findAll();
+
+        if (($this->currentUser()['role_slug'] ?? '') === 'vendedor') {
+            $rows = array_values(array_filter($rows, static fn(array $row): bool => in_array($row['slug'], ['ventas', 'caja'], true)));
+        }
 
         return array_map(fn(array $row): array => [
             'id' => $row['id'],

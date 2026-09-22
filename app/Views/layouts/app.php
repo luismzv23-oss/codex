@@ -208,13 +208,13 @@ if (auth_check() && !$isPopup) {
                 </button>
                 <div class="collapse navbar-collapse" id="mainNav">
                     <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                        <?php if (auth_can('dashboard.view') && (auth_user()['role_slug'] ?? '') !== 'vendedor'): ?>
-                            <li class="nav-item"><a class="nav-link" href="<?= site_url('dashboard') ?>">Dashboard</a></li>
+                        <?php if (auth_can('dashboard.view')): ?>
+                            <li class="nav-item"><a class="nav-link" href="<?= site_url('dashboard') ?>">Mi inicio</a></li>
                         <?php endif; ?>
                         <?php if (auth_can('users.view')): ?>
                             <li class="nav-item"><a class="nav-link" href="<?= site_url('usuarios') ?>">Usuarios</a></li>
                         <?php endif; ?>
-                        <?php if (auth_can('systems.view') && (auth_user()['role_slug'] ?? '') !== 'vendedor'): ?>
+                        <?php if (auth_can('systems.view')): ?>
                             <li class="nav-item"><a class="nav-link" href="<?= site_url('sistemas') ?>">Sistemas</a></li>
                         <?php endif; ?>
                         <?php if (auth_can('companies.view')): ?>
@@ -230,7 +230,7 @@ if (auth_check() && !$isPopup) {
                             <div class="dropdown me-1">
                                 <button class="btn btn-outline-dark dropdown-toggle d-flex align-items-center gap-2 px-3 py-1.5 rounded-3 shadow-sm" type="button" id="moduleSwitcherDropdown" data-bs-toggle="dropdown" aria-expanded="false" style="border: 1px solid rgba(0,0,0,0.12); font-weight: 500; font-size: 13.5px;">
                                     <i class="bi bi-grid-3x3-gap-fill text-dark"></i>
-                                    <span>Módulos</span>
+                                    <span class="visually-hidden">Módulos</span>
                                 </button>
                                 <div class="dropdown-menu dropdown-menu-end p-3 border-0 shadow-lg rounded-4 mt-2" aria-labelledby="moduleSwitcherDropdown" style="width: 320px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(0,0,0,0.06) !important; z-index: 2000;">
                                     <div class="dropdown-header px-2 py-1 text-uppercase tracking-wider text-secondary small fw-bold mb-2">Ecosistema ERP</div>
@@ -255,7 +255,7 @@ if (auth_check() && !$isPopup) {
                             <div class="fw-semibold"><?= esc(auth_user()['name'] ?? '') ?></div>
                             <div class="text-secondary"><?= esc(auth_user()['role_name'] ?? '') ?></div>
                         </div>
-                        <a href="<?= site_url('logout') ?>" class="btn btn-outline-dark btn-sm">Salir</a>
+                        <a href="<?= site_url('logout') ?>" class="btn btn-outline-dark btn-sm icon-btn" title="Salir" aria-label="Salir"><i class="bi bi-box-arrow-right" aria-hidden="true"></i></a>
                     </div>
                 </div>
             </div>

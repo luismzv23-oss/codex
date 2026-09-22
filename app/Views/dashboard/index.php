@@ -1,141 +1,35 @@
 <?= $this->extend('layouts/app') ?>
-
 <?= $this->section('content') ?>
-<div class="row g-4">
-    <div class="col-12">
-        <div class="p-4 rounded-4 bg-white shadow-sm border">
-            <div class="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                    <p class="small text-uppercase text-secondary mb-2">ERP</p>
-                    <h1 class="h2 mb-2">Bienvenido, <?= esc($user['name'] ?? '') ?></h1>
-                    <p class="text-secondary mb-0">Rol activo: <?= esc($user['role_name'] ?? '') ?><?= ! empty($user['company_name']) ? ' | Empresa: ' . esc($user['company_name']) : '' ?></p>
-                </div>
-                <div class="text-end">
-                    <div class="small text-secondary">Readiness</div>
-                    <div class="d-flex align-items-center gap-2 justify-content-end">
-                        <span class="badge text-bg-<?= ($readiness['status'] ?? 'blocked') === 'ready' ? 'success' : (($readiness['status'] ?? 'blocked') === 'warning' ? 'warning' : 'danger') ?>"><?= esc(strtoupper($readiness['status'] ?? 'blocked')) ?></span>
-                        <span class="fw-semibold"><?= esc((string) ($readiness['score'] ?? 0)) ?>%</span>
-                    </div>
-                    <div class="d-flex gap-2 justify-content-end mt-2">
-                        <a href="<?= site_url('dashboard/readiness') ?>" class="btn btn-outline-dark icon-btn" title="Diagnostico ERP" aria-label="Diagnostico ERP"><i class="bi bi-clipboard2-pulse"></i></a>
-                        <a href="<?= site_url('dashboard/qa') ?>" class="btn btn-outline-dark icon-btn" title="QA integral" aria-label="QA integral"><i class="bi bi-shield-check"></i></a>
-                    </div>
-                </div>
-            </div>
-        </div>
+<?php $w = $workspace; $icons = ['ventas' => 'bi-receipt', 'inventario' => 'bi-box-seam', 'compras' => 'bi-bag', 'caja' => 'bi-wallet2', 'plataforma' => 'bi-buildings']; ?>
+<link rel="stylesheet" href="<?= base_url('assets/css/dashboard-workspace.css') ?>">
+<div class="dw" id="dashboard-workspace">
+<header class="dw-heading">
+    <div><h1><?= esc($w['title']) ?></h1><p>Hola, <?= esc($user['name'] ?? 'bienvenido') ?>. <?= esc($w['description']) ?></p></div>
+    <div class="dw-heading-actions">
+        <?php if (auth_can('dashboard.view') && ($user['role_slug'] ?? '') !== 'vendedor'): ?>
+            <a class="dw-refresh" href="<?= site_url('dashboard/readiness') ?>" aria-label="Diagnóstico ERP" title="Diagnóstico ERP"><i class="bi bi-clipboard2-pulse" aria-hidden="true"></i></a>
+            <a class="dw-refresh" href="<?= site_url('dashboard/qa') ?>" aria-label="QA Integral" title="QA Integral"><i class="bi bi-shield-check" aria-hidden="true"></i></a>
+        <?php endif; ?>
+        <button type="button" class="dw-refresh" id="dw-refresh" aria-label="Actualizar" title="Actualizar"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i></button>
     </div>
-
-    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="text-secondary small">Empresas</div><div class="display-6 fw-bold"><?= esc((string) $stats['companies']) ?></div></div></div></div>
-    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="text-secondary small">Usuarios</div><div class="display-6 fw-bold"><?= esc((string) $stats['users']) ?></div></div></div></div>
-    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="text-secondary small">Sucursales</div><div class="display-6 fw-bold"><?= esc((string) $stats['branches']) ?></div></div></div></div>
-    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="text-secondary small">Clientes</div><div class="display-6 fw-bold"><?= esc((string) ($stats['customers'] ?? 0)) ?></div></div></div></div>
-
-    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="text-secondary small">Ventas acumuladas</div><div class="display-6 fw-bold"><?= number_format((float) ($stats['sales_total'] ?? 0), 2, ',', '.') ?></div></div></div></div>
-    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="text-secondary small">Ventas de hoy</div><div class="display-6 fw-bold"><?= number_format((float) ($stats['sales_today'] ?? 0), 2, ',', '.') ?></div></div></div></div>
-    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="text-secondary small">Compras acumuladas</div><div class="display-6 fw-bold"><?= number_format((float) ($stats['purchase_total'] ?? 0), 2, ',', '.') ?></div></div></div></div>
-    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="text-secondary small">Margen comercial</div><div class="display-6 fw-bold text-success"><?= number_format((float) ($stats['sales_margin'] ?? 0), 2, ',', '.') ?></div></div></div></div>
-
-    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="text-secondary small">Saldo por cobrar</div><div class="display-6 fw-bold"><?= number_format((float) ($stats['receivable_balance'] ?? 0), 2, ',', '.') ?></div></div></div></div>
-    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="text-secondary small">Saldo por pagar</div><div class="display-6 fw-bold"><?= number_format((float) ($stats['payable_balance'] ?? 0), 2, ',', '.') ?></div></div></div></div>
-    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="text-secondary small">Cajas abiertas</div><div class="display-6 fw-bold"><?= esc((string) ($stats['open_cash_sessions'] ?? 0)) ?></div></div></div></div>
-    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="text-secondary small">Stock critico</div><div class="display-6 fw-bold text-danger"><?= esc((string) ($stats['critical_stock'] ?? 0)) ?></div></div></div></div>
-
-    <div class="col-lg-4">
-        <div class="card border-0 shadow-sm rounded-4 h-100">
-            <div class="card-body p-4">
-                <h2 class="h4 mb-3">Salud operativa</h2>
-                <?php foreach (($alerts ?? []) as $alert): ?>
-                    <div class="border rounded-4 p-3 mb-3 d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="fw-semibold"><?= esc($alert['label']) ?></div>
-                            <div class="small text-secondary">Estado ejecutivo del ERP</div>
-                        </div>
-                        <span class="badge text-bg-<?= esc($alert['tone']) ?>"><?= esc((string) $alert['value']) ?></span>
-                    </div>
-                <?php endforeach; ?>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-lg-8">
-        <div class="card border-0 shadow-sm rounded-4 h-100">
-            <div class="card-body p-4">
-                <h2 class="h4 mb-1">Rendimiento comercial</h2>
-                <p class="text-secondary mb-4">Ventas y margen de los ultimos seis meses.</p>
-                <?php $maxSeries = max(array_map(static fn(array $row): float => max((float) ($row['amount'] ?? 0), 1), $marketingSeries ?: [['amount' => 1]])); ?>
-                <?php foreach (($marketingSeries ?? []) as $row): ?>
-                    <?php $salesWidth = $maxSeries > 0 ? max(6, (int) round(((float) $row['amount'] / $maxSeries) * 100)) : 6; ?>
-                    <?php $marginWidth = $maxSeries > 0 ? max(4, (int) round(((float) ($row['margin'] ?? 0) / $maxSeries) * 100)) : 4; ?>
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between small mb-1">
-                            <span><?= esc($row['label']) ?></span>
-                            <strong>Ventas <?= number_format((float) $row['amount'], 2, ',', '.') ?> | Margen <?= number_format((float) ($row['margin'] ?? 0), 2, ',', '.') ?></strong>
-                        </div>
-                        <div class="progress mb-1" style="height: 10px;"><div class="progress-bar bg-dark" style="width: <?= esc((string) $salesWidth) ?>%"></div></div>
-                        <div class="progress" style="height: 8px;"><div class="progress-bar bg-success" style="width: <?= esc((string) $marginWidth) ?>%"></div></div>
-                    </div>
-                <?php endforeach; ?>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-lg-6">
-        <div class="card border-0 shadow-sm rounded-4 h-100">
-            <div class="card-body p-4">
-                <h2 class="h4 mb-1">Operacion por sucursal</h2>
-                <p class="text-secondary mb-4">Volumen comercial y margen por unidad operativa.</p>
-                <?php foreach (($branchPerformance ?? []) as $branch): ?>
-                    <div class="border rounded-4 p-3 mb-3">
-                        <div class="d-flex justify-content-between align-items-start gap-3">
-                            <div>
-                                <div class="fw-semibold"><?= esc($branch['branch_name']) ?></div>
-                                <div class="small text-secondary"><?= esc((string) ($branch['sales_count'] ?? 0)) ?> ventas registradas</div>
-                            </div>
-                            <div class="text-end">
-                                <div class="fw-semibold"><?= number_format((float) ($branch['total_amount'] ?? 0), 2, ',', '.') ?></div>
-                                <div class="small text-secondary">Margen <?= number_format((float) ($branch['margin_total'] ?? 0), 2, ',', '.') ?></div>
-                            </div>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-                <?php if (($branchPerformance ?? []) === []): ?><div class="text-secondary">Todavia no hay datos operativos para mostrar.</div><?php endif; ?>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-lg-6">
-        <div class="card border-0 shadow-sm rounded-4 h-100">
-            <div class="card-body p-4">
-                <h2 class="h4 mb-1">Actividad reciente</h2>
-                <p class="text-secondary mb-4">Auditoria funcional e integraciones del ERP.</p>
-                <div class="row g-3">
-                    <div class="col-12">
-                        <div class="border rounded-4 p-3">
-                            <div class="d-flex justify-content-between mb-2">
-                                <strong>Auditoria de hoy</strong>
-                                <span class="badge text-bg-dark"><?= esc((string) ($stats['audit_today'] ?? 0)) ?></span>
-                            </div>
-                            <?php foreach (($recentAudit ?? []) as $row): ?>
-                                <div class="small mb-2"><strong><?= esc($row['action']) ?></strong> en <?= esc($row['entity_type']) ?> por <?= esc($row['user_name'] ?? '-') ?></div>
-                            <?php endforeach; ?>
-                            <?php if (($recentAudit ?? []) === []): ?><div class="small text-secondary">Sin eventos recientes.</div><?php endif; ?>
-                        </div>
-                    </div>
-                    <div class="col-12">
-                        <div class="border rounded-4 p-3">
-                            <div class="d-flex justify-content-between mb-2">
-                                <strong>Integraciones</strong>
-                                <span class="badge text-bg-<?= (($stats['integration_errors'] ?? 0) > 0) ? 'danger' : 'success' ?>"><?= esc((string) ($stats['integration_errors'] ?? 0)) ?> errores</span>
-                            </div>
-                            <?php foreach (($recentIntegrations ?? []) as $row): ?>
-                                <div class="small mb-2"><strong><?= esc($row['provider']) ?>/<?= esc($row['service']) ?></strong> - <?= esc($row['status']) ?><?= ! empty($row['message']) ? ' | ' . esc($row['message']) : '' ?></div>
-                            <?php endforeach; ?>
-                            <?php if (($recentIntegrations ?? []) === []): ?><div class="small text-secondary">Sin integraciones recientes.</div><?php endif; ?>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+</header>
+<form class="dw-filters" method="get" action="<?= site_url('dashboard') ?>"><div class="dw-company"><i class="bi bi-building" aria-hidden="true"></i><div><strong><?= esc($w['company']['name'] ?? 'Sin empresa') ?></strong><small><?= esc($w['scope']) ?></small></div></div><div class="dw-filter-fields">
+<?php if ($w['role'] === 'superadmin'): ?><label>Empresa<select name="company_id"><?php foreach ($w['companies'] as $company): ?><option value="<?= esc($company['id']) ?>" <?= ($w['company']['id'] ?? '') === $company['id'] ? 'selected' : '' ?>><?= esc($company['name']) ?></option><?php endforeach; ?></select></label><?php endif; ?>
+<label>Período<select name="days"><?php foreach ([7, 30, 90] as $days): ?><option value="<?= $days ?>" <?= $w['days'] === $days ? 'selected' : '' ?>>Últimos <?= $days ?> días</option><?php endforeach; ?></select></label><button class="dw-button" type="submit" aria-label="Aplicar filtros" title="Aplicar filtros"><i class="bi bi-funnel" aria-hidden="true"></i></button></div></form>
+<?php if ($w['error']): ?><div class="dw-empty" role="status"><h2>Necesitamos una asignación válida</h2><p><?= esc($w['error']) ?></p></div><?php else: ?>
+<div class="dw-section-title"><h2>Lo importante ahora</h2><span><?= esc(date('d/m', strtotime($w['start']))) ?> — <?= esc(date('d/m/Y', strtotime($w['end']))) ?></span></div>
+<section class="dw-metrics" aria-label="Indicadores de tu trabajo"><?php foreach ($w['metrics'] as $metric): ?><a class="dw-metric" href="<?= esc($metric['url']) ?>"><div><span><?= esc($metric['label']) ?></span><i class="bi <?= esc($icons[$metric['module']] ?? 'bi-activity') ?>" aria-hidden="true"></i></div><strong><?= esc((string) $metric['value']) ?></strong><small><?= esc($metric['note']) ?></small><span class="dw-metric-arrow" aria-hidden="true">↗</span></a><?php endforeach; ?></section>
+<?php if ($w['modules'] === []): ?><div class="dw-empty"><h2>Tu espacio está listo</h2><p>Cuando te asignen módulos activos, verás aquí tus indicadores y accesos.</p></div><?php endif; ?>
+<?php if ($w['modules']): ?>
+<div class="dw-module-tabs" aria-label="Área de análisis"><?php foreach ($w['modules'] as $index => $module): ?><button type="button" data-dw-module="<?= esc($module['id']) ?>" aria-pressed="<?= $index === 0 ? 'true' : 'false' ?>" class="<?= $index === 0 ? 'is-active' : '' ?>" aria-label="<?= esc($module['name']) ?>" title="<?= esc($module['name']) ?>"><i class="bi <?= esc($icons[$module['id']]) ?>" aria-hidden="true"></i></button><?php endforeach; ?></div>
+<div class="dw-analysis-grid"><section class="dw-panel dw-trend"><header><div><span class="dw-eyebrow">TU ACTIVIDAD EN EL TIEMPO</span><h2 id="dw-chart-title">Evolución de registros</h2></div><div class="dw-chart-mode" aria-label="Tipo de gráfica"><button type="button" data-dw-mode="bars" aria-pressed="true" aria-label="Barras" title="Barras"><i class="bi bi-bar-chart" aria-hidden="true"></i></button><button type="button" data-dw-mode="line" aria-pressed="false" aria-label="Línea" title="Línea"><i class="bi bi-graph-up" aria-hidden="true"></i></button></div></header><div class="dw-chart-summary"><strong id="dw-chart-total">—</strong><span>registros en el período · todos los estados</span></div><div id="dw-chart" class="dw-chart"></div><div class="dw-chart-caption" id="dw-point" role="status">Selecciona un punto o una barra para consultar el día.</div><details class="dw-data"><summary>Ver datos de la gráfica en tabla</summary><div class="dw-table-scroll"><table><thead><tr><th>Fecha</th><th>Registros</th></tr></thead><tbody id="dw-series-table"><?php foreach ($w['modules'][0]['series'] as $point): ?><tr><td><?= esc($point['day']) ?></td><td><?= $point['value'] ?></td></tr><?php endforeach; ?></tbody></table></div></details><noscript><p class="dw-note">La tabla contiene los datos de la primera área. Activa JavaScript para cambiar de gráfica.</p></noscript></section>
+<section class="dw-panel dw-distribution"><header><div><span class="dw-eyebrow">UNA LECTURA MÁS CLARA</span><h2>Distribución por estado</h2></div></header><div class="dw-ring-wrap"><div class="dw-ring" id="dw-ring"><div><strong id="dw-ring-total">0</strong><small>registros</small></div></div></div><p id="dw-state-note" class="dw-note"></p><div id="dw-legend" class="dw-legend"></div></section></div>
+<?php endif; ?>
+<div class="dw-bottom-grid"><section class="dw-panel dw-tasks"><header><div><span class="dw-eyebrow">SIGUIENTE PASO</span><h2>Pendientes para revisar</h2></div><span class="dw-count"><?= count($w['tasks']) ?></span></header><?php foreach ($w['tasks'] as $task): ?><a data-dw-task href="<?= esc($task['url']) ?>"><span class="dw-task-icon"><i class="bi <?= esc($icons[$task['module']]) ?>" aria-hidden="true"></i></span><span><strong><?= esc($task['label']) ?></strong><small><?= esc($task['detail']) ?></small></span><b><?= $task['value'] ?></b><span aria-hidden="true">→</span></a><?php endforeach; ?><?php if (! $w['tasks']): ?><div class="dw-empty dw-empty-small"><i class="bi bi-check2-circle" aria-hidden="true"></i><h3>Sin pendientes destacados</h3><p>No detectamos pendientes de los tipos supervisados en tus módulos.</p></div><?php endif; ?><nav class="dw-pagination" id="dw-tasks-pagination" aria-label="Paginación de pendientes" hidden><button type="button" data-page-prev aria-label="Página anterior de pendientes" title="Anterior"><i class="bi bi-chevron-left" aria-hidden="true"></i></button><span data-page-info role="status" aria-live="polite"></span><button type="button" data-page-next aria-label="Página siguiente de pendientes" title="Siguiente"><i class="bi bi-chevron-right" aria-hidden="true"></i></button></nav></section>
+<section class="dw-panel dw-activity"><header><div><span class="dw-eyebrow">TODO EN CONTEXTO</span><h2>Actividad reciente</h2></div><button type="button" class="dw-text-button" id="dw-clear" aria-label="Ver todas las áreas" title="Ver todas las áreas"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i></button></header><label class="dw-search"><i class="bi bi-search" aria-hidden="true"></i><input type="search" id="dw-search" placeholder="Buscar documento, módulo o estado…" aria-label="Buscar actividad reciente"></label><div class="dw-activity-scope" id="dw-activity-scope" role="status">Últimos registros de las áreas autorizadas</div><div class="dw-table-scroll"><table><thead><tr><th>Documento</th><th>Área</th><th>Estado</th><th>Fecha</th></tr></thead><tbody id="dw-activity-body"><?php foreach ($w['activity'] as $event): ?><tr data-area="<?= esc($event['module']) ?>" data-status="<?= esc($event['status']) ?>" data-day="<?= esc(substr($event['date'], 0, 10)) ?>"><td><a href="<?= esc($event['url']) ?>" title="Abrir el módulo <?= esc($event['name']) ?>"><?= esc($event['reference']) ?> ↗</a></td><td><?= esc($event['name']) ?></td><td><span class="dw-status"><?= esc($event['status']) ?></span></td><td><?= esc(date('d/m H:i', strtotime($event['date']))) ?></td></tr><?php endforeach; ?></tbody></table></div><p class="dw-note" id="dw-activity-count"><?= count($w['activity']) ?> registros recientes · Máximo 8 por área</p><p class="dw-empty-small" id="dw-no-results" <?= $w['activity'] ? 'hidden' : '' ?>>No hay actividad para mostrar con estos filtros.</p><nav class="dw-pagination" id="dw-activity-pagination" aria-label="Paginación de actividad reciente" hidden><button type="button" data-page-prev aria-label="Página anterior de actividad reciente" title="Anterior"><i class="bi bi-chevron-left" aria-hidden="true"></i></button><span data-page-info role="status" aria-live="polite"></span><button type="button" data-page-next aria-label="Página siguiente de actividad reciente" title="Siguiente"><i class="bi bi-chevron-right" aria-hidden="true"></i></button></nav></section></div>
+<?php endif; ?>
+<footer class="dw-footer"><span>Datos reales · Acceso según tu rol y asignaciones</span><span>Actualizado <?= esc($w['updated']) ?> <span id="dw-update-status" role="status"></span></span></footer>
 </div>
+<script type="application/json" id="dw-data"><?= json_encode(['modules' => $w['modules']], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE) ?></script>
+<script src="<?= base_url('assets/js/dashboard-workspace.js') ?>" defer></script>
 <?= $this->endSection() ?>

@@ -11,20 +11,33 @@
     <p class="text-secondary mb-0">Parametros centrales por empresa: datos, sucursales, impuestos, monedas y numeraciones.</p>
 </div>
 
-<?php if (! empty($companies)): ?>
+<?php if (! empty($company)): ?>
     <div class="card border-0 shadow-sm rounded-4 mb-4">
         <div class="card-body">
             <form method="get" action="<?= site_url('configuracion') ?>" class="row g-3 align-items-end">
                 <div class="col-md-6">
-                    <label class="form-label">Empresa activa</label>
-                    <select name="company_id" class="form-select">
+                    <label class="form-label" for="settings-active-company">Empresa activa</label>
+                    <?php if (! empty($companies)): ?>
+                    <select name="company_id" id="settings-active-company" class="form-select">
                         <?php foreach ($companies as $companyOption): ?>
                             <option value="<?= esc($companyOption['id']) ?>" <?= ($company['id'] ?? '') === $companyOption['id'] ? 'selected' : '' ?>><?= esc($companyOption['name']) ?></option>
                         <?php endforeach; ?>
                     </select>
+                    <?php else: ?>
+                        <input id="settings-active-company" class="form-control" value="<?= esc($company['name'] ?? '') ?>" readonly>
+                    <?php endif; ?>
                 </div>
-                <div class="col-md-2">
-                    <button class="btn btn-dark icon-btn" title="Cambiar empresa activa" aria-label="Cambiar empresa activa"><i class="bi bi-arrow-repeat"></i></button>
+                <div class="col-md-auto d-flex gap-2">
+                    <?php if (! empty($companies)): ?>
+                        <button class="btn btn-dark icon-btn" title="Cambiar empresa activa" aria-label="Cambiar empresa activa"><i class="bi bi-arrow-repeat"></i></button>
+                    <?php endif; ?>
+                    <?php if (auth_can('settings.manage')): ?>
+                        <a href="<?= site_url('configuracion/empresa/editar?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-dark icon-btn" data-popup="true" data-popup-title="Editar empresa" data-popup-subtitle="Actualizar datos principales de la empresa activa." title="Editar empresa" aria-label="Editar empresa"><i class="bi bi-pencil-square" aria-hidden="true"></i></a>
+                    <?php endif; ?>
+                </div>
+                <div class="col-12 col-md-auto ms-md-auto text-end">
+                    <div class="small text-secondary mb-1">CUIT</div>
+                    <div class="fw-semibold text-break"><?= esc(trim((string) ($company['tax_id'] ?? '')) ?: 'Sin registrar') ?></div>
                 </div>
             </form>
         </div>
@@ -79,28 +92,6 @@
             </div>
         </div>
     </div>
-    <div class="col-12">
-        <div class="card border-0 shadow-sm rounded-4">
-            <div class="card-body p-4">
-                <div class="d-flex justify-content-between align-items-start mb-3">
-                    <div>
-                        <h2 class="h4 mb-1">Datos de la empresa</h2>
-                        <p class="text-secondary mb-0">Configuracion general de la empresa activa.</p>
-                    </div>
-                    <?php if (auth_can('settings.manage')): ?>
-                        <a href="<?= site_url('configuracion/empresa/editar?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-dark icon-btn" data-popup="true" data-popup-title="Editar empresa" data-popup-subtitle="Actualizar datos principales de la empresa activa." title="Editar empresa" aria-label="Editar empresa"><i class="bi bi-pencil-square"></i></a>
-                    <?php endif; ?>
-                </div>
-                <dl class="row mb-0">
-                    <dt class="col-md-3">Nombre</dt><dd class="col-md-9"><?= esc($company['name'] ?? '') ?></dd>
-                    <dt class="col-md-3">Razon social</dt><dd class="col-md-9"><?= esc($company['legal_name'] ?? '-') ?></dd>
-                    <dt class="col-md-3">Cuit</dt><dd class="col-md-9"><?= esc($company['tax_id'] ?? '-') ?></dd>
-                    <dt class="col-md-3">Moneda base</dt><dd class="col-md-9"><?= esc($company['currency_code'] ?? '-') ?></dd>
-                </dl>
-            </div>
-        </div>
-    </div>
-
     <div class="col-lg-6">
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body p-4">

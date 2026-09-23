@@ -172,15 +172,16 @@ $productCatalog = array_values(array_map(static function (array $product): array
                                 </div>
                             </div>
 
-<div class="row g-2 mt-2"><label class="col-md-4">Segundo medio (opcional)<select name="payments[1][payment_method]" class="form-select"><option value="cash">Efectivo</option><option value="card">Tarjeta</option><option value="transfer">Transferencia</option></select></label><label class="col-md-4">Importe del segundo medio<input type="number" name="payments[1][amount]" id="kiosk-second-amount" min="0" step="0.01" value="0" class="form-control"></label><label class="col-md-4">Referencia<input name="payments[1][reference]" class="form-control"></label><p class="small text-secondary">Las transferencias se verifican en Cobranzas antes de cancelar el saldo.</p></div>
                             <div class="row g-3 mt-1">
                                 <div class="col-md-3">
                                     <label class="form-label">Pago</label>
                                     <select name="payments[0][payment_method]" class="form-select"
-                                        id="kiosk-payment-method">
-                                        <option value="cash">Efectivo</option>
-                                        <option value="card">Tarjeta</option>
-                                        <option value="transfer">Transferencia</option>
+                                        id="kiosk-payment-method" required>
+                                        <option value="" selected disabled>Seleccionar medio de pago</option>
+                                        <?php foreach ($paymentMethods as $paymentMethod): ?>
+                                            <?php $paymentType = $paymentMethod['type'] === 'wallet' ? 'qr' : $paymentMethod['type']; ?>
+                                            <option value="<?= esc($paymentType) ?>" <?= in_array($paymentType, \App\Libraries\PaymentIntegrityService::METHODS, true) ? '' : 'disabled title="Tipo aún no compatible con el cobro en kiosco"' ?>><?= esc($paymentMethod['code']) ?></option>
+                                        <?php endforeach; ?>
                                     </select>
                                 </div>
                                 <div class="col-md-3">
@@ -504,17 +505,13 @@ $productCatalog = array_values(array_map(static function (array $product): array
         // ── Change (vuelto) calculation ─────────────────────
         const updateChange = () => {
             const total = totalAmount();
-            const paid = (parseFloat(paidAmount.value) || 0) + (parseFloat(document.getElementById('kiosk-second-amount').value) || 0);
+            const paid = (parseFloat(paidAmount.value) || 0);
             const change = paid - total;
             changeLabel.textContent = '$' + formatMoney(Math.abs(change));
             changeLabel.classList.toggle('is-negative', change < 0);
         };
 
         paidAmount.addEventListener('input', updateChange);
-        document.getElementById('kiosk-second-amount').addEventListener('input', () => {
-            paidAmount.value = Math.max(0, totalAmount() - (parseFloat(document.getElementById('kiosk-second-amount').value) || 0)).toFixed(2);
-            updateChange();
-        });
 
         const renderTicket = () => {
             ticketBody.innerHTML = '';
@@ -522,7 +519,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
             if (items.size === 0) {
                 ticketBody.appendChild(emptyRow);
                 totalLabel.textContent = '0,00';
-                paidAmount.value = '0.00'; document.getElementById('kiosk-second-amount').value = '0';
+                paidAmount.value = '0.00';
                 updateChange();
                 syncHiddenInputs();
                 return;
@@ -541,11 +538,12 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 <td>
                     <input
                         type="number"
-                        step="0.01"
-                        min="0.01"
+                        step="1"
+                        min="1"
+                        inputmode="numeric"
                         class="form-control kiosk-qty"
                         data-id="${item.id}"
-                        value="${Number(item.quantity).toFixed(2)}"
+                        value="${Number(item.quantity)}"
                     >
                 </td>
                 <td>
@@ -592,7 +590,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 }
             }
 
-            paidAmount.value = Math.max(0, Number(total) - (parseFloat(document.getElementById('kiosk-second-amount').value) || 0)).toFixed(2);
+            paidAmount.value = Math.max(0, Number(total)).toFixed(2);
             updateChange();
             syncHiddenInputs();
 
@@ -600,7 +598,13 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 field.addEventListener('change', () => {
                     const item = items.get(field.dataset.id);
                     if (!item) return;
-                    item.quantity = Math.max(0.01, Number(field.value || 0));
+                    const quantity = Number(field.value);
+                    if (!Number.isSafeInteger(quantity) || quantity < 1) {
+                        showToast('La cantidad debe ser un número entero mayor que cero.', 'exclamation-triangle');
+                        field.value = String(item.quantity);
+                        return;
+                    }
+                    item.quantity = quantity;
                     renderTicket();
                 });
             });
@@ -735,7 +739,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
 
                 const showBreakdown = Number(ticketSettings.ticket_show_item_breakdown) === 1;
                 const breakdownHtml = showBreakdown
-                    ? `<span>${formatMoney(item.quantity)} x ${formatMoney(item.unit_price)}${discountText}</span>`
+                    ? `<span>${Number(item.quantity)} x ${formatMoney(item.unit_price)}${discountText}</span>`
                     : `<span>Cant: ${Number(item.quantity)}</span>`;
 
                 return `
@@ -750,7 +754,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 `;
             }).join('');
 
-            const receivedTotal = (parseFloat(paidAmount.value) || 0) + (parseFloat(document.getElementById('kiosk-second-amount').value) || 0);
+            const receivedTotal = (parseFloat(paidAmount.value) || 0);
             const change = Math.max(0, receivedTotal - totalAmount());
 
             const headerTitle = ticketSettings.ticket_header_title || companyLegalName || companyName;
@@ -986,9 +990,8 @@ $productCatalog = array_values(array_map(static function (array $product): array
 
             const formData = new FormData(form);
             // Cash handed over may include change; persist only the amount applied.
-            const secondAmount = Number(formData.get('payments[1][amount]') || 0);
-            if (formData.get('payments[0][payment_method]') === 'cash' && secondAmount <= totalAmount()) {
-                formData.set('payments[0][amount]', Math.min(Number(paidAmount.value || 0), Math.max(0, totalAmount() - secondAmount)).toFixed(2));
+            if (formData.get('payments[0][payment_method]') === 'cash') {
+                formData.set('payments[0][amount]', Math.min(Number(paidAmount.value || 0), Math.max(0, totalAmount())).toFixed(2));
             }
             fetch(form.action, {
                 method: 'POST',

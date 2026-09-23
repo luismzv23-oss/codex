@@ -979,6 +979,7 @@ class SalesController extends BaseController
 
         return view('sales/forms/kiosk', [
             'pageTitle' => 'Ticket Kiosco',
+            'paymentMethods' => (new \App\Models\CompanyPaymentMethodModel())->where('company_id', $companyId)->where('active', 1)->orderBy('name', 'ASC')->findAll(),
             'company' => $context['company'],
             'products' => $this->salesProductCatalog($companyId),
             'customers' => $this->customerOptions($companyId),
@@ -3240,6 +3241,14 @@ class SalesController extends BaseController
             return redirect()->back()->withInput()->with('error', 'La moneda seleccionada debe pertenecer a las monedas activas de la empresa.');
         }
         $items = $this->parseSaleItems($companyId, $input);
+        if ($channel === 'kiosk') {
+            foreach ($items as $item) {
+                $quantity = (float) $item['quantity'];
+                if (! is_finite($quantity) || $quantity < 1 || floor($quantity) !== $quantity) {
+                    return redirect()->back()->withInput()->with('error', 'La cantidad en kiosco debe ser un número entero mayor que cero.');
+                }
+            }
+        }
         try {
             $payments = $this->parseSalePayments($input);
             (new \App\Libraries\PaymentIntegrityService())->validateReferences($companyId, $payments);

@@ -31,6 +31,7 @@ class SettingsController extends BaseController
 
         return view('settings/index', [
             'pageTitle' => 'Configuracion',
+            'paymentMethods' => (new \App\Models\CompanyPaymentMethodModel())->where('company_id', $companyId)->orderBy('name', 'ASC')->findAll(),
             'company' => $companyModel->find($companyId),
             'companies' => $this->isSuperadmin() ? $companyModel->orderBy('name', 'ASC')->findAll() : [],
             'branches' => $branchModel->where('company_id', $companyId)->orderBy('name', 'ASC')->findAll(),
@@ -46,7 +47,10 @@ class SettingsController extends BaseController
             $companyId = (string) $this->resolveCompanyId();
             $service = new \App\Libraries\SettingsService();
             $result = $service->company($companyId, (array) $this->request->getPost());
-            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.');
+            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.', [
+                'entity' => 'settings-list',
+                'item' => ['company_id' => $companyId, 'list' => 'company', 'id' => $result['id']],
+            ]);
         } catch (\Throwable $e) {
             log_message('error', 'Configuracion: {message}', ['message' => $e->getMessage()]);
             return redirect()->back()->withInput()->with('error', $e->getMessage());
@@ -59,7 +63,10 @@ class SettingsController extends BaseController
             $companyId = (string) $this->resolveCompanyId();
             $service = new \App\Libraries\SettingsService();
             $result = $service->branch($companyId, (array) $this->request->getPost());
-            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.');
+            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.', [
+                'entity' => 'settings-list',
+                'item' => ['company_id' => $companyId, 'list' => 'branches', 'id' => $result['id']],
+            ]);
         } catch (\Throwable $e) {
             log_message('error', 'Configuracion: {message}', ['message' => $e->getMessage()]);
             return redirect()->back()->withInput()->with('error', $e->getMessage());
@@ -72,7 +79,10 @@ class SettingsController extends BaseController
             $companyId = (string) $this->resolveCompanyId();
             $service = new \App\Libraries\SettingsService();
             $result = $service->tax($companyId, (array) $this->request->getPost());
-            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.');
+            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.', [
+                'entity' => 'settings-list',
+                'item' => ['company_id' => $companyId, 'list' => 'taxes', 'id' => $result['id']],
+            ]);
         } catch (\Throwable $e) {
             log_message('error', 'Configuracion: {message}', ['message' => $e->getMessage()]);
             return redirect()->back()->withInput()->with('error', $e->getMessage());
@@ -104,7 +114,10 @@ class SettingsController extends BaseController
             $companyId = (string) $this->resolveCompanyId();
             $service = new \App\Libraries\SettingsService();
             $result = $service->tax($companyId, (array) $this->request->getPost(), $id);
-            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.');
+            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.', [
+                'entity' => 'settings-list',
+                'item' => ['company_id' => $companyId, 'list' => 'taxes', 'id' => $result['id']],
+            ]);
         } catch (\Throwable $e) {
             log_message('error', 'Configuracion: {message}', ['message' => $e->getMessage()]);
             return redirect()->back()->withInput()->with('error', $e->getMessage());
@@ -117,7 +130,10 @@ class SettingsController extends BaseController
             $companyId = (string) $this->resolveCompanyId();
             $service = new \App\Libraries\SettingsService();
             $service->taxAction($companyId, $id, 'default');
-            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.');
+            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.', [
+                'entity' => 'settings-list',
+                'item' => ['company_id' => $companyId, 'list' => 'taxes', 'id' => $id],
+            ]);
         } catch (\Throwable $e) {
             log_message('error', 'Configuracion: {message}', ['message' => $e->getMessage()]);
             return redirect()->back()->withInput()->with('error', $e->getMessage());
@@ -130,7 +146,10 @@ class SettingsController extends BaseController
             $companyId = (string) $this->resolveCompanyId();
             $service = new \App\Libraries\SettingsService();
             $service->taxAction($companyId, $id, 'delete');
-            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.');
+            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.', [
+                'entity' => 'settings-list',
+                'item' => ['company_id' => $companyId, 'list' => 'taxes', 'id' => null],
+            ]);
         } catch (\Throwable $e) {
             log_message('error', 'Configuracion: {message}', ['message' => $e->getMessage()]);
             return redirect()->back()->withInput()->with('error', $e->getMessage());
@@ -143,7 +162,10 @@ class SettingsController extends BaseController
             $companyId = (string) $this->resolveCompanyId();
             $service = new \App\Libraries\SettingsService();
             $service->taxAction($companyId, $id, 'toggle');
-            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.');
+            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.', [
+                'entity' => 'settings-list',
+                'item' => ['company_id' => $companyId, 'list' => 'taxes', 'id' => $id],
+            ]);
         } catch (\Throwable $e) {
             log_message('error', 'Configuracion: {message}', ['message' => $e->getMessage()]);
             return redirect()->back()->withInput()->with('error', $e->getMessage());
@@ -156,7 +178,10 @@ class SettingsController extends BaseController
             $companyId = (string) $this->resolveCompanyId();
             $service = new \App\Libraries\SettingsService();
             $result = $service->currency($companyId, (array) $this->request->getPost());
-            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.');
+            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.', [
+                'entity' => 'settings-list',
+                'item' => ['company_id' => $companyId, 'list' => 'currencies', 'id' => $result['id']],
+            ]);
         } catch (\Throwable $e) {
             log_message('error', 'Configuracion: {message}', ['message' => $e->getMessage()]);
             return redirect()->back()->withInput()->with('error', $e->getMessage());
@@ -169,7 +194,10 @@ class SettingsController extends BaseController
             $companyId = (string) $this->resolveCompanyId();
             $service = new \App\Libraries\SettingsService();
             $result = $service->sequence($companyId, (array) $this->request->getPost());
-            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.');
+            return $this->popupOrRedirect('/configuracion?company_id=' . $companyId, 'Configuracion guardada correctamente.', [
+                'entity' => 'settings-list',
+                'item' => ['company_id' => $companyId, 'list' => 'sequences', 'id' => $result['id']],
+            ]);
         } catch (\Throwable $e) {
             log_message('error', 'Configuracion: {message}', ['message' => $e->getMessage()]);
             return redirect()->back()->withInput()->with('error', $e->getMessage());

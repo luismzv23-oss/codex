@@ -198,6 +198,12 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     $routes->post('empresas/(:segment)/eliminar', 'CompaniesController::delete/$1', ['filter' => 'permission:companies.manage']);
 
     $routes->get('configuracion', 'SettingsController::index', ['filter' => 'permission:settings.view']);
+    $routes->get('configuracion/medios-pago/nuevo', 'CompanyPaymentMethodsController::form', ['filter' => 'permission:settings.manage']);
+    $routes->get('configuracion/medios-pago/listado', 'CompanyPaymentMethodsController::listing', ['filter' => 'permission:settings.view']);
+    $routes->get('configuracion/medios-pago/(:segment)/editar', 'CompanyPaymentMethodsController::form/$1', ['filter' => 'permission:settings.manage']);
+    $routes->post('configuracion/medios-pago', 'CompanyPaymentMethodsController::save', ['filter' => 'permission:settings.manage']);
+    $routes->post('configuracion/medios-pago/(:segment)/actualizar', 'CompanyPaymentMethodsController::save/$1', ['filter' => 'permission:settings.manage']);
+    $routes->post('configuracion/medios-pago/(:segment)/eliminar', 'CompanyPaymentMethodsController::delete/$1', ['filter' => 'permission:settings.manage']);
     $routes->get('configuracion/empresa/editar', 'SettingsController::editCompanyForm', ['filter' => 'permission:settings.manage']);
     $routes->get('configuracion/sucursales/nueva', 'SettingsController::createBranchForm', ['filter' => 'permission:branches.manage']);
     $routes->get('configuracion/impuestos/nuevo', 'SettingsController::createTaxForm', ['filter' => 'permission:taxes.manage']);

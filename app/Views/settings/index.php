@@ -12,7 +12,7 @@
 </div>
 
 <?php if (! empty($company)): ?>
-    <div class="card border-0 shadow-sm rounded-4 mb-4">
+    <div class="card border-0 shadow-sm rounded-4 mb-4" id="settings-company-card" data-company-id="<?= esc($company['id']) ?>" data-refresh-url="<?= site_url('configuracion?company_id=' . $company['id']) ?>">
         <div class="card-body">
             <form method="get" action="<?= site_url('configuracion') ?>" class="row g-3 align-items-end">
                 <div class="col-md-6">
@@ -92,28 +92,34 @@
             </div>
         </div>
     </div>
-    <div class="col-lg-6">
-        <div class="card border-0 shadow-sm rounded-4 h-100">
+    <div class="col-12" id="settings-branches-card" data-company-id="<?= esc($company['id']) ?>" data-refresh-url="<?= site_url('configuracion?company_id=' . $company['id']) ?>">
+        <div class="card border-0 shadow-sm rounded-4">
             <div class="card-body p-4">
                 <div class="d-flex justify-content-between align-items-start mb-3">
-                    <h2 class="h4 mb-0">Sucursales</h2>
+                    <div>
+                        <h2 class="h4 mb-1">Sucursales Empresa</h2>
+                        <p class="text-secondary mb-0">Sucursales de la empresa activa y su estado operativo.</p>
+                    </div>
                     <?php if (auth_can('branches.manage')): ?>
                         <a href="<?= site_url('configuracion/sucursales/nueva?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-dark btn-sm icon-btn" data-popup="true" data-popup-title="Nueva sucursal" data-popup-subtitle="Registrar una sucursal para la empresa activa." title="Nueva sucursal" aria-label="Nueva sucursal"><i class="bi bi-plus-lg"></i></a>
                     <?php endif; ?>
                 </div>
-                <ul class="list-group list-group-flush" id="settings-branches" data-settings-pagination="4" aria-label="Sucursales">
+                <ul class="list-group list-group-flush" id="settings-branches" data-settings-pagination="4" aria-label="Sucursales Empresa">
                     <?php if (empty($branches)): ?>
                         <li class="list-group-item px-0 text-secondary" data-pagination-empty>No hay sucursales registradas.</li>
                     <?php endif; ?>
                     <?php foreach ($branches as $branch): ?>
-                        <li class="list-group-item px-0 d-flex justify-content-between"><span><?= esc($branch['name']) ?> <span class="text-secondary">(<?= esc($branch['code']) ?>)</span></span><span><?= (int) $branch['active'] === 1 ? 'Activa' : 'Inactiva' ?></span></li>
+                        <li data-record-id="<?= esc($branch['id']) ?>" tabindex="-1" class="list-group-item px-0 py-3 d-flex justify-content-between align-items-center gap-3">
+                            <span class="text-break"><?= esc($branch['name']) ?> <span class="text-secondary">(<?= esc($branch['code']) ?>)</span></span>
+                            <span class="text-nowrap <?= (int) $branch['active'] === 1 ? 'text-success' : 'text-secondary' ?>"><?= (int) $branch['active'] === 1 ? 'Activa' : 'Inactiva' ?></span>
+                        </li>
                     <?php endforeach; ?>
                 </ul>
             </div>
         </div>
     </div>
 
-    <div class="col-lg-6">
+    <div class="col-lg-6" id="settings-taxes-card" data-company-id="<?= esc($company['id']) ?>" data-refresh-url="<?= site_url('configuracion?company_id=' . $company['id']) ?>">
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body p-4">
                 <div class="d-flex justify-content-between align-items-start mb-3">
@@ -127,7 +133,7 @@
                         <li class="list-group-item px-0 text-secondary" data-pagination-empty>No hay impuestos registrados.</li>
                     <?php endif; ?>
                     <?php foreach ($taxes as $tax): ?>
-                        <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                        <li data-record-id="<?= esc($tax['id']) ?>" tabindex="-1" class="list-group-item px-0 d-flex justify-content-between align-items-center">
                             <div>
                                 <span class="fw-medium"><?= esc($tax['name']) ?></span>
                                 <span class="text-secondary small">(<?= esc($tax['code']) ?>)</span>
@@ -166,7 +172,9 @@
         </div>
     </div>
 
-    <div class="col-lg-6">
+    <?= $this->include('settings/payment_methods_card') ?>
+
+    <div class="col-lg-6" id="settings-currencies-card" data-company-id="<?= esc($company['id']) ?>" data-refresh-url="<?= site_url('configuracion?company_id=' . $company['id']) ?>">
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body p-4">
                 <div class="d-flex justify-content-between align-items-start mb-3">
@@ -178,7 +186,7 @@
                 <?php if (! empty($currencies)): ?>
                     <ul class="list-group list-group-flush" id="settings-currencies" data-settings-pagination="4" aria-label="Monedas">
                         <?php foreach ($currencies as $currency): ?>
-                            <li class="list-group-item px-0">
+                            <li data-record-id="<?= esc($currency['id']) ?>" tabindex="-1" class="list-group-item px-0">
                                 <div class="d-flex justify-content-between align-items-start gap-3">
                                     <div>
                                         <div class="fw-semibold">
@@ -211,7 +219,7 @@
         </div>
     </div>
 
-    <div class="col-lg-6">
+    <div class="col-lg-6" id="settings-sequences-card" data-company-id="<?= esc($company['id']) ?>" data-refresh-url="<?= site_url('configuracion?company_id=' . $company['id']) ?>">
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body p-4">
                 <div class="d-flex justify-content-between align-items-start mb-3">
@@ -225,7 +233,7 @@
                         <li class="list-group-item px-0 text-secondary" data-pagination-empty>No hay numeraciones registradas.</li>
                     <?php endif; ?>
                     <?php foreach ($voucherSequences as $sequence): ?>
-                        <li class="list-group-item px-0 d-flex justify-content-between"><span><?= esc($sequence['document_type']) ?> <span class="text-secondary"><?= esc($sequence['prefix'] ?? '') ?></span></span><span>#<?= esc((string) $sequence['current_number']) ?></span></li>
+                        <li data-record-id="<?= esc($sequence['id']) ?>" tabindex="-1" class="list-group-item px-0 d-flex justify-content-between"><span><?= esc($sequence['document_type']) ?> <span class="text-secondary"><?= esc($sequence['prefix'] ?? '') ?></span></span><span>#<?= esc((string) $sequence['current_number']) ?></span></li>
                     <?php endforeach; ?>
                 </ul>
             </div>

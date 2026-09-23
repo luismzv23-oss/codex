@@ -13,7 +13,7 @@ Alcance: definición y utilización de medios en ventas, kiosco y cobranzas. Rev
 
 ## Hallazgos
 
-1. **Alta: anulación de cobro incompleta.** `SalesController::voidReceipt()` restaura saldos, elimina pagos asociados y marca el recibo anulado. No genera contramovimiento de fondos ni reverso del asiento de `syncSalesReceipt()`. Conserva recibo y auditoría, pero elimina el detalle de pago en lugar de registrar su reverso. Definir separadamente desaplicación, reverso y devolución de dinero.
+1. **Alta: anulación de cobro incompleta.** `SalesController::voidReceipt()` <!-- restaura saldos, elimina pagos asociados y marca el recibo anulado. No genera contramovimiento de fondos ni reverso del asiento de `syncSalesReceipt()`. Conserva recibo y auditoría, pero elimina el detalle de pago en lugar de registrar su reverso. Definir separadamente desaplicación, reverso y devolución de dinero. -->
 
 2. **Alta: sobreaplicación por líneas repetidas o concurrencia.** `receiptApplicationsPayload()` verifica cada línea contra el saldo previo, sin agrupar IDs repetidos ni bloquear la cuenta por cobrar. Dos líneas de 80 contra el mismo saldo de 100 pasan individualmente. `storeReceipt()` calcula el total con ambas; el uso de `min()` al actualizar saldos no invalida los pagos de 160 registrados. La comprobación ocurre antes de la transacción. Agrupar/rechazar duplicados y comprobar saldos bajo bloqueo, tanto web como API.
 

@@ -374,7 +374,7 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
     const taxes = <?= json_encode($taxCatalog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     const customers = <?= json_encode($customers, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     const existingItems = <?= json_encode(array_values(array_map(static function (array $item): array { return ['product_id' => $item['product_id'], 'quantity' => (float) ($item['quantity'] ?? 0), 'unit_price' => (float) ($item['unit_price'] ?? 0), 'discount_rate' => (float) ($item['discount_rate'] ?? 0), 'tax_id' => $item['tax_id'] ?? '']; }, $saleItems)), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
-    const existingPayments = <?= json_encode(array_values(array_map(static function (array $payment): array { return ['payment_method' => $payment['payment_method'] ?? '', 'amount' => (float) ($payment['amount'] ?? 0), 'reference' => $payment['reference'] ?? '', 'paid_at' => ! empty($payment['paid_at']) ? date('Y-m-d\TH:i', strtotime($payment['paid_at'])) : '', 'notes' => $payment['notes'] ?? '']; }, $salePayments)), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    const existingPayments = <?= json_encode(array_values(array_map(static function (array $payment): array { return ['payment_method' => $payment['payment_method'] ?? '', 'amount' => (float) ($payment['amount'] ?? 0), 'gateway_id' => $payment['gateway_id'] ?? '', 'cash_check_id' => $payment['cash_check_id'] ?? '', 'external_reference' => $payment['external_reference'] ?? '', 'reference' => $payment['reference'] ?? '', 'paid_at' => ! empty($payment['paid_at']) ? date('Y-m-d\TH:i', strtotime($payment['paid_at'])) : '', 'notes' => $payment['notes'] ?? '']; }, $salePayments)), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) ?>;
     const body = document.getElementById('sale-items-body');
     const openSearchButton = document.getElementById('open-sale-search');
     const searchField = document.getElementById('sale-search');
@@ -433,7 +433,7 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
         return ['<option value="">Sin impuesto</option>', ...taxes.map((t) => `<option value="${t.id}" ${targetSelected === t.id ? 'selected' : ''}>${t.name} (${Number(t.rate).toFixed(2)}%)</option>`)].join('');
     };
 
-    const paymentOptions = (selected = '') => [['cash', 'Efectivo'], ['card', 'Tarjeta'], ['transfer', 'Transferencia'], ['mixed', 'Mixto']].map(([value, label]) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${label}</option>`).join('');
+    const paymentOptions = (selected = '') => [['cash', 'Efectivo'], ['card', 'Tarjeta'], ['transfer', 'Transferencia']].map(([value, label]) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${label}</option>`).join('');
 
     const availableStock = (productId) => {
         const warehouseId = warehouseField.value;
@@ -586,6 +586,7 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
     const addPaymentRow = (data = {}) => {
         const row = document.createElement('tr');
         row.innerHTML = `<td><select name="payments[${paymentIndex}][payment_method]" class="form-select">${paymentOptions(String(data.payment_method || 'cash'))}</select></td><td><input type="number" step="0.01" min="0" name="payments[${paymentIndex}][amount]" class="form-control sale-payment-amount" value="${Number(data.amount || 0).toFixed(2)}"></td><td><input type="text" name="payments[${paymentIndex}][reference]" class="form-control" value="${String(data.reference || '').replace(/"/g, '&quot;')}"></td><td><input type="datetime-local" name="payments[${paymentIndex}][paid_at]" class="form-control" value="${String(data.paid_at || '')}"></td><td><input type="text" name="payments[${paymentIndex}][notes]" class="form-control" value="${String(data.notes || '').replace(/"/g, '&quot;')}"></td><td class="text-end"><button type="button" class="btn btn-outline-dark icon-btn remove-sale-payment" title="Quitar" aria-label="Quitar"><i class="bi bi-x-lg"></i></button></td>`;
+        ['gateway_id', 'cash_check_id', 'external_reference'].forEach(key => { const hidden = document.createElement('input'); hidden.type = 'hidden'; hidden.name = `payments[${paymentIndex}][${key}]`; hidden.value = data[key] || ''; row.cells[0].append(hidden); });
         paymentsBody.appendChild(row);
         row.querySelectorAll('select, input').forEach((field) => { field.addEventListener('change', syncTotals); field.addEventListener('input', syncTotals); });
         row.querySelector('.remove-sale-payment').addEventListener('click', () => { row.remove(); syncTotals(); });

@@ -11,12 +11,30 @@
             <div class="d-flex gap-2">
                 <?php if (($receipt['status'] ?? '') === 'voided'): ?>
                     <span class="badge bg-secondary fs-6 py-2 px-3">Anulado</span>
+                <?php elseif (($receipt['status'] ?? '') === 'pending'): ?><span class="badge bg-warning text-dark">Pendiente de verificación</span>
                 <?php else: ?>
                     <span class="badge bg-success fs-6 py-2 px-3">Aplicado</span>
                 <?php endif; ?>
             </div>
         </div>
 
+        <?php if (($receipt['status'] ?? '') === 'pending'): ?>
+            <p class="alert alert-warning">Este recibo no cancela deuda ni registra fondos hasta verificar todos sus medios. Los saldos se comprobarán nuevamente al confirmar.</p>
+            <?php if ($context['canManage']): ?>
+            <form method="post" action="<?= site_url('ventas/cobranzas/' . $receipt['id'] . '/confirmar?company_id=' . $selectedCompanyId) ?>" class="d-flex gap-2 mb-3">
+                <?= csrf_field() ?>
+                <label class="flex-grow-1">Evidencia de verificación<input name="confirmation_note" class="form-control" required maxlength="500" placeholder="Referencia bancaria y comprobación realizada"></label>
+                <button class="btn btn-outline-success icon-btn align-self-end" title="Confirmar cobro verificado" aria-label="Confirmar cobro verificado"><i class="bi bi-check2-circle"></i></button>
+            </form>
+            <?php endif; ?>
+        <?php endif; ?>
+        <?php $paymentDetails = json_decode($receipt['payment_details'] ?? 'null', true) ?: []; ?>
+        <?php if ($paymentDetails): ?>
+        <div class="table-responsive mb-3"><table class="table"><thead><tr><th>Medio</th><th>Importe</th><th>Referencia</th></tr></thead><tbody>
+        <?php foreach ($paymentDetails as $line): ?><tr><td><?= esc(['cash'=>'Efectivo','card'=>'Tarjeta','transfer'=>'Transferencia','check'=>'Cheque','qr'=>'QR'][$line['payment_method']] ?? $line['payment_method']) ?></td><td><?= esc(number_format($line['amount'], 2, ',', '.') . ' ' . $receipt['currency_code']) ?></td><td><?= esc($line['external_reference'] ?: $line['reference']) ?></td></tr><?php endforeach; ?>
+        </tbody></table></div>
+        <?php endif; ?>
+        <?php if (! empty($receipt['reversal_reason'])): ?><p>Motivo de anulación: <?= esc($receipt['reversal_reason']) ?></p><?php endif; ?>
         <div class="row g-3 mb-4">
             <div class="col-md-3">
                 <div class="border rounded-4 p-3">
@@ -96,9 +114,9 @@
 
         <div class="d-flex gap-2 pt-3">
             <?php if ($context['canManage'] && ($receipt['status'] ?? '') !== 'voided'): ?>
-                <form method="post" action="<?= site_url('ventas/cobranzas/' . $receipt['id'] . '/anular' . (! empty($selectedCompanyId) ? '?company_id=' . $selectedCompanyId : '')) ?>" onsubmit="return confirm('¿Anular este recibo? Se revertiran los saldos aplicados.')">
+                <form method="post" action="<?= site_url('ventas/cobranzas/' . $receipt['id'] . '/anular' . (! empty($selectedCompanyId) ? '?company_id=' . $selectedCompanyId : '')) ?>" onsubmit="const reason = prompt('Motivo del reverso de fondos y aplicaciones:'); if (!reason || !reason.trim()) return false; this.elements.reason.value = reason; return confirm('Se registrarán contramovimientos de fondos y contabilidad. ¿Continuar?');">
                     <?= csrf_field() ?>
-                    <button type="submit" class="btn btn-outline-danger icon-btn" title="Anular recibo" aria-label="Anular recibo"><i class="bi bi-x-circle"></i></button>
+                    <input type="hidden" name="reason"><button type="submit" class="btn btn-outline-danger icon-btn" title="Anular recibo" aria-label="Anular recibo"><i class="bi bi-x-circle"></i></button>
                 </form>
             <?php endif; ?>
             <?php if ($isPopup): ?>

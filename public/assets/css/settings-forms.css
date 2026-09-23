@@ -1,0 +1,65 @@
+.settings-form {
+    --settings-ink: #203052;
+    --settings-accent: #4959d8;
+    color: var(--settings-ink);
+}
+.settings-form .card {
+    border: 1px solid #e1e7f2 !important;
+    border-radius: 20px !important;
+    box-shadow: 0 8px 28px rgba(32, 48, 82, .06) !important;
+}
+.settings-form .card-body > div:first-child:has(> h2) {
+    padding-bottom: 18px;
+    border-bottom: 1px solid #e8edf5;
+    margin-bottom: 22px !important;
+}
+.settings-form h2 { font-weight: 700; color: var(--settings-ink); }
+.settings-form .form-label { font-size: .875rem; font-weight: 600; margin-bottom: 8px; }
+.settings-form .form-control,
+.settings-form .form-select {
+    min-height: 44px;
+    border-color: #dce3ef;
+    border-radius: 10px;
+    background-color: #fbfcff;
+    color: var(--settings-ink);
+}
+.settings-form .form-control:focus,
+.settings-form .form-select:focus {
+    background-color: #fff;
+    border-color: var(--settings-accent);
+    box-shadow: 0 0 0 3px rgba(73, 89, 216, .13);
+}
+.settings-form .icon-btn,
+.settings-form button[role="tab"] {
+    width: 44px;
+    height: 44px;
+    padding: 0 !important;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    font-size: 1.15rem;
+}
+.settings-form .btn-dark {
+    background: var(--settings-ink);
+    border-color: var(--settings-ink);
+}
+.settings-form .btn-dark:hover { background: #344971; border-color: #344971; }
+.settings-form .btn-outline-secondary { border-color: #dce3ef; color: #61718e; }
+.settings-form .btn-outline-secondary:hover { background: #edf1f9; color: var(--settings-ink); }
+.settings-form button:focus-visible { outline: 3px solid var(--settings-accent); outline-offset: 3px; }
+.settings-form form .col-12.d-flex:has(> .icon-btn) {
+    justify-content: flex-end;
+    border-top: 1px solid #e8edf5;
+    padding-top: 18px !important;
+    margin-top: 24px;
+}
+body.popup-mode:has(.settings-form) { background: #f5f7fb; }
+body.popup-mode:has(.settings-form) .popup-shell { max-width: 100%; padding: 20px; }
+body.popup-mode .settings-form > .card { box-shadow: none !important; }
+body.popup-mode .settings-form > .card > .card-body > div:first-child > h2 { display: none; }
+@media (max-width: 575px) {
+    body.popup-mode:has(.settings-form) .popup-shell { padding: 10px; }
+    .settings-form .card-body { padding: 18px !important; }
+}

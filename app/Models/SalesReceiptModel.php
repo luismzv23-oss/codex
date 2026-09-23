@@ -21,6 +21,8 @@ class SalesReceiptModel extends BaseUuidModel
         'reference',
         'external_reference',
         'status',
+        'payment_details', 'confirmed_by', 'confirmed_at', 'confirmation_note',
+        'reversed_by', 'reversed_at', 'reversal_reason',
         'notes',
         'created_by',
         'created_at',

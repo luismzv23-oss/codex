@@ -231,8 +231,11 @@ class AccountingService
     public function syncSalesReceipt(string $companyId, string $receiptId, string $userId): array
     {
         $db = db_connect();
-        $receipt = $db->table('sales_receipts')->where('id', $receiptId)->get()->getRowArray();
+        $receipt = $db->table('sales_receipts')->where('id', $receiptId)->where('company_id', $companyId)->get()->getRowArray();
         if (!$receipt) return ['ok' => false, 'error' => 'Receipt not found'];
+        if ($db->table('journal_entries')->where('company_id', $companyId)->where('reference_type', 'sales_receipt')->where('reference_id', $receiptId)->countAllResults()) {
+            return ['ok' => true, 'already_synced' => true];
+        }
 
         $map = $this->getAccountMapping($companyId);
         if (empty($map)) {
@@ -240,7 +243,7 @@ class AccountingService
         }
 
         $lines = [];
-        $amount = (float)($receipt['total'] ?? 0);
+        $amount = (float)($receipt['total_amount'] ?? 0);
 
         // Debit: Cash or Bank
         $cashAccount = $map['cash'] ?? $map['bank'] ?? null;
@@ -249,16 +252,35 @@ class AccountingService
         // Credit: Accounts Receivable
         if (!empty($map['receivable'])) $lines[] = ['account_id' => $map['receivable'], 'debit' => 0, 'credit' => $amount, 'description' => 'Cobranza cliente'];
 
-        if (empty($lines)) {
+        if (! $cashAccount || empty($map['receivable']) || $amount <= 0) {
             throw new \RuntimeException("Falta configurar la cuenta de caja/banco o de clientes (receivable) para registrar el recibo de venta.");
         }
 
         return $this->createJournalEntry($companyId, [
             'description' => 'Cobro recibo #' . ($receipt['receipt_number'] ?? ''),
-            'entry_date' => $receipt['receipt_date'] ?? date('Y-m-d'),
+            'entry_date' => $receipt['issue_date'] ?? date('Y-m-d'),
             'reference_type' => 'sales_receipt', 'reference_id' => $receiptId,
             'status' => 'posted', 'user_id' => $userId,
         ], $lines);
+    }
+
+    public function reverseSalesReceipt(string $companyId, string $receiptId, string $userId, string $reason): array
+    {
+        $db = db_connect();
+        if ($db->table('journal_entries')->where('company_id', $companyId)->where('reference_type', 'receipt_reversal')->where('reference_id', $receiptId)->countAllResults()) {
+            return ['ok' => true, 'already_synced' => true];
+        }
+        $entries = $db->table('journal_entries')->where('company_id', $companyId)->where('reference_type', 'sales_receipt')->where('reference_id', $receiptId)->get()->getResultArray();
+        $lines = [];
+        foreach ($entries as $entry) {
+            if ($entry['status'] !== 'posted') { throw new \RuntimeException('El asiento original requiere revisión antes del reverso.'); }
+            foreach ($db->table('journal_entry_lines')->where('journal_entry_id', $entry['id'])->get()->getResultArray() as $line) {
+                $lines[] = ['account_id' => $line['account_id'], 'debit' => (float) $line['credit'], 'credit' => (float) $line['debit'], 'description' => 'Reverso: ' . $reason];
+            }
+        }
+        if (! $entries) { return ['ok' => true, 'skipped' => 'legacy_receipt_without_journal']; }
+        return $this->createJournalEntry($companyId, ['description' => 'Anulación de recibo: ' . $reason,
+            'reference_type' => 'receipt_reversal', 'reference_id' => $receiptId, 'status' => 'posted', 'user_id' => $userId], $lines);
     }
 
     /**

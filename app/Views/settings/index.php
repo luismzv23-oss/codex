@@ -1,6 +1,11 @@
 <?= $this->extend('layouts/app') ?>
 
 <?= $this->section('content') ?>
+<style>
+    [data-settings-pagination] > [hidden] { display: none !important; }
+    .settings-pagination { border-top: 1px solid var(--bs-border-color, #dee2e6); }
+</style>
+<script src="<?= base_url('assets/js/settings-pagination.js') ?>" defer></script>
 <div class="mb-4">
     <h1 class="h2 mb-1">Configuracion</h1>
     <p class="text-secondary mb-0">Parametros centrales por empresa: datos, sucursales, impuestos, monedas y numeraciones.</p>
@@ -105,7 +110,10 @@
                         <a href="<?= site_url('configuracion/sucursales/nueva?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-dark btn-sm icon-btn" data-popup="true" data-popup-title="Nueva sucursal" data-popup-subtitle="Registrar una sucursal para la empresa activa." title="Nueva sucursal" aria-label="Nueva sucursal"><i class="bi bi-plus-lg"></i></a>
                     <?php endif; ?>
                 </div>
-                <ul class="list-group list-group-flush">
+                <ul class="list-group list-group-flush" id="settings-branches" data-settings-pagination="4" aria-label="Sucursales">
+                    <?php if (empty($branches)): ?>
+                        <li class="list-group-item px-0 text-secondary" data-pagination-empty>No hay sucursales registradas.</li>
+                    <?php endif; ?>
                     <?php foreach ($branches as $branch): ?>
                         <li class="list-group-item px-0 d-flex justify-content-between"><span><?= esc($branch['name']) ?> <span class="text-secondary">(<?= esc($branch['code']) ?>)</span></span><span><?= (int) $branch['active'] === 1 ? 'Activa' : 'Inactiva' ?></span></li>
                     <?php endforeach; ?>
@@ -123,7 +131,10 @@
                         <a href="<?= site_url('configuracion/impuestos/nuevo?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-dark btn-sm icon-btn" data-popup="true" data-popup-title="Nuevo impuesto" data-popup-subtitle="Registrar un impuesto para la empresa activa." title="Nuevo impuesto" aria-label="Nuevo impuesto"><i class="bi bi-plus-lg"></i></a>
                     <?php endif; ?>
                 </div>
-                <ul class="list-group list-group-flush">
+                <ul class="list-group list-group-flush" id="settings-taxes" data-settings-pagination="4" aria-label="Impuestos">
+                    <?php if (empty($taxes)): ?>
+                        <li class="list-group-item px-0 text-secondary" data-pagination-empty>No hay impuestos registrados.</li>
+                    <?php endif; ?>
                     <?php foreach ($taxes as $tax): ?>
                         <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
                             <div>
@@ -174,7 +185,7 @@
                     <?php endif; ?>
                 </div>
                 <?php if (! empty($currencies)): ?>
-                    <ul class="list-group list-group-flush">
+                    <ul class="list-group list-group-flush" id="settings-currencies" data-settings-pagination="4" aria-label="Monedas">
                         <?php foreach ($currencies as $currency): ?>
                             <li class="list-group-item px-0">
                                 <div class="d-flex justify-content-between align-items-start gap-3">
@@ -218,7 +229,10 @@
                         <a href="<?= site_url('configuracion/numeraciones/nueva?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-dark btn-sm icon-btn" data-popup="true" data-popup-title="Nueva numeracion" data-popup-subtitle="Registrar una numeracion de comprobantes para la empresa activa." title="Nueva numeracion" aria-label="Nueva numeracion"><i class="bi bi-plus-lg"></i></a>
                     <?php endif; ?>
                 </div>
-                <ul class="list-group list-group-flush">
+                <ul class="list-group list-group-flush" id="settings-sequences" data-settings-pagination="4" aria-label="Numeración de comprobantes">
+                    <?php if (empty($voucherSequences)): ?>
+                        <li class="list-group-item px-0 text-secondary" data-pagination-empty>No hay numeraciones registradas.</li>
+                    <?php endif; ?>
                     <?php foreach ($voucherSequences as $sequence): ?>
                         <li class="list-group-item px-0 d-flex justify-content-between"><span><?= esc($sequence['document_type']) ?> <span class="text-secondary"><?= esc($sequence['prefix'] ?? '') ?></span></span><span>#<?= esc((string) $sequence['current_number']) ?></span></li>
                     <?php endforeach; ?>

@@ -1,5 +1,7 @@
 <?= $this->extend('layouts/app') ?>
 <?= $this->section('content') ?>
+<link rel="stylesheet" href="<?= base_url('assets/css/settings-forms.css') ?>">
+<div class="settings-form">
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body p-4">
         <div class="mb-3">
@@ -18,5 +20,6 @@
             <div class="col-12 d-flex gap-2 pt-2"><button class="btn btn-dark icon-btn" title="Guardar" aria-label="Guardar"><i class="bi bi-check-lg"></i></button><button type="button" class="btn btn-outline-secondary icon-btn" title="Cancelar" aria-label="Cancelar" onclick="window.parent.postMessage({type:'codex-popup-close',redirectUrl:<?= json_encode(site_url('configuracion?company_id=' . $companyId)) ?>}, window.location.origin)"><i class="bi bi-x-lg"></i></button></div>
         </form>
     </div>
+</div>
 </div>
 <?= $this->endSection() ?>

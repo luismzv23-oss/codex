@@ -172,6 +172,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                                 </div>
                             </div>
 
+<div class="row g-2 mt-2"><label class="col-md-4">Segundo medio (opcional)<select name="payments[1][payment_method]" class="form-select"><option value="cash">Efectivo</option><option value="card">Tarjeta</option><option value="transfer">Transferencia</option></select></label><label class="col-md-4">Importe del segundo medio<input type="number" name="payments[1][amount]" id="kiosk-second-amount" min="0" step="0.01" value="0" class="form-control"></label><label class="col-md-4">Referencia<input name="payments[1][reference]" class="form-control"></label><p class="small text-secondary">Las transferencias se verifican en Cobranzas antes de cancelar el saldo.</p></div>
                             <div class="row g-3 mt-1">
                                 <div class="col-md-3">
                                     <label class="form-label">Pago</label>
@@ -180,7 +181,6 @@ $productCatalog = array_values(array_map(static function (array $product): array
                                         <option value="cash">Efectivo</option>
                                         <option value="card">Tarjeta</option>
                                         <option value="transfer">Transferencia</option>
-                                        <option value="mixed">Mixto</option>
                                     </select>
                                 </div>
                                 <div class="col-md-3">
@@ -504,13 +504,17 @@ $productCatalog = array_values(array_map(static function (array $product): array
         // ── Change (vuelto) calculation ─────────────────────
         const updateChange = () => {
             const total = totalAmount();
-            const paid = parseFloat(paidAmount.value) || 0;
+            const paid = (parseFloat(paidAmount.value) || 0) + (parseFloat(document.getElementById('kiosk-second-amount').value) || 0);
             const change = paid - total;
             changeLabel.textContent = '$' + formatMoney(Math.abs(change));
             changeLabel.classList.toggle('is-negative', change < 0);
         };
 
         paidAmount.addEventListener('input', updateChange);
+        document.getElementById('kiosk-second-amount').addEventListener('input', () => {
+            paidAmount.value = Math.max(0, totalAmount() - (parseFloat(document.getElementById('kiosk-second-amount').value) || 0)).toFixed(2);
+            updateChange();
+        });
 
         const renderTicket = () => {
             ticketBody.innerHTML = '';
@@ -518,7 +522,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
             if (items.size === 0) {
                 ticketBody.appendChild(emptyRow);
                 totalLabel.textContent = '0,00';
-                paidAmount.value = '0.00';
+                paidAmount.value = '0.00'; document.getElementById('kiosk-second-amount').value = '0';
                 updateChange();
                 syncHiddenInputs();
                 return;
@@ -588,7 +592,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 }
             }
 
-            paidAmount.value = Number(total).toFixed(2);
+            paidAmount.value = Math.max(0, Number(total) - (parseFloat(document.getElementById('kiosk-second-amount').value) || 0)).toFixed(2);
             updateChange();
             syncHiddenInputs();
 
@@ -746,7 +750,8 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 `;
             }).join('');
 
-            const change = Math.max(0, (parseFloat(paidAmount.value) || 0) - totalAmount());
+            const receivedTotal = (parseFloat(paidAmount.value) || 0) + (parseFloat(document.getElementById('kiosk-second-amount').value) || 0);
+            const change = Math.max(0, receivedTotal - totalAmount());
 
             const headerTitle = ticketSettings.ticket_header_title || companyLegalName || companyName;
 
@@ -929,7 +934,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
 
                 
                 <div class="ticket-small" style="margin-top:8px; text-align:left;"><strong>Pago:</strong> ${paymentMethod.options[paymentMethod.selectedIndex].text}</div>
-                <div class="ticket-small" style="text-align:left;"><strong>Cobrado:</strong> ${formatMoney(paidAmount.value || 0)}</div>
+                <div class="ticket-small" style="text-align:left;"><strong>Importe informado:</strong> ${formatMoney(receivedTotal)}</div>
                 ${change > 0 ? '<div class="ticket-small" style="font-weight:700; color:#198754; text-align:left;"><strong>Vuelto:</strong> ' + formatMoney(change) + '</div>' : ''}
                 
                 ${customerHtml}
@@ -980,6 +985,11 @@ $productCatalog = array_values(array_map(static function (array $product): array
             submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
 
             const formData = new FormData(form);
+            // Cash handed over may include change; persist only the amount applied.
+            const secondAmount = Number(formData.get('payments[1][amount]') || 0);
+            if (formData.get('payments[0][payment_method]') === 'cash' && secondAmount <= totalAmount()) {
+                formData.set('payments[0][amount]', Math.min(Number(paidAmount.value || 0), Math.max(0, totalAmount() - secondAmount)).toFixed(2));
+            }
             fetch(form.action, {
                 method: 'POST',
                 body: formData,

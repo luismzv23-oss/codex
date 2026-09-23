@@ -119,6 +119,7 @@
                                 <td>
                                     <?php if ($isVoided): ?>
                                         <span class="badge bg-secondary">Anulado</span>
+                                    <?php elseif (($receipt['status'] ?? '') === 'pending'): ?><span class="badge bg-warning text-dark">Pendiente de verificación</span>
                                     <?php else: ?>
                                         <span class="badge bg-success">Aplicado</span>
                                     <?php endif; ?>
@@ -127,9 +128,9 @@
                                     <div class="d-flex gap-1 justify-content-end">
                                         <a href="<?= site_url('ventas/cobranzas/' . $receipt['id'] . '/detalle' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark btn-sm icon-btn" data-popup="true" data-popup-title="Detalle de recibo" data-popup-subtitle="Comprobantes aplicados y datos del recibo." title="Ver detalle" aria-label="Ver detalle"><i class="bi bi-eye"></i></a>
                                         <?php if ($context['canManage'] && ! $isVoided): ?>
-                                            <form method="post" action="<?= site_url('ventas/cobranzas/' . $receipt['id'] . '/anular' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" onsubmit="return confirm('¿Anular este recibo? Se revertiran los saldos aplicados.')">
+                                            <form method="post" action="<?= site_url('ventas/cobranzas/' . $receipt['id'] . '/anular' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" onsubmit="const reason = prompt('Motivo del reverso de fondos y aplicaciones:'); if (!reason || !reason.trim()) return false; this.elements.reason.value = reason; return confirm('Se registrarán contramovimientos de fondos y contabilidad. ¿Continuar?');">
                                                 <?= csrf_field() ?>
-                                                <button type="submit" class="btn btn-outline-danger btn-sm icon-btn" title="Anular recibo" aria-label="Anular recibo"><i class="bi bi-x-circle"></i></button>
+                                                <input type="hidden" name="reason"><button type="submit" class="btn btn-outline-danger btn-sm icon-btn" title="Anular recibo" aria-label="Anular recibo"><i class="bi bi-x-circle"></i></button>
                                             </form>
                                         <?php endif; ?>
                                     </div>
@@ -160,4 +161,12 @@
     });
 })();
 </script>
+<?php if (! empty($pendingPayments)): ?>
+<section class="card mt-4"><div class="card-body"><h2 class="h5">Transferencias de ventas pendientes de verificación</h2>
+<div class="table-responsive"><table class="table" data-codex-pagination="5"><thead><tr><th>Venta</th><th>Importe</th><th>Referencia</th><th>Verificación</th></tr></thead><tbody>
+<?php foreach ($pendingPayments as $payment): ?><tr><td><?= esc($payment['sale_number']) ?></td><td><?= esc(number_format($payment['amount'], 2, ',', '.') . ' ' . $payment['currency_code']) ?></td><td><?= esc($payment['external_reference'] ?: $payment['reference']) ?></td><td>
+<form method="post" action="<?= site_url('ventas/' . $payment['sale_id'] . '/pagos/' . $payment['id'] . '/confirmar?company_id=' . $selectedCompanyId) ?>" class="d-flex gap-2"><?= csrf_field() ?><input name="confirmation_note" class="form-control" aria-label="Evidencia de verificación" placeholder="Evidencia de verificación" required maxlength="500"><button class="btn btn-outline-success icon-btn" title="Confirmar transferencia" aria-label="Confirmar transferencia"><i class="bi bi-check2-circle"></i></button></form>
+</td></tr><?php endforeach; ?>
+</tbody></table></div></div></section>
+<?php endif; ?>
 <?= $this->endSection() ?>

@@ -1,5 +1,7 @@
 <?= $this->extend('layouts/app') ?>
 <?= $this->section('content') ?>
+<link rel="stylesheet" href="<?= base_url('assets/css/settings-forms.css') ?>">
+<div class="settings-form">
 <?php
 $currentUser = auth_user();
 $isAdminOrSuperadmin = in_array($currentUser['role_slug'] ?? null, ['admin', 'superadmin'], true);
@@ -18,13 +20,13 @@ $disabledAttr = !$isAdminOrSuperadmin ? 'disabled' : '';
                 <!-- Navigation Tabs -->
                 <ul class="nav nav-pills mb-4 gap-2 bg-light p-1 rounded-3" id="ticketConfigTab" role="tablist" style="width: fit-content;">
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link active py-2 px-3 fw-medium" id="pos-tab" data-bs-toggle="tab" data-bs-target="#pos-tab-pane" type="button" role="tab" aria-controls="pos-tab-pane" aria-selected="true">
-                            <i class="bi bi-display me-1"></i> Punto de Venta (POS)
+                        <button class="nav-link active py-2 px-3 fw-medium" title="Punto de venta (POS)" aria-label="Punto de venta (POS)" id="pos-tab" data-bs-toggle="tab" data-bs-target="#pos-tab-pane" type="button" role="tab" aria-controls="pos-tab-pane" aria-selected="true">
+                            <i class="bi bi-display" aria-hidden="true"></i>
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link py-2 px-3 fw-medium" id="kiosk-tab" data-bs-toggle="tab" data-bs-target="#kiosk-tab-pane" type="button" role="tab" aria-controls="kiosk-tab-pane" aria-selected="false">
-                            <i class="bi bi-tablet me-1"></i> Kiosco
+                        <button class="nav-link py-2 px-3 fw-medium" title="Kiosco" aria-label="Kiosco" id="kiosk-tab" data-bs-toggle="tab" data-bs-target="#kiosk-tab-pane" type="button" role="tab" aria-controls="kiosk-tab-pane" aria-selected="false">
+                            <i class="bi bi-tablet" aria-hidden="true"></i>
                         </button>
                     </li>
                 </ul>
@@ -890,4 +892,5 @@ document.addEventListener('DOMContentLoaded', () => {
     updatePreview();
 });
 </script>
+</div>
 <?= $this->endSection() ?>

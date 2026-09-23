@@ -1,5 +1,7 @@
 <?= $this->extend('layouts/app') ?>
 <?= $this->section('content') ?>
+<link rel="stylesheet" href="<?= base_url('assets/css/settings-forms.css') ?>">
+<div class="settings-form">
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body p-4">
         <div class="mb-3">
@@ -36,5 +38,6 @@
             </div>
         </form>
     </div>
+</div>
 </div>
 <?= $this->endSection() ?>

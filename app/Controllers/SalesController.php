@@ -363,6 +363,7 @@ class SalesController extends BaseController
             'receivableSummary' => $this->receivableSummary($companyId),
             'receivables' => $this->receivableRows($companyId),
             'receipts' => $this->receiptRows($companyId),
+            'pendingPayments' => $context['canManage'] ? db_connect()->table('sale_payments p')->select('p.*, s.sale_number, s.currency_code')->join('sales s', 's.id = p.sale_id')->where('s.company_id', $companyId)->where('p.status', 'pending')->whereIn('s.status', ['confirmed', 'returned_partial'])->where('p.sales_receipt_id', null)->get()->getResultArray() : [],
         ]);
     }
 
@@ -385,131 +386,45 @@ class SalesController extends BaseController
         ]);
     }
 
+    public function confirmReceipt(string $id)
+    {
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) { return $context; }
+        try {
+            $payload = (array) $this->request->getPost();
+            $applied = (new \App\Libraries\SalesCollectionService())->confirm($context['company']['id'], $id, $this->currentUser()['id'], trim((string) ($payload['confirmation_note'] ?? '')));
+            if ($applied) { $receipt = (new SalesReceiptModel())->find($id); \App\Libraries\EventBus::emit('sale.payment_received', ['company_id' => $context['company']['id'], 'payment' => ['amount' => $receipt['total_amount']], 'receipt_id' => $id]); }
+            return $this->popupOrRedirect($this->salesRoute('ventas/cobranzas', $context['company']['id']), 'Operación registrada correctamente.');
+        } catch (\Throwable $e) { return redirect()->back()->withInput()->with('error', $e->getMessage()); }
+    }
+
+    public function confirmSalePayment(string $saleId, string $paymentId)
+    {
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) { return $context; }
+        try {
+            $payload = (array) $this->request->getPost();
+            (new \App\Libraries\SalesCollectionService())->confirmSalePayment($context['company']['id'], $saleId, $paymentId, $this->currentUser()['id'], trim((string) ($payload['confirmation_note'] ?? '')));
+            return redirect()->to($this->salesRoute('ventas/cobranzas', $context['company']['id']))->with('message', 'Transferencia verificada.');
+        } catch (\Throwable $e) { return redirect()->back()->withInput()->with('error', $e->getMessage()); }
+    }
+
     public function storeReceipt()
     {
         $context = $this->salesContext('manage');
-        if ($context instanceof RedirectResponse) {
-            return $context;
-        }
-
+        if ($context instanceof RedirectResponse) { return $context; }
         $companyId = $context['company']['id'];
-        $rows = $this->receiptApplicationsPayload($companyId);
-        if ($rows === []) {
-            return redirect()->back()->withInput()->with('error', 'Debes aplicar al menos una cobranza a un comprobante pendiente.');
-        }
-
-        $customerIds = array_values(array_unique(array_map(static fn(array $row): string => (string) $row['customer_id'], $rows)));
-        if (count($customerIds) !== 1) {
-            return redirect()->back()->withInput()->with('error', 'El recibo solo puede aplicarse a comprobantes del mismo cliente.');
-        }
-
-        $cashSession = (new CashService())->activeSessionForChannel($companyId, 'general');
-        if (!$cashSession) {
-            return redirect()->back()->withInput()->with('error', 'Debes abrir una caja activa para registrar la cobranza.');
-        }
-
-        $total = round(array_sum(array_map(static fn(array $row): float => (float) $row['applied_amount'], $rows)), 2);
-        $issueDate = trim((string) $this->request->getPost('issue_date')) ?: date('Y-m-d H:i:s');
-        $paymentMethod = trim((string) $this->request->getPost('payment_method')) ?: 'cash';
-        $gatewayId = trim((string) $this->request->getPost('gateway_id')) ?: null;
-        $cashCheckId = trim((string) $this->request->getPost('cash_check_id')) ?: null;
-        $externalReference = trim((string) $this->request->getPost('external_reference')) ?: null;
-        $receiptNumber = $this->nextSequenceNumber($companyId, 'RECIBO', 'REC');
-
-        $db = db_connect();
-        $db->transStart();
-
-        $receiptId = (new SalesReceiptModel())->insert([
-            'company_id' => $companyId,
-            'customer_id' => $customerIds[0],
-            'cash_register_id' => $cashSession['cash_register_id'],
-            'cash_session_id' => $cashSession['id'],
-            'receipt_number' => $receiptNumber,
-            'issue_date' => $issueDate,
-            'currency_code' => $context['company']['currency_code'] ?? 'ARS',
-            'payment_method' => $paymentMethod,
-            'gateway_id' => $gatewayId,
-            'cash_check_id' => $cashCheckId,
-            'total_amount' => $total,
-            'reference' => trim((string) $this->request->getPost('reference')),
-            'external_reference' => $externalReference,
-            'notes' => trim((string) $this->request->getPost('notes')),
-            'created_by' => $this->currentUser()['id'],
-        ], true);
-
-        $receiptItemModel = new SalesReceiptItemModel();
-        $salePaymentModel = new SalePaymentModel();
-        $receivableModel = new SalesReceivableModel();
-
-        foreach ($rows as $row) {
-            $receiptItemModel->insert([
-                'sales_receipt_id' => $receiptId,
-                'sales_receivable_id' => $row['receivable_id'],
-                'sale_id' => $row['sale_id'],
-                'document_number' => $row['document_number'],
-                'applied_amount' => $row['applied_amount'],
-            ]);
-
-            $salePaymentModel->insert([
-                'sale_id' => $row['sale_id'],
-                'payment_method' => $paymentMethod,
-                'amount' => $row['applied_amount'],
-                'reference' => $receiptNumber,
-                'status' => 'registered',
-                'paid_at' => $issueDate,
-                'notes' => 'Cobranza aplicada desde recibo',
-            ]);
-
-            $receivable = $receivableModel->find($row['receivable_id']);
-            if ($receivable) {
-                $paidAmount = min((float) ($receivable['total_amount'] ?? 0), (float) ($receivable['paid_amount'] ?? 0) + (float) $row['applied_amount']);
-                $balance = max(0, (float) ($receivable['total_amount'] ?? 0) - $paidAmount);
-                $receivableModel->update($row['receivable_id'], [
-                    'paid_amount' => $paidAmount,
-                    'balance_amount' => $balance,
-                    'status' => $balance <= 0 ? 'paid' : 'partial',
-                ]);
-            }
-
-            $this->refreshSalePaymentStatus($row['sale_id']);
-            $this->syncReceivableForSale($row['sale_id']);
-        }
-
-        (new CashService())->registerMovement([
-            'company_id' => $companyId,
-            'cash_register_id' => $cashSession['cash_register_id'],
-            'cash_session_id' => $cashSession['id'],
-            'movement_type' => 'customer_receipt',
-            'payment_method' => $paymentMethod,
-            'gateway_id' => $gatewayId,
-            'cash_check_id' => $cashCheckId,
-            'amount' => $total,
-            'reference_type' => 'sales_receipt',
-            'reference_id' => $receiptId,
-            'reference_number' => $receiptNumber,
-            'external_reference' => $externalReference,
-            'occurred_at' => $issueDate,
-            'notes' => 'Cobranza de cuenta corriente',
-            'created_by' => $this->currentUser()['id'],
-        ]);
-
         try {
-            (new AccountingService())->syncSalesReceipt($companyId, (string) $receiptId, $this->currentUser()['id']);
-        } catch (\Throwable $e) {
-            $db->transRollback();
-            return redirect()->back()->withInput()->with('error', $e->getMessage());
-        }
-
-        EventBus::emit('sale.payment_received', ['company_id' => $companyId, 'payment' => ['amount' => $total], 'receipt_id' => $receiptId]);
-
-        $db->transComplete();
-        if (!$db->transStatus()) {
-            return redirect()->back()->withInput()->with('error', 'No se pudo registrar el recibo.');
-        }
-
-        $this->logAudit($companyId, 'sales', 'receipt', $receiptId, 'create', null, (new SalesReceiptModel())->find($receiptId));
-
-        return $this->popupOrRedirect($this->salesRoute('ventas/cobranzas', $companyId), 'Recibo registrado correctamente.');
+            $payload = (array) $this->request->getPost();
+            $payload['items'] = [];
+            foreach ((array) ($payload['items_receivable_id'] ?? []) as $i => $id) {
+                $payload['items'][] = ['receivable_id' => $id, 'applied_amount' => $payload['items_applied_amount'][$i] ?? 0];
+            }
+            $receipt = (new \App\Libraries\SalesCollectionService())->create($companyId, $this->currentUser()['id'], $payload,
+                fn() => $this->nextSequenceNumber($companyId, 'RECIBO', 'REC'));
+            if ($receipt['status'] === 'applied') { \App\Libraries\EventBus::emit('sale.payment_received', ['company_id' => $companyId, 'payment' => ['amount' => $receipt['total_amount']], 'receipt_id' => $receipt['id']]); }
+            return $this->popupOrRedirect($this->salesRoute('ventas/cobranzas', $companyId), $receipt['status'] === 'pending' ? 'Recibo pendiente: verifica la transferencia para aplicar sus importes.' : 'Cobro aplicado correctamente.');
+        } catch (\Throwable $e) { return redirect()->back()->withInput()->with('error', $e->getMessage()); }
     }
 
     public function receiptDetail(string $id)
@@ -551,65 +466,12 @@ class SalesController extends BaseController
     public function voidReceipt(string $id)
     {
         $context = $this->salesContext('manage');
-        if ($context instanceof RedirectResponse) {
-            return $context;
-        }
-
-        $companyId = $context['company']['id'];
-        $receipt = (new SalesReceiptModel())->where('company_id', $companyId)->where('id', $id)->first();
-        if (!$receipt) {
-            return redirect()->to($this->salesRoute('ventas/cobranzas', $companyId))->with('error', 'Recibo no encontrado.');
-        }
-
-        if (($receipt['status'] ?? '') === 'voided') {
-            return redirect()->to($this->salesRoute('ventas/cobranzas', $companyId))->with('error', 'El recibo ya fue anulado.');
-        }
-
-        $db = db_connect();
-        $db->transStart();
-
-        // Reverse receipt items - restore balances on receivables
-        $receiptItems = (new SalesReceiptItemModel())->where('sales_receipt_id', $id)->findAll();
-        $receivableModel = new SalesReceivableModel();
-        $salePaymentModel = new SalePaymentModel();
-
-        foreach ($receiptItems as $item) {
-            $receivable = $receivableModel->find($item['sales_receivable_id']);
-            if ($receivable) {
-                $newPaid = max(0, (float) ($receivable['paid_amount'] ?? 0) - (float) ($item['applied_amount'] ?? 0));
-                $newBalance = max(0, (float) ($receivable['total_amount'] ?? 0) - $newPaid);
-                $receivableModel->update($item['sales_receivable_id'], [
-                    'paid_amount' => $newPaid,
-                    'balance_amount' => $newBalance,
-                    'status' => $newBalance <= 0 ? 'paid' : ($newPaid > 0 ? 'partial' : 'pending'),
-                ]);
-            }
-
-            // Remove the associated sale payment created from this receipt
-            $salePaymentModel
-                ->where('sale_id', $item['sale_id'])
-                ->where('reference', $receipt['receipt_number'])
-                ->delete();
-
-            // Refresh sale payment status
-            $this->refreshSalePaymentStatus($item['sale_id']);
-            $this->syncReceivableForSale($item['sale_id']);
-        }
-
-        // Mark receipt as voided
-        (new SalesReceiptModel())->update($id, [
-            'status' => 'voided',
-            'notes' => trim(($receipt['notes'] ?? '') . ' [ANULADO ' . date('d/m/Y H:i') . ']'),
-        ]);
-
-        $this->logAudit($companyId, 'sales', 'receipt', $id, 'void', $receipt, (new SalesReceiptModel())->find($id));
-
-        $db->transComplete();
-        if (!$db->transStatus()) {
-            return redirect()->to($this->salesRoute('ventas/cobranzas', $companyId))->with('error', 'No se pudo anular el recibo.');
-        }
-
-        return redirect()->to($this->salesRoute('ventas/cobranzas', $companyId))->with('message', 'Recibo anulado correctamente. Los saldos han sido restaurados.');
+        if ($context instanceof RedirectResponse) { return $context; }
+        try {
+            $payload = (array) $this->request->getPost();
+            (new \App\Libraries\SalesCollectionService())->reverse($context['company']['id'], $id, $this->currentUser()['id'], trim((string) ($payload['reason'] ?? '')));
+            return $this->popupOrRedirect($this->salesRoute('ventas/cobranzas', $context['company']['id']), 'Operación registrada correctamente.');
+        } catch (\Throwable $e) { return redirect()->back()->withInput()->with('error', $e->getMessage()); }
     }
 
     public function reportsPdf()
@@ -1691,7 +1553,7 @@ class SalesController extends BaseController
                     'discount_rate' => $i['discount_pct'],
                     // Tax matching would require tax lookup, but form defaults to no-tax or lets user select if we leave empty.
                     // We can try to match the rate to a tax_id later if needed, but for now we let it default.
-                    'tax_id' => null 
+                    'tax_id' => null
                 ];
             }, $fromOrderItems);
         }
@@ -2325,8 +2187,8 @@ class SalesController extends BaseController
             $method = \Config\Services::router()->methodName();
             $allowedForVendedor = [
                 'index', 'pos', 'storePos', 'kiosk', 'storeKiosk', 'posCatalog',
-                'arcaDiagnostics', 'diagnoseArca', 'testArcaConnection', 
-                'createCustomerForm', 'storeCustomer', 'pdf', 'convert', 'confirm', 'cancel', 
+                'arcaDiagnostics', 'diagnoseArca', 'testArcaConnection',
+                'createCustomerForm', 'storeCustomer', 'pdf', 'convert', 'confirm', 'cancel',
                 'authorizeArca', 'consultArca', 'createReturnForm', 'storeReturn'
             ];
 
@@ -3157,37 +3019,6 @@ class SalesController extends BaseController
             ->getResultArray();
     }
 
-    private function receiptApplicationsPayload(string $companyId): array
-    {
-        $receivableIds = (array) $this->request->getPost('items_receivable_id');
-        $amounts = (array) $this->request->getPost('items_applied_amount');
-        $rows = [];
-        $model = new SalesReceivableModel();
-
-        foreach ($receivableIds as $index => $receivableId) {
-            $receivableId = trim((string) $receivableId);
-            $appliedAmount = (float) ($amounts[$index] ?? 0);
-            $receivable = $receivableId !== '' ? $model->where('company_id', $companyId)->find($receivableId) : null;
-            if (!$receivable || $appliedAmount <= 0) {
-                continue;
-            }
-
-            $available = (float) ($receivable['balance_amount'] ?? 0);
-            if ($appliedAmount > $available) {
-                continue;
-            }
-
-            $rows[] = [
-                'receivable_id' => $receivableId,
-                'sale_id' => (string) $receivable['sale_id'],
-                'customer_id' => (string) ($receivable['customer_id'] ?? ''),
-                'document_number' => (string) ($receivable['document_number'] ?? ''),
-                'applied_amount' => round($appliedAmount, 2),
-            ];
-        }
-
-        return $rows;
-    }
 
     private function customerOptions(string $companyId): array
     {
@@ -3409,7 +3240,12 @@ class SalesController extends BaseController
             return redirect()->back()->withInput()->with('error', 'La moneda seleccionada debe pertenecer a las monedas activas de la empresa.');
         }
         $items = $this->parseSaleItems($companyId, $input);
-        $payments = $this->parseSalePayments($input);
+        try {
+            $payments = $this->parseSalePayments($input);
+            (new \App\Libraries\PaymentIntegrityService())->validateReferences($companyId, $payments);
+        } catch (\Throwable $e) {
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
+        }
 
         if ($items === []) {
             return redirect()->back()->withInput()->with('error', 'Debes agregar al menos un producto.');
@@ -3445,6 +3281,9 @@ class SalesController extends BaseController
         $subtotal = array_sum(array_map(static fn(array $row): float => (float) $row['subtotal'], $items));
         $paymentMethodDiscount = $this->paymentMethodDiscount($companyId, $payments, $subtotal);
         $totals = $this->calculateSaleTotals($items, (float) ($input['global_discount_total'] ?? 0) + $paymentMethodDiscount, $payments);
+        if (round(array_sum(array_column($payments, 'amount')), 2) > $totals['total']) {
+            return redirect()->back()->withInput()->with('error', 'Los importes aplicados no pueden superar el total de la venta; separa el vuelto.');
+        }
         $marginTotal = round(array_sum(array_map(static fn(array $row): float => ((float) ($row['line_total'] ?? 0)) - (((float) ($row['unit_cost'] ?? 0)) * ((float) ($row['quantity'] ?? 0))), $items)), 2);
         $creditSnapshot = $this->customerCreditSnapshot($companyId, $customerId, $totals['total']);
 
@@ -3685,31 +3524,7 @@ class SalesController extends BaseController
 
     private function parseSalePayments(?array $input = null): array
     {
-        $input ??= (array) $this->request->getPost();
-        $payments = (array) ($input['payments'] ?? []);
-        $rows = [];
-
-        foreach ($payments as $payment) {
-            $method = trim((string) ($payment['payment_method'] ?? ''));
-            $amount = (float) ($payment['amount'] ?? 0);
-            if ($method === '' || $amount <= 0) {
-                continue;
-            }
-
-            $rows[] = [
-                'payment_method' => $method,
-                'gateway_id' => trim((string) ($payment['gateway_id'] ?? '')) ?: null,
-                'cash_check_id' => trim((string) ($payment['cash_check_id'] ?? '')) ?: null,
-                'amount' => $amount,
-                'reference' => trim((string) ($payment['reference'] ?? '')),
-                'external_reference' => trim((string) ($payment['external_reference'] ?? '')),
-                'status' => 'registered',
-                'paid_at' => trim((string) ($payment['paid_at'] ?? '')) ?: null,
-                'notes' => trim((string) ($payment['notes'] ?? '')),
-            ];
-        }
-
-        return $rows;
+        return (new \App\Libraries\PaymentIntegrityService())->parse((array) (($input ?? (array) $this->request->getPost())['payments'] ?? []));
     }
 
     private function paymentMethodDiscount(string $companyId, array $payments, float $subtotal = 0.0): float
@@ -3845,7 +3660,7 @@ class SalesController extends BaseController
         $itemDiscountTotal = array_sum(array_map(static fn(array $item): float => (float) $item['discount_amount'], $items));
         $taxTotal = array_sum(array_map(static fn(array $item): float => (float) $item['tax_total'], $items));
         $total = max(0, round($subtotal + $taxTotal - $globalDiscount, 2));
-        $paidTotal = round(array_sum(array_map(static fn(array $payment): float => (float) $payment['amount'], $payments)), 2);
+        $paidTotal = \App\Libraries\PaymentIntegrityService::paid($payments);
 
         return [
             'subtotal' => round($subtotal, 2),
@@ -4060,7 +3875,7 @@ class SalesController extends BaseController
             return;
         }
 
-        $paidTotal = round(array_sum(array_map(static fn(array $row): float => (float) ($row['amount'] ?? 0), $this->salePayments($saleId))), 2);
+        $paidTotal = \App\Libraries\PaymentIntegrityService::paid($this->salePayments($saleId));
         $paymentStatus = $paidTotal <= 0 ? 'pending' : ($paidTotal < (float) $sale['total'] ? 'partial' : 'paid');
 
         (new SaleModel())->update($saleId, [
@@ -4221,6 +4036,7 @@ class SalesController extends BaseController
 
         $service = new CashService();
         foreach ($this->salePayments($saleId) as $payment) {
+            if (! \App\Libraries\PaymentIntegrityService::settled($payment)) { continue; }
             $service->registerMovement([
                 'company_id' => $companyId,
                 'cash_register_id' => $sale['cash_register_id'],

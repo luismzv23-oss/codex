@@ -80,11 +80,14 @@ class AccountingService
     {
         $lines = [];
         $total = (float) ($sale['total'] ?? 0);
-        $sub   = (float) ($sale['subtotal'] ?? 0);
+        $sub   = (float) ($sale['subtotal'] ?? 0) - (float) ($sale['global_discount_total'] ?? 0);
         $tax   = (float) ($sale['tax_total'] ?? 0);
 
         if (!empty($map['receivable'])) $lines[] = ['account_id' => $map['receivable'], 'debit' => $total, 'credit' => 0, 'description' => 'Venta #' . ($sale['sale_number'] ?? '')];
         if (!empty($map['revenue']))    $lines[] = ['account_id' => $map['revenue'], 'debit' => 0, 'credit' => $sub, 'description' => 'Ingreso por venta'];
+        if (!empty($map['revenue']) && (float) ($sale['payment_surcharge_amount'] ?? 0) > 0) {
+            $lines[] = ['account_id' => $map['revenue'], 'debit' => 0, 'credit' => (float) $sale['payment_surcharge_amount'], 'description' => 'Recargo por medio de pago'];
+        }
         if (!empty($map['iva_debito']) && $tax > 0) $lines[] = ['account_id' => $map['iva_debito'], 'debit' => 0, 'credit' => $tax, 'description' => 'IVA Debito Fiscal'];
 
         return $this->createJournalEntry($companyId, [

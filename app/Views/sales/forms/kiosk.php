@@ -107,32 +107,11 @@ $productCatalog = array_values(array_map(static function (array $product): array
 
             <div class="col-12">
                 <div class="row g-4">
-                    <div class="col-xl-5">
-                        <div class="border rounded-4 p-3 p-lg-4 h-100 bg-light-subtle">
-                            <div class="mb-3">
-                                <h2 class="h5 mb-1">Buscar productos</h2>
-                                <p class="text-secondary mb-0">Escanea el codigo de barras o busca por nombre.</p>
-                            </div>
-
-                            <div class="position-relative">
-                                <label class="form-label">Producto</label>
-                                <input type="text" id="kiosk-search" class="form-control"
-                                    placeholder="Escanea o escribe para buscar" autocomplete="off">
-                                <input type="hidden" id="kiosk-selected-product-id">
-                                <div id="kiosk-search-results"
-                                    class="list-group position-absolute start-0 end-0 mt-2 shadow-sm d-none"
-                                    style="z-index: 20; max-height: 320px; overflow:auto;"></div>
-                            </div>
-
-                            <div class="small text-secondary mt-3">
-                                Coincidencias: <span class="fw-semibold" id="kiosk-results-count">0</span>
-                                <span class="ms-2" id="kiosk-scan-indicator" style="display:none;">📡 <strong>Barcode
-                                        detectado</strong></span>
-                            </div>
-                        </div>
+                    <div class="col-12 d-flex justify-content-end">
+                        <button type="button" class="btn btn-dark icon-btn" id="open-kiosk-search" title="Buscar productos" aria-label="Buscar productos"><i class="bi bi-search" aria-hidden="true"></i></button>
                     </div>
 
-                    <div class="col-xl-7">
+                    <div class="col-12">
                         <div class="border rounded-4 p-3 p-lg-4 h-100">
                             <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
                                 <div>
@@ -143,7 +122,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                                 <div class="text-end">
                                     <div class="small text-secondary" id="kiosk-tax-breakdown-label"
                                         style="display:none;"></div>
-                                    <div class="small text-secondary">Total</div>
+                                    <div class="small text-secondary">Total a pagar</div>
                                     <div class="fs-4 fw-semibold" id="kiosk-total">0,00</div>
                                 </div>
                             </div>
@@ -175,12 +154,12 @@ $productCatalog = array_values(array_map(static function (array $product): array
                             <div class="row g-3 mt-1">
                                 <div class="col-md-3">
                                     <label class="form-label">Pago</label>
-                                    <select name="payments[0][payment_method]" class="form-select"
+                                    <select name="payment_method_id" class="form-select"
                                         id="kiosk-payment-method" required>
                                         <option value="" selected disabled>Seleccionar medio de pago</option>
                                         <?php foreach ($paymentMethods as $paymentMethod): ?>
                                             <?php $paymentType = $paymentMethod['type'] === 'wallet' ? 'qr' : $paymentMethod['type']; ?>
-                                            <option value="<?= esc($paymentType) ?>" <?= in_array($paymentType, \App\Libraries\PaymentIntegrityService::METHODS, true) ? '' : 'disabled title="Tipo aún no compatible con el cobro en kiosco"' ?>><?= esc($paymentMethod['code']) ?></option>
+                                            <option value="<?= esc($paymentMethod['id']) ?>" data-type="<?= esc($paymentType) ?>" data-percentage="<?= esc((string) $paymentMethod['percentage']) ?>" <?= in_array($paymentType, \App\Libraries\PaymentIntegrityService::METHODS, true) ? '' : 'disabled title="Tipo aún no compatible con el cobro en kiosco"' ?>><?= esc($paymentMethod['code']) ?></option>
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
@@ -278,12 +257,41 @@ $productCatalog = array_values(array_map(static function (array $product): array
     </div>
 </div>
 
+<div class="modal fade" id="kioskProductSearchModal" tabindex="-1" aria-labelledby="kiosk-product-search-title" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content rounded-4 border-0 shadow-lg">
+            <div class="modal-header">
+                <div>
+                    <h2 class="h5 mb-1" id="kiosk-product-search-title">Buscar productos</h2>
+                    <p class="text-secondary mb-0">Busca por c?digo, nombre o marca y selecciona los productos a agregar.</p>
+                </div>
+                <button type="button" class="btn btn-outline-dark icon-btn" data-bs-dismiss="modal" title="Cerrar" aria-label="Cerrar"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+            </div>
+            <div class="modal-body p-4">
+                <label class="form-label" for="kiosk-search">Producto</label>
+                <input type="text" id="kiosk-search" class="form-control" placeholder="Escanea o escribe para buscar" autocomplete="off">
+                <input type="hidden" id="kiosk-selected-product-id">
+                <div class="small text-secondary my-3">
+                    Coincidencias: <span class="fw-semibold" id="kiosk-results-count">0</span>
+                    <span class="ms-2" id="kiosk-scan-indicator" style="display:none;">C?digo detectado</span>
+                </div>
+                <div id="kiosk-search-results" class="list-group border rounded-4 overflow-auto d-none" style="max-height:360px;"></div>
+            </div>
+            <div class="modal-footer">
+                <span class="small text-secondary me-auto" id="kiosk-selected-count" role="status" aria-live="polite">0 seleccionados</span>
+                <button type="button" class="btn btn-outline-dark icon-btn" data-bs-dismiss="modal" title="Cancelar" aria-label="Cancelar"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+                <button type="button" class="btn btn-dark icon-btn" id="accept-kiosk-search" title="Agregar seleccionados" aria-label="Agregar seleccionados" disabled><i class="bi bi-check-lg" aria-hidden="true"></i></button>
+            </div>
+        </div>
+    </div>
+</div>
 <script>
     (() => {
         const catalog = <?= json_encode($productCatalog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
         const customers = <?= json_encode($customers ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
         const consumerFinalId = '<?= esc($consumerFinalId) ?>';
         const ticketSettings = <?= json_encode($ticketSettings ?? [], JSON_UNESCAPED_UNICODE) ?>;
+        const paymentDiscounts = <?= json_encode($paymentDiscounts ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
         const companyName = <?= json_encode($company['name'] ?? '') ?>;
         const companyLegalName = <?= json_encode($company['legal_name'] ?? '') ?>;
         const companyTaxId = <?= json_encode($company['tax_id'] ?? '') ?>;
@@ -293,6 +301,13 @@ $productCatalog = array_values(array_map(static function (array $product): array
         const kioskDocType = <?= json_encode($documentType) ?>;
 
 
+        const searchModalElement = document.getElementById('kioskProductSearchModal');
+        const openSearchButton = document.getElementById('open-kiosk-search');
+        const acceptSearchButton = document.getElementById('accept-kiosk-search');
+        const selectedCount = document.getElementById('kiosk-selected-count');
+        const pendingProducts = new Map();
+        const resolveProductModal = () => window.bootstrap?.Modal.getOrCreateInstance(searchModalElement);
+        const focusProductSearch = () => (searchModalElement.classList.contains('show') ? searchField : openSearchButton).focus();
         const searchField = document.getElementById('kiosk-search');
         const resultsContainer = document.getElementById('kiosk-search-results');
         const resultsCount = document.getElementById('kiosk-results-count');
@@ -408,7 +423,8 @@ $productCatalog = array_values(array_map(static function (array $product): array
         const handlePossibleScan = (code) => {
             const product = catalog.find(p => p.sku === code || p.sku === code.trim());
             if (product) {
-                addProduct(product);
+                pendingProducts.set(product.id, product);
+                updateSelection();
                 beepScan();
                 scanIndicator.style.display = 'inline';
                 setTimeout(() => scanIndicator.style.display = 'none', 2000);
@@ -475,13 +491,14 @@ $productCatalog = array_values(array_map(static function (array $product): array
             });
         };
 
+        const roundMoney = value => Math.round((value + Number.EPSILON) * 100) / 100;
         const lineGrossAmount = (item) => {
             const base = Number(item.quantity) * Number(item.unit_price);
-            const discount = base * (Number(item.discount_rate || 0) / 100);
-            return Math.max(0, base - discount);
+            const discount = roundMoney(base * (Number(item.discount_rate || 0) / 100));
+            return roundMoney(Math.max(0, base - discount));
         };
 
-        const totalAmount = () => Array.from(items.values()).reduce((carry, item) => {
+        const productsTotal = () => Array.from(items.values()).reduce((carry, item) => {
             return carry + lineGrossAmount(item);
         }, 0);
 
@@ -489,10 +506,34 @@ $productCatalog = array_values(array_map(static function (array $product): array
             const gross = lineGrossAmount(item);
             const taxRate = item.tax_rate !== undefined ? Number(item.tax_rate) : (defaultTax ? Number(defaultTax.rate || 0) : 0);
             const net = taxRate > 0 ? gross / (1 + (taxRate / 100)) : gross;
-            return carry + net;
+            return carry + roundMoney(net);
         }, 0);
 
-        const taxTotalAmount = () => totalAmount() - subtotalAmount();
+        const taxTotalAmount = () => roundMoney(productsTotal() - subtotalAmount());
+        const surchargeRate = () => Number(paymentMethod.selectedOptions[0]?.dataset.percentage || 0);
+        const paymentDiscount = () => {
+            const policy = paymentDiscounts.find(row => row.payment_method === paymentMethod.selectedOptions[0]?.dataset.type);
+            return policy ? Number(policy.fixed_discount || 0) + subtotalAmount() * Number(policy.discount_rate || 0) / 100 : 0;
+        };
+        const surchargeBase = () => Math.max(0, roundMoney(productsTotal() - paymentDiscount()));
+        const surchargeAmount = () => Math.round(Math.round(surchargeBase() * 100) * Math.round(surchargeRate() * 100) / 10000) / 100;
+        const totalAmount = () => roundMoney(surchargeBase() + surchargeAmount());
+        const escapeSummary = value => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[char]));
+        const summaryHtml = () => {
+            const taxesByRate = new Map();
+            items.forEach(item => {
+                const rate = Number(item.tax_rate ?? defaultTax?.rate ?? 0);
+                const gross = lineGrossAmount(item);
+                const tax = roundMoney(gross - roundMoney(gross / (1 + rate / 100)));
+                taxesByRate.set(rate, roundMoney((taxesByRate.get(rate) || 0) + tax));
+            });
+            const row = (label, amount) => `<div style="display:flex;justify-content:space-between;gap:24px"><span>${escapeSummary(label)}</span><span>${formatMoney(amount)}</span></div>`;
+            return row('Subtotal neto', subtotalAmount())
+                + Array.from(taxesByRate, ([rate, amount]) => row(`IVA ${formatMoney(rate)} %`, amount)).join('')
+                + (paymentDiscount() > 0 ? row('Descuento por medio de pago', -paymentDiscount()) : '')
+                + row('Total con impuestos', surchargeBase())
+                + (surchargeRate() > 0 ? row(`Recargo ${paymentMethod.selectedOptions[0].text} (${formatMoney(surchargeRate())} %)`, surchargeAmount()) : '');
+        };
 
 
 
@@ -519,6 +560,8 @@ $productCatalog = array_values(array_map(static function (array $product): array
             if (items.size === 0) {
                 ticketBody.appendChild(emptyRow);
                 totalLabel.textContent = '0,00';
+                taxBreakdownLabel.innerHTML = '';
+                taxBreakdownLabel.style.display = 'none';
                 paidAmount.value = '0.00';
                 updateChange();
                 syncHiddenInputs();
@@ -582,12 +625,8 @@ $productCatalog = array_values(array_map(static function (array $product): array
             totalLabel.textContent = formatMoney(total);
 
             if (taxBreakdownLabel) {
-                if (taxTotal > 0 && defaultTax) {
-                    taxBreakdownLabel.textContent = `Neto: $${formatMoney(subtotal)} | ${defaultTax.name} (${Number(defaultTax.rate).toFixed(0)}%): $${formatMoney(taxTotal)}`;
-                    taxBreakdownLabel.style.display = 'block';
-                } else {
-                    taxBreakdownLabel.style.display = 'none';
-                }
+                taxBreakdownLabel.innerHTML = summaryHtml();
+                taxBreakdownLabel.style.display = 'block';
             }
 
             paidAmount.value = Math.max(0, Number(total)).toFixed(2);
@@ -648,7 +687,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
             renderTicket();
             searchField.value = '';
             renderResults([]);
-            searchField.focus();
+            focusProductSearch();
         };
 
 
@@ -690,11 +729,46 @@ $productCatalog = array_values(array_map(static function (array $product): array
                     </div>
                 </div>
             `;
-                option.addEventListener('click', () => { addProduct(product); beepScan(); });
+                option.classList.toggle('active', pendingProducts.has(product.id));
+                option.setAttribute('aria-pressed', String(pendingProducts.has(product.id)));
+                option.addEventListener('click', () => {
+                    if (pendingProducts.has(product.id)) pendingProducts.delete(product.id);
+                    else pendingProducts.set(product.id, product);
+                    updateSelection();
+                    renderResults(results);
+                });
                 resultsContainer.appendChild(option);
             });
             resultsContainer.classList.remove('d-none');
         };
+
+        const updateSelection = () => {
+            selectedCount.textContent = `${pendingProducts.size} seleccionados`;
+            acceptSearchButton.disabled = pendingProducts.size === 0;
+        };
+        openSearchButton.addEventListener('click', () => {
+            pendingProducts.clear();
+            updateSelection();
+            searchField.value = '';
+            renderResults([]);
+            resolveProductModal()?.show();
+        });
+        searchModalElement.addEventListener('shown.bs.modal', () => searchField.focus());
+        searchModalElement.addEventListener('hidden.bs.modal', () => {
+            pendingProducts.clear();
+            scanBuffer = '';
+            clearTimeout(scanTimer);
+            updateSelection();
+            openSearchButton.focus();
+        });
+        acceptSearchButton.addEventListener('click', () => {
+            if (!pendingProducts.size) return;
+            pendingProducts.forEach(product => addProduct(product));
+            pendingProducts.clear();
+            updateSelection();
+            beepScan();
+            resolveProductModal()?.hide();
+        });
 
         // ── Ticket print markup ─────────────────────────────
         const buildPrintMarkup = () => {
@@ -925,14 +999,9 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 
                 ${rows}
                 
-                ${taxTotalAmount() > 0 ? `
-                <div class="ticket-small" style="margin-top:6px; text-align:right; border-top:1px dashed #000; padding-top:4px;">
-                    <span>Neto: $${formatMoney(subtotalAmount())}</span><br>
-                    <span>${defaultTax ? defaultTax.name : 'IVA'} (${defaultTax ? Number(defaultTax.rate).toFixed(0) : 21}%): $${formatMoney(taxTotalAmount())}</span>
-                </div>
-                ` : ''}
+                <div class="ticket-small" style="margin-top:6px;border-top:1px dashed #000;padding-top:4px;">${summaryHtml()}</div>
                 <div class="ticket-total">
-                    <span>TOTAL</span>
+                    <span>TOTAL A PAGAR</span>
                     <span>${totalLabel.textContent}</span>
                 </div>
 
@@ -990,7 +1059,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
 
             const formData = new FormData(form);
             // Cash handed over may include change; persist only the amount applied.
-            if (formData.get('payments[0][payment_method]') === 'cash') {
+            if (paymentMethod.selectedOptions[0]?.dataset.type === 'cash') {
                 formData.set('payments[0][amount]', Math.min(Number(paidAmount.value || 0), Math.max(0, totalAmount())).toFixed(2));
             }
             fetch(form.action, {
@@ -1037,6 +1106,9 @@ $productCatalog = array_values(array_map(static function (array $product): array
                         if (data.arca_cae) {
                             toastMsg += ' · CAE: ' + data.arca_cae;
                         }
+                        if (data.arca_status === 'rejected' || data.arca_status === 'error') {
+                            toastMsg += ' · Sin autorización fiscal: ' + (data.arca_message || 'Revisa el comprobante.');
+                        }
                         showToast(toastMsg);
                         items.clear();
                         renderTicket();
@@ -1048,7 +1120,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                         const ticketRadio = document.getElementById('kiosk-emit-ticket');
                         if (ticketRadio) { ticketRadio.checked = true; ticketRadio.dispatchEvent(new Event('change')); }
                         searchField.value = '';
-                        searchField.focus();
+                        focusProductSearch();
                     } else {
                         throw new Error(data.message || 'Error desconocido');
                     }
@@ -1085,7 +1157,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
             if (kioskDocumentDisplay) kioskDocumentDisplay.value = defaultKioskDocLabel;
             clearCustomerBtn.classList.add('d-none');
             searchField.value = '';
-            searchField.focus();
+            focusProductSearch();
             showToast('Ticket cancelado', 'slash-circle');
         });
 
@@ -1094,6 +1166,8 @@ $productCatalog = array_values(array_map(static function (array $product): array
             if (!window.bootstrap || !window.bootstrap.Modal) return null;
             return window.bootstrap.Modal.getOrCreateInstance(customerSearchModalEl);
         };
+
+        paymentMethod.addEventListener('change', renderTicket);
 
         const matchingCustomers = (term) => {
             const normalized = term.trim().toLowerCase();
@@ -1191,6 +1265,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
 
         // ── Keyboard shortcuts ──────────────────────────────
         document.addEventListener('keydown', (event) => {
+            if (searchModalElement.classList.contains('show')) return;
             // Don't intercept if user is in a text input that isn't the search
             const active = document.activeElement;
             const isInput = active && (active.tagName === 'TEXTAREA' || (active.tagName === 'INPUT' && active.id !== 'kiosk-search' && active.type !== 'number'));
@@ -1213,19 +1288,20 @@ $productCatalog = array_values(array_map(static function (array $product): array
                     event.preventDefault();
                     const opts = paymentMethod.options;
                     paymentMethod.selectedIndex = (paymentMethod.selectedIndex + 1) % opts.length;
+                    paymentMethod.dispatchEvent(new Event('change'));
                     showToast('Pago: ' + opts[paymentMethod.selectedIndex].text, 'credit-card');
                     break;
                 case 'Escape':
                     searchField.value = '';
                     renderResults([]);
-                    searchField.focus();
+                    focusProductSearch();
                     break;
             }
         });
 
         updateReferenceField();
         renderTicket();
-        searchField.focus();
+        focusProductSearch();
     })();
 </script>
 <?= $this->endSection() ?>

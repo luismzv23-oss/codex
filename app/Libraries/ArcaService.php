@@ -323,6 +323,14 @@ class ArcaService
             ];
         }
 
+        if ((float) ($sale['payment_surcharge_amount'] ?? 0) > 0) {
+            return [
+                'status' => 'rejected', 'result_code' => 'SURCHARGE_FISCAL_MAPPING_REQUIRED',
+                'message' => 'El comprobante incluye un recargo de pago. Falta configurar su tratamiento fiscal para enviarlo a ARCA.',
+                'service_slug' => $service['slug'], 'environment' => $settings['arca_environment'] ?? 'homologacion',
+                'request_payload' => [], 'response_payload' => [],
+            ];
+        }
         $readiness = $this->readiness($settings);
         $payload = $this->buildPayloadPreview($sale, $documentType, $company, $settings, $items, $pointOfSale, $service);
         $environment = $settings['arca_environment'] ?? 'homologacion';

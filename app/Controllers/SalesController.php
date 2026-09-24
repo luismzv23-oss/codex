@@ -979,6 +979,7 @@ class SalesController extends BaseController
 
         return view('sales/forms/kiosk', [
             'pageTitle' => 'Ticket Kiosco',
+            'paymentDiscounts' => (new SalesDiscountPolicyModel())->where('company_id', $companyId)->where('policy_type', 'payment_method_discount')->where('active', 1)->orderBy('discount_rate', 'DESC')->findAll(),
             'paymentMethods' => (new \App\Models\CompanyPaymentMethodModel())->where('company_id', $companyId)->where('active', 1)->orderBy('name', 'ASC')->findAll(),
             'company' => $context['company'],
             'products' => $this->salesProductCatalog($companyId),
@@ -3241,6 +3242,16 @@ class SalesController extends BaseController
             return redirect()->back()->withInput()->with('error', 'La moneda seleccionada debe pertenecer a las monedas activas de la empresa.');
         }
         $items = $this->parseSaleItems($companyId, $input);
+        $configuredPayment = null;
+        if ($channel === 'kiosk') {
+            $methodId = $input['payment_method_id'] ?? '';
+            $configuredPayment = is_string($methodId) && $methodId !== ''
+                ? (new \App\Models\CompanyPaymentMethodModel())->where('company_id', $companyId)->where('active', 1)->find($methodId) : null;
+            if (! $configuredPayment) {
+                return redirect()->back()->withInput()->with('error', 'Selecciona un medio de pago activo de la empresa.');
+            }
+            $input['payments'][0]['payment_method'] = $configuredPayment['type'] === 'wallet' ? 'qr' : $configuredPayment['type'];
+        }
         if ($channel === 'kiosk') {
             foreach ($items as $item) {
                 $quantity = (float) $item['quantity'];
@@ -3290,6 +3301,9 @@ class SalesController extends BaseController
         $subtotal = array_sum(array_map(static fn(array $row): float => (float) $row['subtotal'], $items));
         $paymentMethodDiscount = $this->paymentMethodDiscount($companyId, $payments, $subtotal);
         $totals = $this->calculateSaleTotals($items, (float) ($input['global_discount_total'] ?? 0) + $paymentMethodDiscount, $payments);
+        $surcharge = \App\Libraries\PaymentSurcharge::calculate($totals['total'], (float) ($configuredPayment['percentage'] ?? 0));
+        $totals['total'] = $surcharge['total'];
+        $totals['payment_status'] = $totals['paid_total'] <= 0 ? 'pending' : ($totals['paid_total'] < $totals['total'] ? 'partial' : 'paid');
         if (round(array_sum(array_column($payments, 'amount')), 2) > $totals['total']) {
             return redirect()->back()->withInput()->with('error', 'Los importes aplicados no pueden superar el total de la venta; separa el vuelto.');
         }
@@ -3359,6 +3373,10 @@ class SalesController extends BaseController
                 'margin_total' => $marginTotal,
                 'total' => $totals['total'],
                 'paid_total' => $totals['paid_total'],
+                'payment_method_id' => $configuredPayment['id'] ?? null,
+                'payment_method_code' => $configuredPayment['code'] ?? null,
+                'payment_surcharge_rate' => $surcharge['rate'],
+                'payment_surcharge_amount' => $surcharge['amount'],
                 'credit_score_snapshot' => $creditSnapshot['score'],
                 'authorization_status' => $creditSnapshot['requires_authorization'] ? 'pending' : 'not_required',
                 'authorization_reason' => $creditSnapshot['reason'],

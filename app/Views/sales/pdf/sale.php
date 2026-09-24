@@ -425,27 +425,29 @@
         </table>
     </div>
 
-    <!-- 5. Totals Grid (Image 2 style) -->
+    <!-- Resumen vertical: los recargos no son productos. -->
+    <?php
+    $taxGroups = [];
+    foreach ($items as $item) {
+        $rate = number_format((float) ($item['tax_rate'] ?? 0), 2, ',', '.');
+        $taxGroups[$rate] = ($taxGroups[$rate] ?? 0) + (float) ($item['tax_total'] ?? 0);
+    }
+    $summaryRows = ['Subtotal neto' => (float) ($sale['subtotal'] ?? 0)];
+    foreach ($taxGroups as $rate => $amount) { $summaryRows['IVA ' . $rate . ' %'] = $amount; }
+    if ((float) ($sale['global_discount_total'] ?? 0) > 0) {
+        $summaryRows['Descuento general'] = -(float) $sale['global_discount_total'];
+    }
+    $summaryRows['Total con impuestos'] = (float) $sale['total'] - (float) ($sale['payment_surcharge_amount'] ?? 0);
+    if ((float) ($sale['payment_surcharge_rate'] ?? 0) > 0) {
+        $summaryRows['Recargo ' . ($sale['payment_method_code'] ?? '') . ' (' . number_format((float) $sale['payment_surcharge_rate'], 2, ',', '.') . ' %)'] = (float) $sale['payment_surcharge_amount'];
+    }
+    ?>
     <div class="section">
-        <table class="totals-grid">
-            <tr>
-                <td class="label">Subtotal</td>
-                <td class="label">Descuentos</td>
-                <td class="label">Impuestos</td>
-                <td class="label">IVA Insc. 21%</td>
-                <td class="label">IVA No Insc.</td>
-                <td class="label" style="background: #212529; color: #ffffff;">TOTAL $</td>
-            </tr>
-            <tr>
-                <td style="font-weight: bold;">$ <?= number_format((float) ($sale['subtotal'] ?? 0), 2, ',', '.') ?>
-                </td>
-                <td>$ <?= number_format((float) ($sale['global_discount_total'] ?? 0), 2, ',', '.') ?></td>
-                <td>$ <?= number_format((float) ($sale['tax_total'] ?? 0), 2, ',', '.') ?></td>
-                <td>$ <?= number_format((float) (($sale['tax_total'] ?? 0) * 1.0), 2, ',', '.') ?></td>
-                <td>$ 0,00</td>
-                <td style="font-weight: bold; font-size: 13px; background: #f8fafc;">$
-                    <?= number_format((float) ($sale['total'] ?? 0), 2, ',', '.') ?></td>
-            </tr>
+        <table style="width:55%;margin-left:auto;border-collapse:collapse;">
+            <?php foreach ($summaryRows as $label => $amount): ?>
+                <tr><td style="padding:5px; border-bottom:1px solid #ddd;"><?= esc($label) ?></td><td style="padding:5px;text-align:right;border-bottom:1px solid #ddd;">$ <?= number_format($amount, 2, ',', '.') ?></td></tr>
+            <?php endforeach; ?>
+            <tr style="font-weight:bold;font-size:14px;background:#f0f3f8;"><td style="padding:8px;">TOTAL A PAGAR</td><td style="padding:8px;text-align:right;">$ <?= number_format((float) $sale['total'], 2, ',', '.') ?></td></tr>
         </table>
     </div>
 

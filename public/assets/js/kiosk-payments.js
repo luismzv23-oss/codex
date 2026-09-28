@@ -13,6 +13,11 @@ window.createKioskPayments = function (container, methods, getBase, onChange) {
             rate:rate/100, base:base/100, surcharge:surcharge/100, total:total/100,
             received:received/100, change:Math.max(0,received-total)/100};
     });
+    const canAdd = () => {
+        const values = data();
+        return rows.length < 20 && !values.some(line=>!line.id)
+            && cents(getBase()) > values.reduce((sum,line)=>sum+cents(line.base),0);
+    };
     const update = () => {
         const values = data();
         rows.forEach((row,i) => {
@@ -20,7 +25,6 @@ window.createKioskPayments = function (container, methods, getBase, onChange) {
             row.fee.textContent = value.rate ? `Recargo ${money(value.rate)} %: ${money(value.surcharge)}` : '';
             row.total.textContent = money(value.total);
             row.remove.disabled = rows.length === 1;
-            row.add.disabled = rows.length >= 20 || values.some(line=>!line.id) || cents(getBase()) <= values.reduce((sum,line)=>sum+cents(line.base),0);
         });
         onChange();
     };
@@ -34,22 +38,21 @@ window.createKioskPayments = function (container, methods, getBase, onChange) {
             <label class="flex-grow-1" style="flex-basis:25%;min-width:170px">Medio de pago<select class="form-select" required></select></label>
             <label style="width:170px;flex-shrink:0">Importe a cubrir<input class="form-control base" type="number" min="0.01" step="0.01" required></label>
             <div style="width:190px;flex-shrink:0"><div class="small text-secondary">A cobrar con este medio</div><strong class="total"></strong><div class="fee small text-secondary"></div></div>
-            <div class="d-flex justify-content-end gap-2 ms-auto"><button type="button" class="btn btn-dark icon-btn add" title="Agregar medio de pago" aria-label="Agregar medio de pago"><i class="bi bi-plus-lg" aria-hidden="true"></i></button><button type="button" class="btn btn-outline-danger icon-btn remove" title="Eliminar pago" aria-label="Eliminar pago"><i class="bi bi-trash" aria-hidden="true"></i></button></div>
+            <div class="d-flex justify-content-end ms-auto"><button type="button" class="btn btn-outline-danger icon-btn remove" title="Eliminar pago" aria-label="Eliminar pago"><i class="bi bi-trash" aria-hidden="true"></i></button></div>
             </div>`;
         const row = {element,select:element.querySelector('select')};
-        for (const key of ['base','fee','total','add','remove']) row[key]=element.querySelector('.'+key);
+        for (const key of ['base','fee','total','remove']) row[key]=element.querySelector('.'+key);
         row.select.add(new Option('Seleccionar medio de pago',''));
         methods.forEach(method => { const option=new Option(method.code,method.id);option.disabled=!['cash','card','transfer','check','wallet'].includes(method.type);row.select.add(option); });
         row.base.value = remaining.toFixed(2);
         rows.push(row);container.append(element);
         row.select.addEventListener('change',update);
         row.base.addEventListener('input',update);
-        row.add.addEventListener('click',add);
         row.remove.addEventListener('click',()=>{rows.splice(rows.indexOf(row),1);element.remove();update();});
         update();
     };
     return {
-        data, add,
+        data, add, canAdd,
         syncBase() {
             if (!rows.length) { add();return; }
             if (rows.length === 1) {

@@ -107,10 +107,6 @@ $productCatalog = array_values(array_map(static function (array $product): array
 
             <div class="col-12">
                 <div class="row g-4">
-                    <div class="col-12 d-flex justify-content-end">
-                        <button type="button" class="btn btn-dark icon-btn" id="open-kiosk-search" title="Buscar productos" aria-label="Buscar productos"><i class="bi bi-search" aria-hidden="true"></i></button>
-                    </div>
-
                     <div class="col-12">
                         <div class="border rounded-4 p-3 p-lg-4 h-100">
                             <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
@@ -138,7 +134,9 @@ $productCatalog = array_values(array_map(static function (array $product): array
                                                 <th style="width: 110px;">Precio</th>
                                                 <th style="width: 90px;">Desc. %</th>
                                                 <th style="width: 120px;">Total</th>
-                                                <th class="text-end" style="width: 56px;"></th>
+                                                <th class="text-end" style="width: 56px;">
+                                                    <button type="button" class="btn btn-dark icon-btn" id="open-kiosk-search" title="Buscar productos" aria-label="Buscar productos"><i class="bi bi-search" aria-hidden="true"></i></button>
+                                                </th>
                                             </tr>
                                         </thead>
                                         <tbody id="kiosk-ticket-body">
@@ -156,19 +154,20 @@ $productCatalog = array_values(array_map(static function (array $product): array
                                 <div id="kiosk-payment-balance" class="border rounded-3 bg-light p-3 mb-3" role="status" aria-live="polite"></div>
                                 <div id="kiosk-payments" class="overflow-auto"></div>
                                 <p class="small text-secondary mb-2">Elige un medio e indica cuánto cubre. Si queda saldo, pulsa + para completar el resto con otro medio.</p>
-                                <label class="mt-2">Comprobante<input type="text" class="form-control" id="kiosk-reference" value="<?= esc($documentReference ?? '') ?>" readonly></label>
                             </div>
 
                             <div id="kiosk-hidden-items"></div>
 
-                            <div class="col-12 pt-3">
-                                <div class="d-flex gap-3 align-items-center flex-wrap">
-                                    <div class="form-check form-check-inline">
+                            <div class="d-flex flex-nowrap align-items-center gap-3 mt-3 pb-2 overflow-auto">
+                                <label class="d-flex align-items-center gap-2 mb-0 flex-shrink-0">Comprobante<input type="text" class="form-control" style="width:200px;" id="kiosk-reference" value="<?= esc($documentReference ?? '') ?>" readonly></label>
+                            <div class="flex-shrink-0">
+                                <div class="d-flex gap-3 align-items-center flex-nowrap">
+                                    <div class="form-check form-check-inline mb-0 me-0">
                                         <input class="form-check-input" type="radio" name="kiosk_emit_type"
                                             id="kiosk-emit-ticket" value="ticket" checked>
                                         <label class="form-check-label" for="kiosk-emit-ticket">Ticket</label>
                                     </div>
-                                    <div class="form-check form-check-inline">
+                                    <div class="form-check form-check-inline mb-0 me-0">
                                         <input class="form-check-input" type="radio" name="kiosk_emit_type"
                                             id="kiosk-emit-factura" value="factura">
                                         <label class="form-check-label" for="kiosk-emit-factura">Factura</label>
@@ -188,7 +187,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                                     value="">
                             </div>
 
-                            <div class="d-flex justify-content-end gap-2 pt-4">
+                            <div class="d-flex justify-content-end gap-2 ms-auto flex-shrink-0">
                                 <button type="button" class="btn btn-outline-dark icon-btn" id="kiosk-print-preview"
                                     title="Imprimir factura (F5)" aria-label="Imprimir factura"><i
                                         class="bi bi-printer"></i></button>
@@ -198,6 +197,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                                 <button type="button" class="btn btn-outline-dark icon-btn" id="kiosk-cancel-button"
                                     title="Cancelar factura (F4)" aria-label="Cancelar factura"><i
                                         class="bi bi-x-lg"></i></button>
+                            </div>
                             </div>
                         </div>
                     </div>
@@ -537,9 +537,13 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
                     <div><div class="small text-secondary">Total a pagar</div><strong>${formatMoney(totalAmount())}</strong></div>
                     <div><div class="small text-secondary">Asignado a medios de pago</div><strong>${formatMoney(assigned)}</strong></div>
-                    <div class="text-end ${remaining < 0 ? 'text-danger' : remaining === 0 && items.size ? 'text-success' : ''}"><div class="small">${remaining < 0 ? 'Importe excedido' : remaining === 0 && items.size ? 'Total distribuido' : 'Falta pagar'}</div><strong class="fs-4">${formatMoney(Math.abs(remaining))}</strong></div>
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="text-end ${remaining < 0 ? 'text-danger' : remaining === 0 && items.size ? 'text-success' : ''}"><div class="small">${remaining < 0 ? 'Importe excedido' : remaining === 0 && items.size ? 'Total distribuido' : 'Falta pagar'}</div><strong class="fs-4">${formatMoney(Math.abs(remaining))}</strong></div>
+                        <button type="button" id="kiosk-add-payment" class="btn btn-dark icon-btn" title="Agregar medio de pago" aria-label="Agregar medio de pago" ${paymentRows?.canAdd() ? '' : 'disabled'}><i class="bi bi-plus-lg" aria-hidden="true"></i></button>
+                    </div>
                 </div>
                 ${lines.some(line=>line.type==='transfer') ? '<div class="small text-secondary mt-2">Las transferencias asignadas siguen pendientes de confirmación.</div>' : ''}`;
+            document.getElementById('kiosk-add-payment').addEventListener('click', () => paymentRows.add());
         };
 
         const renderTicket = () => {
@@ -898,7 +902,6 @@ $productCatalog = array_values(array_map(static function (array $product): array
             line-height: 1.35;
         }
         .ticket-line {
-            border-bottom: 1px dashed #000;
             padding: 6px 0;
         }
         .ticket-name {

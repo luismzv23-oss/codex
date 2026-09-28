@@ -99,6 +99,35 @@ final class CompanyPaymentMethodTest extends CIUnitTestCase
         (new CompanyPaymentMethodService())->save('a', array_replace($this->input(), ['currency_ids' => []]));
     }
 
+    public function testKioskResolvesCatalogAndRejectsOtherCompany(): void
+    {
+        $method = (new CompanyPaymentMethodService())->save('a', array_replace($this->input(), ['type'=>'card','percentage'=>'2.50']));
+        $input = [['payment_method_id'=>$method['id'],'base_amount'=>'4000','percentage'=>99]];
+        $lines = (new \App\Libraries\KioskPayments())->prepare('a',$input);
+        $this->assertEquals(100,$lines[0]['surcharge_amount']);
+        $this->expectException(RuntimeException::class);
+        (new \App\Libraries\KioskPayments())->prepare('b',$input);
+    }
+
+    public function testKioskPaymentSnapshotSurvivesCatalogChanges(): void
+    {
+        $db = db_connect('tests');
+        $fields = explode(',', 'id,sale_id,payment_method,payment_method_id,payment_method_code,base_amount,surcharge_rate,surcharge_amount,received_amount,change_amount,amount,gateway_id,cash_check_id,external_reference,reference,status,paid_at,notes,created_at,updated_at');
+        $db->query('CREATE TABLE '.$db->prefixTable('sale_payments').' ('.implode(',',array_map(static fn($field)=>'"'.$field.'" TEXT'.($field==='id'?' PRIMARY KEY':''),$fields)).')');
+        $this->tables[] = 'sale_payments';
+        $service = new CompanyPaymentMethodService();
+        $method = $service->save('a', array_replace($this->input(), ['type'=>'card','percentage'=>'2.50']));
+        $line = (new \App\Libraries\KioskPayments())->prepare('a',[['payment_method_id'=>$method['id'],'base_amount'=>'4000']])[0];
+        $payments = new \App\Models\SalePaymentModel();
+        $id = $payments->insert(array_merge($line,['sale_id'=>'sale']),true);
+        $service->save('a',array_replace($this->input(),['type'=>'card','percentage'=>'5.00']),$method['id']);
+        $stored = $payments->find($id);
+        $this->assertSame($method['id'],$stored['payment_method_id']);
+        $this->assertEquals(2.5,$stored['surcharge_rate']);
+        $this->assertEquals(100,$stored['surcharge_amount']);
+        $this->assertEquals(4100,$stored['amount']);
+    }
+
     public function testPercentagePersistsOnCreateAndUpdate(): void
     {
         $service = new CompanyPaymentMethodService();

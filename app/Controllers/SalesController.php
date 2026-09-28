@@ -3242,16 +3242,6 @@ class SalesController extends BaseController
             return redirect()->back()->withInput()->with('error', 'La moneda seleccionada debe pertenecer a las monedas activas de la empresa.');
         }
         $items = $this->parseSaleItems($companyId, $input);
-        $configuredPayment = null;
-        if ($channel === 'kiosk') {
-            $methodId = $input['payment_method_id'] ?? '';
-            $configuredPayment = is_string($methodId) && $methodId !== ''
-                ? (new \App\Models\CompanyPaymentMethodModel())->where('company_id', $companyId)->where('active', 1)->find($methodId) : null;
-            if (! $configuredPayment) {
-                return redirect()->back()->withInput()->with('error', 'Selecciona un medio de pago activo de la empresa.');
-            }
-            $input['payments'][0]['payment_method'] = $configuredPayment['type'] === 'wallet' ? 'qr' : $configuredPayment['type'];
-        }
         if ($channel === 'kiosk') {
             foreach ($items as $item) {
                 $quantity = (float) $item['quantity'];
@@ -3261,7 +3251,9 @@ class SalesController extends BaseController
             }
         }
         try {
-            $payments = $this->parseSalePayments($input);
+            $payments = $channel === 'kiosk'
+                ? (new \App\Libraries\KioskPayments())->prepare($companyId, (array) ($input['kiosk_payments'] ?? []))
+                : $this->parseSalePayments($input);
             (new \App\Libraries\PaymentIntegrityService())->validateReferences($companyId, $payments);
         } catch (\Throwable $e) {
             return redirect()->back()->withInput()->with('error', $e->getMessage());
@@ -3301,8 +3293,13 @@ class SalesController extends BaseController
         $subtotal = array_sum(array_map(static fn(array $row): float => (float) $row['subtotal'], $items));
         $paymentMethodDiscount = $this->paymentMethodDiscount($companyId, $payments, $subtotal);
         $totals = $this->calculateSaleTotals($items, (float) ($input['global_discount_total'] ?? 0) + $paymentMethodDiscount, $payments);
-        $surcharge = \App\Libraries\PaymentSurcharge::calculate($totals['total'], (float) ($configuredPayment['percentage'] ?? 0));
-        $totals['total'] = $surcharge['total'];
+        if ($channel === 'kiosk') {
+            try { \App\Libraries\KioskPayments::assertAllocated($payments, $totals['total']); }
+            catch (\RuntimeException $e) { return redirect()->back()->withInput()->with('error', $e->getMessage()); }
+        }
+        $surcharge = ['rate' => count($payments) === 1 ? ($payments[0]['surcharge_rate'] ?? 0) : 0,
+            'amount' => round(array_sum(array_column($payments, 'surcharge_amount')), 2)];
+        $totals['total'] = round($totals['total'] + $surcharge['amount'], 2);
         $totals['payment_status'] = $totals['paid_total'] <= 0 ? 'pending' : ($totals['paid_total'] < $totals['total'] ? 'partial' : 'paid');
         if (round(array_sum(array_column($payments, 'amount')), 2) > $totals['total']) {
             return redirect()->back()->withInput()->with('error', 'Los importes aplicados no pueden superar el total de la venta; separa el vuelto.');
@@ -3373,8 +3370,8 @@ class SalesController extends BaseController
                 'margin_total' => $marginTotal,
                 'total' => $totals['total'],
                 'paid_total' => $totals['paid_total'],
-                'payment_method_id' => $configuredPayment['id'] ?? null,
-                'payment_method_code' => $configuredPayment['code'] ?? null,
+                'payment_method_id' => count($payments) === 1 ? ($payments[0]['payment_method_id'] ?? null) : null,
+                'payment_method_code' => count($payments) === 1 ? ($payments[0]['payment_method_code'] ?? null) : null,
                 'payment_surcharge_rate' => $surcharge['rate'],
                 'payment_surcharge_amount' => $surcharge['amount'],
                 'credit_score_snapshot' => $creditSnapshot['score'],

@@ -17,7 +17,7 @@ class PaymentIntegrityService
         return (int) round((float) $value * 100);
     }
 
-    public function parse(array $payments): array
+    public function parse(array $payments, bool $requireTransferReference = true): array
     {
         $rows = [];
         foreach ($payments as $payment) {
@@ -28,7 +28,7 @@ class PaymentIntegrityService
             if (! in_array($method, self::METHODS, true)) { throw new RuntimeException('Medio de pago inválido. Desglosa los pagos combinados en líneas.'); }
             $reference = trim((string) ($payment['reference'] ?? ''));
             $external = trim((string) ($payment['external_reference'] ?? ''));
-            if ($method === 'transfer' && $reference === '' && $external === '') { throw new RuntimeException('La transferencia requiere una referencia verificable.'); }
+            if ($requireTransferReference && $method === 'transfer' && $reference === '' && $external === '') { throw new RuntimeException('La transferencia requiere una referencia verificable.'); }
             $date = trim((string) ($payment['paid_at'] ?? ''));
             if ($date !== '' && strtotime($date) === false) { throw new RuntimeException('Fecha de pago inválida.'); }
             $rows[] = ['payment_method' => $method, 'amount' => $cents / 100,

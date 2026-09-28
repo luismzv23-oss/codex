@@ -9,6 +9,8 @@ class SalePaymentModel extends BaseUuidModel
         'id',
         'sale_id',
         'payment_method',
+        'payment_method_id', 'payment_method_code', 'base_amount', 'surcharge_rate',
+        'surcharge_amount', 'received_amount', 'change_amount',
         'gateway_id',
         'cash_check_id',
         'external_reference',

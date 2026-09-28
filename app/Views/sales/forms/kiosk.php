@@ -151,32 +151,12 @@ $productCatalog = array_values(array_map(static function (array $product): array
                                 </div>
                             </div>
 
-                            <div class="row g-3 mt-1">
-                                <div class="col-md-3">
-                                    <label class="form-label">Pago</label>
-                                    <select name="payment_method_id" class="form-select"
-                                        id="kiosk-payment-method" required>
-                                        <option value="" selected disabled>Seleccionar medio de pago</option>
-                                        <?php foreach ($paymentMethods as $paymentMethod): ?>
-                                            <?php $paymentType = $paymentMethod['type'] === 'wallet' ? 'qr' : $paymentMethod['type']; ?>
-                                            <option value="<?= esc($paymentMethod['id']) ?>" data-type="<?= esc($paymentType) ?>" data-percentage="<?= esc((string) $paymentMethod['percentage']) ?>" <?= in_array($paymentType, \App\Libraries\PaymentIntegrityService::METHODS, true) ? '' : 'disabled title="Tipo aún no compatible con el cobro en kiosco"' ?>><?= esc($paymentMethod['code']) ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label">Monto cobrado</label>
-                                    <input type="number" step="0.01" min="0" name="payments[0][amount]"
-                                        class="form-control" id="kiosk-paid-amount" value="0">
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label">Vuelto</label>
-                                    <div class="codex-kiosk-change" id="kiosk-change">$0,00</div>
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label">Referencia</label>
-                                    <input type="text" name="payments[0][reference]" class="form-control"
-                                        id="kiosk-reference" value="<?= esc($documentReference ?? '') ?>" readonly>
-                                </div>
+                            <div class="mt-3">
+                                <h3 class="h6 mb-2">Medios de pago</h3>
+                                <div id="kiosk-payment-balance" class="border rounded-3 bg-light p-3 mb-3" role="status" aria-live="polite"></div>
+                                <div id="kiosk-payments" class="overflow-auto"></div>
+                                <p class="small text-secondary mb-2">Elige un medio e indica cuánto cubre. Si queda saldo, pulsa + para completar el resto con otro medio.</p>
+                                <label class="mt-2">Comprobante<input type="text" class="form-control" id="kiosk-reference" value="<?= esc($documentReference ?? '') ?>" readonly></label>
                             </div>
 
                             <div id="kiosk-hidden-items"></div>
@@ -263,9 +243,9 @@ $productCatalog = array_values(array_map(static function (array $product): array
             <div class="modal-header">
                 <div>
                     <h2 class="h5 mb-1" id="kiosk-product-search-title">Buscar productos</h2>
-                    <p class="text-secondary mb-0">Busca por c?digo, nombre o marca y selecciona los productos a agregar.</p>
+                    <p class="text-secondary mb-0">Busca por código, nombre o marca. Marca uno o varios productos y pulsa ✓ para agregarlos.</p>
                 </div>
-                <button type="button" class="btn btn-outline-dark icon-btn" data-bs-dismiss="modal" title="Cerrar" aria-label="Cerrar"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+                <button type="button" class="btn btn-outline-dark icon-btn ms-auto flex-shrink-0 align-self-start" data-bs-dismiss="modal" title="Cerrar" aria-label="Cerrar"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
             </div>
             <div class="modal-body p-4">
                 <label class="form-label" for="kiosk-search">Producto</label>
@@ -273,7 +253,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 <input type="hidden" id="kiosk-selected-product-id">
                 <div class="small text-secondary my-3">
                     Coincidencias: <span class="fw-semibold" id="kiosk-results-count">0</span>
-                    <span class="ms-2" id="kiosk-scan-indicator" style="display:none;">C?digo detectado</span>
+                    <span class="ms-2" id="kiosk-scan-indicator" style="display:none;">Código detectado</span>
                 </div>
                 <div id="kiosk-search-results" class="list-group border rounded-4 overflow-auto d-none" style="max-height:360px;"></div>
             </div>
@@ -285,6 +265,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
         </div>
     </div>
 </div>
+<script src="<?= base_url('assets/js/kiosk-payments.js') ?>"></script>
 <script>
     (() => {
         const catalog = <?= json_encode($productCatalog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
@@ -318,9 +299,9 @@ $productCatalog = array_values(array_map(static function (array $product): array
         const taxBreakdownLabel = document.getElementById('kiosk-tax-breakdown-label');
         const hiddenItems = document.getElementById('kiosk-hidden-items');
 
-        const paidAmount = document.getElementById('kiosk-paid-amount');
-        const changeLabel = document.getElementById('kiosk-change');
-        const paymentMethod = document.getElementById('kiosk-payment-method');
+        let paymentRows;
+
+
         const currencyField = document.getElementById('kiosk-currency');
         const referenceField = document.getElementById('kiosk-reference');
         const form = document.getElementById('kiosk-form');
@@ -510,13 +491,13 @@ $productCatalog = array_values(array_map(static function (array $product): array
         }, 0);
 
         const taxTotalAmount = () => roundMoney(productsTotal() - subtotalAmount());
-        const surchargeRate = () => Number(paymentMethod.selectedOptions[0]?.dataset.percentage || 0);
         const paymentDiscount = () => {
-            const policy = paymentDiscounts.find(row => row.payment_method === paymentMethod.selectedOptions[0]?.dataset.type);
+            const types = (paymentRows?.data() || []).map(line => line.type);
+            const policy = paymentDiscounts.find(row => types.includes(row.payment_method));
             return policy ? Number(policy.fixed_discount || 0) + subtotalAmount() * Number(policy.discount_rate || 0) / 100 : 0;
         };
         const surchargeBase = () => Math.max(0, roundMoney(productsTotal() - paymentDiscount()));
-        const surchargeAmount = () => Math.round(Math.round(surchargeBase() * 100) * Math.round(surchargeRate() * 100) / 10000) / 100;
+        const surchargeAmount = () => roundMoney((paymentRows?.data() || []).reduce((sum,line)=>sum+line.surcharge,0));
         const totalAmount = () => roundMoney(surchargeBase() + surchargeAmount());
         const escapeSummary = value => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[char]));
         const summaryHtml = () => {
@@ -532,7 +513,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 + Array.from(taxesByRate, ([rate, amount]) => row(`IVA ${formatMoney(rate)} %`, amount)).join('')
                 + (paymentDiscount() > 0 ? row('Descuento por medio de pago', -paymentDiscount()) : '')
                 + row('Total con impuestos', surchargeBase())
-                + (surchargeRate() > 0 ? row(`Recargo ${paymentMethod.selectedOptions[0].text} (${formatMoney(surchargeRate())} %)`, surchargeAmount()) : '');
+                + (paymentRows?.data() || []).filter(line=>line.rate>0).map(line=>row(`Recargo ${line.code} (${formatMoney(line.rate)} %)`,line.surcharge)).join('');
         };
 
 
@@ -544,15 +525,22 @@ $productCatalog = array_values(array_map(static function (array $product): array
         };
 
         // ── Change (vuelto) calculation ─────────────────────
-        const updateChange = () => {
-            const total = totalAmount();
-            const paid = (parseFloat(paidAmount.value) || 0);
-            const change = paid - total;
-            changeLabel.textContent = '$' + formatMoney(Math.abs(change));
-            changeLabel.classList.toggle('is-negative', change < 0);
+        const updatePaymentSummary = () => {
+            totalLabel.textContent = formatMoney(totalAmount());
+            taxBreakdownLabel.innerHTML = items.size ? summaryHtml() : '';
+            taxBreakdownLabel.style.display = items.size ? 'block' : 'none';
+            const lines=(paymentRows?.data() || []).filter(line=>line.id);
+            const allocated=lines.reduce((sum,line)=>sum+line.base,0);
+            const remaining=roundMoney(surchargeBase()-allocated);
+            const assigned=roundMoney(lines.reduce((sum,line)=>sum+line.total,0));
+            document.getElementById('kiosk-payment-balance').innerHTML=`
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                    <div><div class="small text-secondary">Total a pagar</div><strong>${formatMoney(totalAmount())}</strong></div>
+                    <div><div class="small text-secondary">Asignado a medios de pago</div><strong>${formatMoney(assigned)}</strong></div>
+                    <div class="text-end ${remaining < 0 ? 'text-danger' : remaining === 0 && items.size ? 'text-success' : ''}"><div class="small">${remaining < 0 ? 'Importe excedido' : remaining === 0 && items.size ? 'Total distribuido' : 'Falta pagar'}</div><strong class="fs-4">${formatMoney(Math.abs(remaining))}</strong></div>
+                </div>
+                ${lines.some(line=>line.type==='transfer') ? '<div class="small text-secondary mt-2">Las transferencias asignadas siguen pendientes de confirmación.</div>' : ''}`;
         };
-
-        paidAmount.addEventListener('input', updateChange);
 
         const renderTicket = () => {
             ticketBody.innerHTML = '';
@@ -562,8 +550,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 totalLabel.textContent = '0,00';
                 taxBreakdownLabel.innerHTML = '';
                 taxBreakdownLabel.style.display = 'none';
-                paidAmount.value = '0.00';
-                updateChange();
+                paymentRows?.syncBase();
                 syncHiddenInputs();
                 return;
             }
@@ -629,8 +616,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 taxBreakdownLabel.style.display = 'block';
             }
 
-            paidAmount.value = Math.max(0, Number(total)).toFixed(2);
-            updateChange();
+            paymentRows?.syncBase();
             syncHiddenInputs();
 
             ticketBody.querySelectorAll('.kiosk-qty').forEach((field) => {
@@ -714,6 +700,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 option.innerHTML = `
                 <div class="d-flex justify-content-between align-items-start gap-3">
                     <div class="d-flex gap-3 align-items-start text-start">
+                        <i class="bi ${pendingProducts.has(product.id) ? 'bi-check-square-fill' : 'bi-square'} kiosk-selection-mark fs-5 flex-shrink-0" aria-hidden="true"></i>
                         ${product.image
                         ? `<img src="/uploads/products/${product.image}" style="width:40px;height:40px;object-fit:cover;" class="rounded flex-shrink-0">`
                         : `<span class="d-flex align-items-center justify-content-center rounded bg-light text-secondary flex-shrink-0" style="width:40px;height:40px;"><i class="bi bi-box"></i></span>`
@@ -735,7 +722,10 @@ $productCatalog = array_values(array_map(static function (array $product): array
                     if (pendingProducts.has(product.id)) pendingProducts.delete(product.id);
                     else pendingProducts.set(product.id, product);
                     updateSelection();
-                    renderResults(results);
+                    const selected = pendingProducts.has(product.id);
+                    option.classList.toggle('active', selected);
+                    option.setAttribute('aria-pressed', String(selected));
+                    option.querySelector('.kiosk-selection-mark').className = `bi ${selected ? 'bi-check-square-fill' : 'bi-square'} kiosk-selection-mark fs-5 flex-shrink-0`;
                 });
                 resultsContainer.appendChild(option);
             });
@@ -828,7 +818,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 `;
             }).join('');
 
-            const receivedTotal = (parseFloat(paidAmount.value) || 0);
+            const receivedTotal = paymentRows.data().reduce((sum,line)=>sum+line.received,0);
             const change = Math.max(0, receivedTotal - totalAmount());
 
             const headerTitle = ticketSettings.ticket_header_title || companyLegalName || companyName;
@@ -1006,7 +996,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 </div>
 
                 
-                <div class="ticket-small" style="margin-top:8px; text-align:left;"><strong>Pago:</strong> ${paymentMethod.options[paymentMethod.selectedIndex].text}</div>
+                <div class="ticket-small" style="margin-top:8px; text-align:left;"><strong>Pago:</strong> ${paymentRows.data().map(line=>`${escapeSummary(line.code)}: ${formatMoney(line.total)}${line.type === 'transfer' ? ' (pendiente de confirmaci&oacute;n)' : ''}`).join('<br>')}</div>
                 <div class="ticket-small" style="text-align:left;"><strong>Importe informado:</strong> ${formatMoney(receivedTotal)}</div>
                 ${change > 0 ? '<div class="ticket-small" style="font-weight:700; color:#198754; text-align:left;"><strong>Vuelto:</strong> ' + formatMoney(change) + '</div>' : ''}
                 
@@ -1028,12 +1018,6 @@ $productCatalog = array_values(array_map(static function (array $product): array
         searchField.addEventListener('input', () => renderResults(matchingProducts(searchField.value)));
         warehouseField?.addEventListener('change', () => renderResults(matchingProducts(searchField.value)));
 
-        document.addEventListener('click', (event) => {
-            if (!resultsContainer.contains(event.target) && event.target !== searchField) {
-                resultsContainer.classList.add('d-none');
-            }
-        });
-
         // ── CSRF token helpers ────────────────────────────────
         const csrfName = '<?= csrf_token() ?>';
         const getCsrfField = () => form.querySelector('input[name="' + csrfName + '"]');
@@ -1053,15 +1037,13 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 showToast('Agrega al menos un producto', 'exclamation-triangle-fill');
                 return;
             }
+            try { paymentRows.validate(); } catch (error) { showToast(error.message, 'exclamation-triangle'); return; }
             syncHiddenInputs();
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
 
             const formData = new FormData(form);
-            // Cash handed over may include change; persist only the amount applied.
-            if (paymentMethod.selectedOptions[0]?.dataset.type === 'cash') {
-                formData.set('payments[0][amount]', Math.min(Number(paidAmount.value || 0), Math.max(0, totalAmount())).toFixed(2));
-            }
+            paymentRows.appendTo(formData);
             fetch(form.action, {
                 method: 'POST',
                 body: formData,
@@ -1111,6 +1093,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                         }
                         showToast(toastMsg);
                         items.clear();
+                        paymentRows.reset();
                         renderTicket();
                         kioskCustomerId.value = consumerFinalId;
                         kioskCustomerName.value = 'Consumidor Final';
@@ -1140,6 +1123,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 showToast('Agrega productos antes de imprimir', 'exclamation-triangle-fill');
                 return;
             }
+            try { paymentRows.validate(); } catch (error) { showToast(error.message, 'exclamation-triangle'); return; }
             const popup = window.open('', 'codex-kiosk-ticket', 'width=460,height=820');
             if (!popup) return;
             popup.document.open();
@@ -1151,6 +1135,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
         cancelButton.addEventListener('click', () => {
             if (items.size > 0 && !confirm('¿Cancelar la factura actual?')) return;
             items.clear();
+            paymentRows.reset();
             renderTicket();
             kioskCustomerId.value = consumerFinalId;
             kioskCustomerName.value = 'Consumidor Final';
@@ -1167,7 +1152,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
             return window.bootstrap.Modal.getOrCreateInstance(customerSearchModalEl);
         };
 
-        paymentMethod.addEventListener('change', renderTicket);
+        paymentRows = window.createKioskPayments(document.getElementById('kiosk-payments'), <?= json_encode($paymentMethods, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, surchargeBase, updatePaymentSummary);
 
         const matchingCustomers = (term) => {
             const normalized = term.trim().toLowerCase();
@@ -1286,10 +1271,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                     break;
                 case 'F9':
                     event.preventDefault();
-                    const opts = paymentMethod.options;
-                    paymentMethod.selectedIndex = (paymentMethod.selectedIndex + 1) % opts.length;
-                    paymentMethod.dispatchEvent(new Event('change'));
-                    showToast('Pago: ' + opts[paymentMethod.selectedIndex].text, 'credit-card');
+                    paymentRows.add();
                     break;
                 case 'Escape':
                     searchField.value = '';

@@ -88,11 +88,6 @@ class ArcaAsyncWorker
 
         $retryCount = (int) ($sale['arca_retry_count'] ?? 0);
         $maxRetries = 5;
-        if ((float) ($sale['payment_surcharge_amount'] ?? 0) > 0) {
-            $message = 'Falta configurar el tratamiento fiscal del recargo por medio de pago.';
-            $this->markError($saleId, $message, $maxRetries);
-            return ['ok' => false, 'sale_id' => $saleId, 'error' => $message];
-        }
 
         // Fetch company ARCA settings
         $settingsRow = $db->table('company_settings')
@@ -114,7 +109,7 @@ class ArcaAsyncWorker
                 'CbteTipo'   => $sale['voucher_type'] ?? 6, // 1: Factura A, 6: Factura B, 11: Factura C
                 'PtoVta'     => $sale['pos_number'] ?? 1,
                 'CbteFch'    => date('Ymd', strtotime($sale['sale_date'] ?? date('Y-m-d'))),
-                'ImpTotal'   => (float) $sale['total'],
+                'ImpTotal'   => ArcaService::fiscalTotal($sale),
                 'ImpNeto'    => (float) $sale['subtotal'],
                 'ImpIVA'     => (float) ($sale['tax_total'] ?? 0),
                 'ImpTotConc' => 0,

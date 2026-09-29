@@ -323,14 +323,6 @@ class ArcaService
             ];
         }
 
-        if ((float) ($sale['payment_surcharge_amount'] ?? 0) > 0) {
-            return [
-                'status' => 'rejected', 'result_code' => 'SURCHARGE_FISCAL_MAPPING_REQUIRED',
-                'message' => 'El comprobante incluye un recargo de pago. Falta configurar su tratamiento fiscal para enviarlo a ARCA.',
-                'service_slug' => $service['slug'], 'environment' => $settings['arca_environment'] ?? 'homologacion',
-                'request_payload' => [], 'response_payload' => [],
-            ];
-        }
         $readiness = $this->readiness($settings);
         $payload = $this->buildPayloadPreview($sale, $documentType, $company, $settings, $items, $pointOfSale, $service);
         $environment = $settings['arca_environment'] ?? 'homologacion';
@@ -496,7 +488,7 @@ class ArcaService
 
         $subtotal = (float) ($sale['subtotal'] ?? 0);
         $taxTotal = (float) ($sale['tax_total'] ?? 0);
-        $total    = (float) ($sale['total'] ?? 0);
+        $total    = self::fiscalTotal($sale);
 
         // Build IVA array from items
         $ivaByRate = [];
@@ -691,7 +683,7 @@ class ArcaService
             'imp_op_ex'     => 0,
             'imp_subtotal'  => (float) ($sale['subtotal'] ?? 0),
             'imp_trib'      => 0,
-            'imp_total'     => (float) ($sale['total'] ?? 0),
+            'imp_total'     => self::fiscalTotal($sale),
             'mon_id'        => ($sale['currency_code'] ?? 'ARS') === 'ARS' ? 'PES' : ($sale['currency_code'] ?? 'PES'),
             'mon_cotiz'     => (float) ($sale['exchange_rate'] ?? 1),
             'items'         => $mtxcaItems,
@@ -1124,6 +1116,17 @@ class ArcaService
         ];
     }
 
+    /** Payment surcharges remain in local collections, outside the ARCA voucher. */
+    public static function fiscalTotal(array $sale): float
+    {
+        $total = (float) ($sale['total'] ?? 0);
+        $surcharge = (float) ($sale['payment_surcharge_amount'] ?? 0);
+        if (!is_finite($total) || !is_finite($surcharge) || $surcharge < 0 || round($surcharge, 2) > round($total, 2)) {
+            throw new \InvalidArgumentException('Los importes del comprobante no permiten calcular el total para ARCA.');
+        }
+        return (round($total * 100) - round($surcharge * 100)) / 100;
+    }
+
     private function buildPayloadPreview(
         array $sale, array $documentType, array $company, array $settings, array $items, array $pointOfSale, array $service
     ): array {
@@ -1131,7 +1134,7 @@ class ArcaService
         $cbteTipo  = (int) ($documentType['afip_code'] ?? 6);
         $subtotal  = (float) ($sale['subtotal'] ?? 0);
         $taxTotal  = (float) ($sale['tax_total'] ?? 0);
-        $total     = (float) ($sale['total'] ?? 0);
+        $total     = self::fiscalTotal($sale);
         $taxProfile = $sale['customer_tax_profile'] ?? '';
         $condicionIvaReceptorId = $this->resolveIvaConditionId($taxProfile);
 

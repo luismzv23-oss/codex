@@ -36,6 +36,7 @@ $selectedCompanyId = $selectedCompanyId ?? '';
 $sale = $sale ?? null;
 $saleItems = $saleItems ?? [];
 $salePayments = $salePayments ?? [];
+$useConfiguredPayments = $useConfiguredPayments ?? false;
 $sourceSale = $sourceSale ?? null;
 $currencyCode = $currencyCode ?? 'ARS';
 $defaultWarehouseId = old('warehouse_id', $sale['warehouse_id'] ?? (($warehouses[0]['id'] ?? '')));
@@ -281,6 +282,20 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
 
             <div class="col-12">
                 <div class="border rounded-4 p-3">
+                    <?php if ($useConfiguredPayments): ?>
+                    <h3 class="h5 mb-3">Medios de pago</h3>
+                    <div class="border rounded-3 bg-light p-3 mb-3 d-flex flex-wrap justify-content-between align-items-center gap-3">
+                        <div><div class="small text-secondary">Total a pagar</div><strong id="pos-payment-total">0,00</strong></div>
+                        <div><div class="small text-secondary">Asignado a medios de pago</div><strong id="pos-payment-assigned">0,00</strong></div>
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="text-end" aria-live="polite"><div class="small" id="pos-payment-balance-label">Falta pagar</div><strong class="fs-4" id="pos-payment-balance">0,00</strong></div>
+                            <button type="button" class="btn btn-dark icon-btn" id="add-sale-payment" title="Agregar medio de pago" aria-label="Agregar medio de pago"><i class="bi bi-plus-lg" aria-hidden="true"></i></button>
+                        </div>
+                    </div>
+                    <div id="sale-payments-body" class="overflow-auto"></div>
+                    <p class="small text-secondary mt-2 mb-0">Elige un medio e indica cuánto cubre. Si queda saldo, pulsa + para completar el resto con otro medio.</p>
+                    <p id="pos-payment-pending" class="small text-secondary mb-0" hidden>Las transferencias asignadas siguen pendientes de confirmación.</p>
+                    <?php else: ?>
                     <div class="d-flex justify-content-between align-items-start mb-3">
                         <div>
                             <h3 class="h5 mb-1">Pagos</h3>
@@ -296,6 +311,7 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
                             <tbody id="sale-payments-body"></tbody>
                         </table>
                     </div>
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -368,9 +384,17 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
         </div>
     </div>
 </div>
+<script src="<?= base_url('assets/js/kiosk-payments.js') ?>"></script>
+<script src="<?= base_url('assets/js/sales-product-search.js') ?>"></script>
 <script>
 (() => {
-    const products = <?= json_encode($productCatalog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    const useConfiguredPayments = <?= json_encode($useConfiguredPayments) ?>;
+    const configuredMethods = <?= json_encode($paymentMethods ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    const paymentDiscounts = <?= json_encode($paymentDiscounts ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    let paymentRows = null;
+    let paymentBase = 0;
+    let products = <?= json_encode($productCatalog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    const fetchProducts = window.createSalesProductSearch(<?= json_encode(site_url('ventas/productos/buscar') . '?company_id=' . rawurlencode($context['company']['id'])) ?>);
     const taxes = <?= json_encode($taxCatalog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     const customers = <?= json_encode($customers, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     const existingItems = <?= json_encode(array_values(array_map(static function (array $item): array { return ['product_id' => $item['product_id'], 'quantity' => (float) ($item['quantity'] ?? 0), 'unit_price' => (float) ($item['unit_price'] ?? 0), 'discount_rate' => (float) ($item['discount_rate'] ?? 0), 'tax_id' => $item['tax_id'] ?? '']; }, $saleItems)), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
@@ -449,15 +473,32 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
             const price = Number(row.querySelector('.sale-unit-price')?.value || 0);
             const discount = Number(row.querySelector('.sale-discount-rate')?.value || 0);
             const taxId = row.querySelector('.sale-tax-id')?.value || '';
-            const lineGross = Math.max(0, (qty * price) * (1 - (discount / 100)));
+            const discountAmount = Math.round(qty * price * discount) / 100;
+            const lineGross = Math.max(0, Math.round((qty * price - discountAmount) * 100) / 100);
             const taxRate = Number((taxMap[taxId] || {}).rate || 0);
-            const net = taxRate > 0 ? (lineGross / (1 + (taxRate / 100))) : lineGross;
-            const tax = lineGross - net;
+            const net = Math.round((taxRate > 0 ? (lineGross / (1 + (taxRate / 100))) : lineGross) * 100) / 100;
+            const tax = Math.round((lineGross - net) * 100) / 100;
             subtotal += net;
             taxTotal += tax;
         });
         paymentsBody.querySelectorAll('.sale-payment-amount').forEach((field) => { paidTotal += Number(field.value || 0); });
-        const total = Math.max(0, subtotal + taxTotal - Number(globalDiscount.value || 0));
+        const types = (paymentRows?.data() || []).map(line => line.type);
+        const policy = paymentDiscounts.find(row => types.includes(row.payment_method));
+        const paymentDiscount = policy ? Number(policy.fixed_discount || 0) + subtotal * Number(policy.discount_rate || 0) / 100 : 0;
+        paymentBase = Math.max(0, Math.round((subtotal + taxTotal - Number(globalDiscount.value || 0) - paymentDiscount) * 100) / 100);
+        const lines = paymentRows?.data() || [];
+        const total = paymentBase + lines.reduce((sum,line) => sum + line.surcharge, 0);
+        if (useConfiguredPayments) {
+            paidTotal = lines.filter(line => line.type !== 'transfer').reduce((sum,line) => sum + line.total, 0);
+            const assigned = lines.reduce((sum,line) => sum + line.total, 0);
+            const remaining = Math.round((paymentBase - lines.reduce((sum,line) => sum + line.base, 0)) * 100) / 100;
+            document.getElementById('pos-payment-total').textContent = formatMoney(total);
+            document.getElementById('pos-payment-assigned').textContent = formatMoney(assigned);
+            document.getElementById('pos-payment-balance').textContent = formatMoney(Math.abs(remaining));
+            document.getElementById('pos-payment-balance-label').textContent = remaining < 0 ? 'Importe excedido' : remaining === 0 && paymentBase > 0 ? 'Total distribuido' : 'Falta pagar';
+            document.getElementById('add-sale-payment').disabled = !paymentRows?.canAdd();
+            document.getElementById('pos-payment-pending').hidden = !lines.some(line => line.type === 'transfer');
+        }
         document.getElementById('sale-subtotal').textContent = formatMoney(subtotal);
         document.getElementById('sale-tax-total').textContent = formatMoney(taxTotal);
         document.getElementById('sale-paid-total').textContent = formatMoney(paidTotal);
@@ -488,13 +529,14 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
             totalLabel.textContent = formatMoney(lineGross);
             qtyField.classList.toggle('is-invalid', Boolean(productId) && qty > available && warehouseField.value !== '');
             syncTotals();
+            paymentRows?.syncBase();
         };
         row.querySelectorAll('select, input').forEach((field) => {
             field.addEventListener('change', sync);
             field.addEventListener('input', sync);
         });
         row.querySelector('.sale-unit-price').addEventListener('input', (event) => { event.target.dataset.touched = '1'; });
-        row.querySelector('.remove-sale-item').addEventListener('click', () => { row.remove(); syncTotals(); });
+        row.querySelector('.remove-sale-item').addEventListener('click', () => { row.remove(); syncTotals(); paymentRows?.syncBase(); });
         sync();
     };
 
@@ -594,9 +636,42 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
         syncTotals();
     };
 
-    document.getElementById('add-sale-payment').addEventListener('click', () => addPaymentRow());
+    if (useConfiguredPayments) {
+        paymentRows = window.createKioskPayments(paymentsBody, configuredMethods, () => paymentBase, () => {
+            const previousBase = paymentBase;
+            syncTotals();
+            if (previousBase !== paymentBase) paymentRows?.syncBase();
+        });
+        const paymentForm = paymentsBody.closest('form');
+        paymentForm.addEventListener('submit', event => {
+            syncTotals();
+            try { paymentRows.validate(); } catch (error) { event.preventDefault(); alert(error.message); }
+        });
+        paymentForm.addEventListener('formdata', event => paymentRows.appendTo(event.formData));
+    }
+    document.getElementById('add-sale-payment').addEventListener('click', () => useConfiguredPayments ? paymentRows.add() : addPaymentRow());
     warehouseField.addEventListener('change', refreshItemStocks);
-    globalDiscount.addEventListener('input', syncTotals);
+    globalDiscount.addEventListener('input', () => { syncTotals(); paymentRows?.syncBase(); });
+    const searchProducts = async () => {
+        renderResults([]);
+        resultsContainer.textContent = 'Actualizando productos…';
+        try {
+            const result = await fetchProducts(searchField.value);
+            if (result === null) return null;
+            products = result;
+            products.forEach(product => {
+                productMap[product.id] = product;
+                if (selectedProducts.has(product.id)) selectedProducts.set(product.id, product);
+            });
+            renderResults(products.slice(0, 12));
+            return products;
+        } catch (error) {
+            products = [];
+            renderResults([]);
+            resultsContainer.textContent = error.message;
+            return null;
+        }
+    };
     openSearchButton.addEventListener('click', () => {
         const searchModal = resolveSearchModal();
         if (!searchModal) {
@@ -607,16 +682,17 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
         renderResults([]);
         resultsCount.textContent = '0';
         searchModal.show();
+        searchProducts();
         setTimeout(() => searchField.focus(), 150);
     });
-    searchField.addEventListener('input', () => renderResults(matchingProducts(searchField.value)));
-    searchField.addEventListener('keydown', (event) => {
+    searchField.addEventListener('input', searchProducts);
+    searchField.addEventListener('keydown', async (event) => {
         if (event.key !== 'Enter') {
             return;
         }
         event.preventDefault();
-        const results = matchingProducts(searchField.value);
-        if (results.length > 0) {
+        const results = await searchProducts();
+        if (results?.length > 0) {
             const product = results[0];
             if (selectedProducts.has(product.id)) {
                 selectedProducts.delete(product.id);
@@ -750,10 +826,11 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
     });
 
     existingItems.forEach((item) => addItemRow(item));
-    existingPayments.forEach((payment) => addPaymentRow(payment));
+    if (!useConfiguredPayments) existingPayments.forEach((payment) => addPaymentRow(payment));
     updateCustomerInfo();
     refreshItemStocks();
     syncTotals();
+    if (useConfiguredPayments) paymentRows.syncBase();
 
     // ARCA checkbox visibility based on document type
     const docTypeSelect = document.querySelector('[name="document_type_id"]');

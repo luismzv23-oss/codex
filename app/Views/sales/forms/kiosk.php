@@ -266,9 +266,11 @@ $productCatalog = array_values(array_map(static function (array $product): array
     </div>
 </div>
 <script src="<?= base_url('assets/js/kiosk-payments.js') ?>"></script>
+<script src="<?= base_url('assets/js/sales-product-search.js') ?>"></script>
 <script>
     (() => {
-        const catalog = <?= json_encode($productCatalog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+        let catalog = <?= json_encode($productCatalog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+        const fetchProducts = window.createSalesProductSearch(<?= json_encode(site_url('ventas/productos/buscar') . '?company_id=' . rawurlencode($companyId)) ?>);
         const customers = <?= json_encode($customers ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
         const consumerFinalId = '<?= esc($consumerFinalId) ?>';
         const ticketSettings = <?= json_encode($ticketSettings ?? [], JSON_UNESCAPED_UNICODE) ?>;
@@ -401,7 +403,8 @@ $productCatalog = array_values(array_map(static function (array $product): array
         const SCAN_THRESHOLD_MS = 80;
         const SCAN_MIN_LENGTH = 4;
 
-        const handlePossibleScan = (code) => {
+        const handlePossibleScan = async (code) => {
+            if (await searchProducts(code) === null) return;
             const product = catalog.find(p => p.sku === code || p.sku === code.trim());
             if (product) {
                 pendingProducts.set(product.id, product);
@@ -417,7 +420,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
             renderResults([]);
         };
 
-        searchField.addEventListener('keydown', (event) => {
+        searchField.addEventListener('keydown', async (event) => {
             if (event.key === 'Enter') {
                 event.preventDefault();
                 clearTimeout(scanTimer);
@@ -431,6 +434,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
 
                 // Otherwise, select first search result
                 scanBuffer = '';
+                if (await searchProducts() === null) return;
                 const first = resultsContainer.querySelector('button');
                 if (first) first.click();
                 return;
@@ -690,6 +694,26 @@ $productCatalog = array_values(array_map(static function (array $product): array
             }).slice(0, 12);
         };
 
+        const searchProducts = async (term = searchField.value) => {
+            renderResults([]);
+            resultsContainer.textContent = 'Actualizando productos…';
+            try {
+                const result = await fetchProducts(term);
+                if (result === null) return null;
+                catalog = result.map(product => ({...product, price: product.sale_price}));
+                catalog.forEach(product => {
+                    if (pendingProducts.has(product.id)) pendingProducts.set(product.id, product);
+                });
+                renderResults(catalog.slice(0, 12));
+                return catalog;
+            } catch (error) {
+                catalog = [];
+                renderResults([]);
+                resultsContainer.textContent = error.message;
+                return null;
+            }
+        };
+
         const renderResults = (results) => {
             resultsContainer.innerHTML = '';
             resultsCount.textContent = String(results.length);
@@ -746,6 +770,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
             searchField.value = '';
             renderResults([]);
             resolveProductModal()?.show();
+            searchProducts();
         });
         searchModalElement.addEventListener('shown.bs.modal', () => searchField.focus());
         searchModalElement.addEventListener('hidden.bs.modal', () => {
@@ -1018,8 +1043,8 @@ $productCatalog = array_values(array_map(static function (array $product): array
         };
 
         // ── Event listeners ─────────────────────────────────
-        searchField.addEventListener('input', () => renderResults(matchingProducts(searchField.value)));
-        warehouseField?.addEventListener('change', () => renderResults(matchingProducts(searchField.value)));
+        searchField.addEventListener('input', () => searchProducts());
+        warehouseField?.addEventListener('change', () => searchProducts());
 
         // ── CSRF token helpers ────────────────────────────────
         const csrfName = '<?= csrf_token() ?>';

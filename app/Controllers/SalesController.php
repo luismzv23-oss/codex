@@ -145,6 +145,9 @@ class SalesController extends BaseController
 
         return view('sales/forms/sale', [
             'pageTitle' => 'POS Ventas',
+            'useConfiguredPayments' => true,
+            'paymentMethods' => (new \App\Models\CompanyPaymentMethodModel())->where('company_id', $companyId)->where('active', 1)->orderBy('name', 'ASC')->findAll(),
+            'paymentDiscounts' => (new SalesDiscountPolicyModel())->where('company_id', $companyId)->where('policy_type', 'payment_method_discount')->where('active', 1)->orderBy('discount_rate', 'DESC')->findAll(),
             'context' => $context,
             'sale' => null,
             'saleItems' => [],
@@ -203,7 +206,7 @@ class SalesController extends BaseController
                 }
                 return redirect()->back()->withInput()->with('error', $msg);
             }
-            $payload = $this->salePayload($companyId, [], $context['access_level'] ?? 'manage');
+            $payload = $this->salePayload($companyId, [], $context['access_level'] ?? 'manage', true);
 
             if ($payload instanceof RedirectResponse) {
                 if ($this->request->isAJAX()) {
@@ -2188,7 +2191,7 @@ class SalesController extends BaseController
         if ($isVendedorAccess) {
             $method = \Config\Services::router()->methodName();
             $allowedForVendedor = [
-                'index', 'pos', 'storePos', 'kiosk', 'storeKiosk', 'posCatalog',
+                'index', 'pos', 'storePos', 'kiosk', 'storeKiosk', 'posCatalog', 'productSearch',
                 'arcaDiagnostics', 'diagnoseArca', 'testArcaConnection',
                 'createCustomerForm', 'storeCustomer', 'pdf', 'convert', 'confirm', 'cancel',
                 'authorizeArca', 'consultArca', 'createReturnForm', 'storeReturn'
@@ -3188,18 +3191,42 @@ class SalesController extends BaseController
         return (new TaxModel())->where('company_id', $companyId)->where('active', 1)->orderBy('name', 'ASC')->findAll();
     }
 
-    private function salesProductCatalog(string $companyId): array
+    public function productSearch()
     {
-        $products = (new InventoryProductModel())
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) {
+            return $this->response->setStatusCode(403)->setJSON(['message' => 'No tienes acceso a los productos de esta empresa.']);
+        }
+        $products = $this->salesProductCatalog($context['company']['id'], trim((string) $this->request->getGet('q')));
+        return $this->response->setHeader('Cache-Control', 'no-store, private')->setJSON([
+            'products' => array_map(static fn(array $p): array => [
+                'id' => $p['id'], 'sku' => $p['sku'], 'name' => $p['name'],
+                'brand' => $p['brand'] ?? '', 'unit' => $p['unit'] ?? 'unidad',
+                'sale_price' => (float) $p['sale_price'], 'stocks' => $p['stocks'],
+                'image' => $p['image'] ?? null,
+            ], $products),
+        ]);
+    }
+
+    private function salesProductCatalog(string $companyId, ?string $search = null): array
+    {
+        $query = (new InventoryProductModel())
             ->where('company_id', $companyId)
-            ->where('active', 1)
-            ->orderBy('name', 'ASC')
-            ->findAll();
+            ->where('active', 1);
+        if ($search !== null && $search !== '') {
+            $query->groupStart()->like('sku', $search)->orLike('name', $search)->orLike('brand', $search)->groupEnd();
+            $query->orderBy('CASE WHEN sku = ' . db_connect()->escape($search) . ' THEN 0 ELSE 1 END', 'ASC', false);
+        }
+        $products = $query->orderBy('name', 'ASC')->findAll($search === null ? 0 : 50);
+        if ($products === []) {
+            return [];
+        }
 
         $stockRows = db_connect()->table('inventory_stock_levels s')
             ->select('s.product_id, s.warehouse_id, SUM(s.quantity) AS quantity, SUM(s.reserved_quantity) AS reserved_quantity', false)
             ->join('inventory_warehouses w', 'w.id = s.warehouse_id')
             ->where('s.company_id', $companyId)
+            ->whereIn('s.product_id', array_column($products, 'id'))
             ->where('w.active', 1)
             ->groupBy('s.product_id, s.warehouse_id')
             ->get()
@@ -3222,13 +3249,14 @@ class SalesController extends BaseController
         }, $products);
     }
 
-    private function salePayload(string $companyId, array $overrides = [], string $accessLevel = 'manage')
+    private function salePayload(string $companyId, array $overrides = [], string $accessLevel = 'manage', bool $configuredPayments = false)
     {
         $input = array_replace_recursive((array) $this->request->getPost(), $overrides);
         $customerId = trim((string) ($input['customer_id'] ?? '')) ?: null;
         $warehouseId = trim((string) ($input['warehouse_id'] ?? '')) ?: null;
         $sourceSaleId = trim((string) ($input['source_sale_id'] ?? '')) ?: null;
         $channel = (string) ($input['pos_mode'] ?? '') === '1' ? 'kiosk' : 'standard';
+        $configuredPayments = $configuredPayments || $channel === 'kiosk';
         $documentContext = $this->resolveDocumentContext($companyId, $channel, trim((string) ($input['document_type_id'] ?? '')), trim((string) ($input['point_of_sale_id'] ?? '')));
         if ($documentContext['error'] !== null) {
             return redirect()->back()->withInput()->with('error', $documentContext['error']);
@@ -3251,7 +3279,7 @@ class SalesController extends BaseController
             }
         }
         try {
-            $payments = $channel === 'kiosk'
+            $payments = $configuredPayments
                 ? (new \App\Libraries\KioskPayments())->prepare($companyId, (array) ($input['kiosk_payments'] ?? []))
                 : $this->parseSalePayments($input);
             (new \App\Libraries\PaymentIntegrityService())->validateReferences($companyId, $payments);
@@ -3293,7 +3321,7 @@ class SalesController extends BaseController
         $subtotal = array_sum(array_map(static fn(array $row): float => (float) $row['subtotal'], $items));
         $paymentMethodDiscount = $this->paymentMethodDiscount($companyId, $payments, $subtotal);
         $totals = $this->calculateSaleTotals($items, (float) ($input['global_discount_total'] ?? 0) + $paymentMethodDiscount, $payments);
-        if ($channel === 'kiosk') {
+        if ($configuredPayments) {
             try { \App\Libraries\KioskPayments::assertAllocated($payments, $totals['total']); }
             catch (\RuntimeException $e) { return redirect()->back()->withInput()->with('error', $e->getMessage()); }
         }

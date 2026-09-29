@@ -1,15 +1,17 @@
 <?= $this->extend('layouts/app') ?>
 
 <?= $this->section('content') ?>
+<link rel="stylesheet" href="<?= base_url('assets/css/settings-workspace.css') ?>">
+<div class="settings-workspace">
 <style>
     [data-settings-pagination] > [hidden] { display: none !important; }
     .settings-pagination { border-top: 1px solid var(--bs-border-color, #dee2e6); }
 </style>
 <script src="<?= base_url('assets/js/settings-pagination.js') ?>" defer></script>
-<div class="mb-4">
-    <h1 class="h2 mb-1">Configuracion</h1>
-    <p class="text-secondary mb-0">Parametros centrales por empresa: datos, sucursales, impuestos, monedas y numeraciones.</p>
-</div>
+<header class="settings-heading">
+    <div><span class="settings-eyebrow">ADMINISTRACIÓN / PREFERENCIAS</span><h1>Configuración</h1><p>Una base organizada para toda tu operación.</p></div>
+    <span class="settings-context"><i class="bi bi-building-check" aria-hidden="true"></i> Configuración por empresa</span>
+</header>
 
 <?php if (! empty($company)): ?>
     <div class="card border-0 shadow-sm rounded-4 mb-4" id="settings-company-card" data-company-id="<?= esc($company['id']) ?>" data-refresh-url="<?= site_url('configuracion?company_id=' . $company['id']) ?>">
@@ -45,46 +47,50 @@
 <?php endif; ?>
 
 <div class="row g-4">
-    <div class="col-12">
+    <div class="col-12" id="settings-systems-card">
         <div class="card border-0 shadow-sm rounded-4">
             <div class="card-body p-4">
                 <div class="d-flex justify-content-between align-items-start mb-3">
                     <div>
-                        <h2 class="h4 mb-1">Configuracion por sistema</h2>
-                        <p class="text-secondary mb-0">La empresa centraliza su base y cada sistema consume esta configuracion de forma integrada.</p>
+                        <span class="settings-eyebrow">MÓDULOS CONECTADOS</span>
+                        <h2 class="h4 mb-1">Configuración por sistema</h2>
+                        <p class="text-secondary mb-0">Personaliza las reglas de cada módulo para la empresa activa.</p>
                     </div>
                 </div>
                 <div class="row g-3">
                     <div class="col-md-4">
-                        <div class="border rounded-4 p-3 h-100">
+                        <div class="border rounded-4 p-3 h-100 settings-module">
                             <div class="d-flex justify-content-between align-items-start gap-3">
                                 <div>
+                                    <span class="settings-module-icon"><i class="bi bi-box-seam" aria-hidden="true"></i></span>
                                     <div class="fw-semibold">Inventario</div>
                                     <div class="small text-secondary">Depositos, alertas, stock negativo y politicas operativas.</div>
                                 </div>
-                                <a href="<?= site_url('inventario/configuracion?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-outline-dark btn-sm">Configuracion</a>
+                                <a href="<?= site_url('inventario/configuracion?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-outline-dark btn-sm icon-btn" title="Configurar inventario" aria-label="Configurar inventario"><i class="bi bi-arrow-up-right" aria-hidden="true"></i></a>
                             </div>
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <div class="border rounded-4 p-3 h-100">
+                        <div class="border rounded-4 p-3 h-100 settings-module">
                             <div class="d-flex justify-content-between align-items-start gap-3">
                                 <div>
+                                    <span class="settings-module-icon"><i class="bi bi-receipt" aria-hidden="true"></i></span>
                                     <div class="fw-semibold">Ventas</div>
                                     <div class="small text-secondary">Argentina ARCA, monedas habilitadas, facturacion estandar y kiosco.</div>
                                 </div>
-                                <a href="<?= site_url('ventas/configuracion?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-outline-dark btn-sm">Configuracion</a>
+                                <a href="<?= site_url('ventas/configuracion?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-outline-dark btn-sm icon-btn" title="Configurar ventas" aria-label="Configurar ventas"><i class="bi bi-arrow-up-right" aria-hidden="true"></i></a>
                             </div>
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <div class="border rounded-4 p-3 h-100">
+                        <div class="border rounded-4 p-3 h-100 settings-module">
                             <div class="d-flex justify-content-between align-items-start gap-3">
                                 <div>
+                                    <span class="settings-module-icon"><i class="bi bi-printer" aria-hidden="true"></i></span>
                                     <div class="fw-semibold">Impresión y Tickets</div>
                                     <div class="small text-secondary">Diseño de comprobantes, ancho de papel, cabeceras y leyendas.</div>
                                 </div>
-                                <a href="<?= site_url('configuracion/tickets?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-outline-dark btn-sm" data-popup="true" data-popup-title="Configuracion de Impresion y Tickets" data-popup-subtitle="Personalizar cabeceras, pie de pagina, dimensiones y visibilidad de datos.">Configuracion</a>
+                                <a href="<?= site_url('configuracion/tickets?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-outline-dark btn-sm icon-btn" title="Configurar impresión y tickets" aria-label="Configurar impresión y tickets" data-popup="true" data-popup-title="Configuracion de Impresion y Tickets" data-popup-subtitle="Personalizar cabeceras, pie de pagina, dimensiones y visibilidad de datos."><i class="bi bi-arrow-up-right" aria-hidden="true"></i></a>
                             </div>
                         </div>
                     </div>
@@ -97,7 +103,7 @@
             <div class="card-body p-4">
                 <div class="d-flex justify-content-between align-items-start mb-3">
                     <div>
-                        <h2 class="h4 mb-1">Sucursales Empresa</h2>
+                        <h2 class="h4 mb-1">Sucursales de la empresa</h2>
                         <p class="text-secondary mb-0">Sucursales de la empresa activa y su estado operativo.</p>
                     </div>
                     <?php if (auth_can('branches.manage')): ?>
@@ -223,7 +229,7 @@
         <div class="card border-0 shadow-sm rounded-4 h-100">
             <div class="card-body p-4">
                 <div class="d-flex justify-content-between align-items-start mb-3">
-                    <h2 class="h4 mb-0">Numeracion de comprobantes</h2>
+                    <h2 class="h4 mb-0">Numeración de comprobantes</h2>
                     <?php if (auth_can('voucher_sequences.manage')): ?>
                         <a href="<?= site_url('configuracion/numeraciones/nueva?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-dark btn-sm icon-btn" data-popup="true" data-popup-title="Nueva numeracion" data-popup-subtitle="Registrar una numeracion de comprobantes para la empresa activa." title="Nueva numeracion" aria-label="Nueva numeracion"><i class="bi bi-plus-lg"></i></a>
                     <?php endif; ?>
@@ -239,5 +245,7 @@
             </div>
         </div>
     </div>
+</div>
+<footer class="settings-footer"><i class="bi bi-shield-check" aria-hidden="true"></i> Los cambios se aplican a la empresa activa, según los permisos de tu perfil.</footer>
 </div>
 <?= $this->endSection() ?>

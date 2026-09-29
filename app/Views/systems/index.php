@@ -1,23 +1,26 @@
 <?= $this->extend('layouts/app') ?>
 
 <?= $this->section('content') ?>
-<div class="d-flex justify-content-between align-items-center mb-4">
+<link rel="stylesheet" href="<?= base_url('assets/css/systems-workspace.css') ?>">
+<div class="systems-workspace">
+<header class="systems-heading">
     <div>
+        <span class="systems-eyebrow">ADMINISTRACIÓN / ECOSISTEMA</span>
         <h1 class="h2 mb-1">Sistemas</h1>
-        <p class="text-secondary mb-0">Asignaciones por empresa y permisos operativos por usuario dentro del ecosistema.</p>
+        <p class="text-secondary mb-0"><?= $isSuperadmin ? 'Conecta empresas, sistemas y equipos desde un solo lugar.' : 'Accede a los sistemas de tu empresa y organiza los permisos de tu equipo.' ?></p>
     </div>
     <?php if ($isSuperadmin): ?>
         <a href="<?= site_url('sistemas/nuevo') ?>" class="btn btn-dark icon-btn" data-popup="true" data-popup-title="Nuevo sistema" data-popup-subtitle="Registrar un nuevo sistema del ecosistema." title="Nuevo sistema" aria-label="Nuevo sistema"><i class="bi bi-window-plus"></i></a>
     <?php endif; ?>
-</div>
+</header>
 
 <?php if (! empty($companies)): ?>
     <div class="card border-0 shadow-sm rounded-4 mb-4">
         <div class="card-body">
             <form method="get" action="<?= site_url('sistemas') ?>" class="row g-3 align-items-end">
                 <div class="col-md-6">
-                    <label class="form-label">Empresa activa</label>
-                    <select name="company_id" class="form-select">
+                    <label class="form-label" for="systems-company">Empresa activa</label>
+                    <select name="company_id" id="systems-company" class="form-select">
                         <?php foreach ($companies as $company): ?>
                             <option value="<?= esc($company['id']) ?>" <?= $selectedCompanyId === $company['id'] ? 'selected' : '' ?>><?= esc($company['name']) ?></option>
                         <?php endforeach; ?>
@@ -26,13 +29,16 @@
                 <div class="col-md-2">
                     <button class="btn btn-dark icon-btn" title="Cambiar empresa" aria-label="Cambiar empresa"><i class="bi bi-arrow-repeat"></i></button>
                 </div>
+                <div class="col-md-4 text-md-end"><span class="systems-context"><i class="bi bi-shield-check" aria-hidden="true"></i> Administración global</span></div>
             </form>
         </div>
     </div>
+<?php elseif (! empty($selectedCompany)): ?>
+    <div class="systems-company-context"><span><i class="bi bi-building" aria-hidden="true"></i> <?= esc($selectedCompany['name']) ?></span><span class="systems-context">Sistemas de tu empresa</span></div>
 <?php endif; ?>
 
 <div class="row g-4">
-    <div class="col-12">
+    <div class="col-12" id="systems-available">
         <div class="card border-0 shadow-sm rounded-4">
             <div class="card-body p-4">
                 <div class="d-flex justify-content-between align-items-start mb-3">
@@ -53,19 +59,19 @@
                     <div class="row g-3">
                         <?php foreach ($accessibleSystems as $system): ?>
                             <div class="col-md-6 col-xl-4">
-                                <div class="card h-100 border rounded-4">
+                                <div class="card h-100 border rounded-4 systems-module">
                                     <div class="card-body d-flex flex-column gap-3">
-                                        <div class="d-flex justify-content-between align-items-start">
+                                        <div class="systems-module-heading">
                                             <div class="d-flex align-items-center gap-3">
-                                                <span class="btn btn-outline-dark icon-btn disabled"><i class="bi <?= esc($system['icon']) ?>"></i></span>
+                                                <span class="systems-module-icon"><i class="bi <?= esc($system['icon'] ?: 'bi-grid') ?>" aria-hidden="true"></i></span>
                                                 <div>
                                                     <div class="fw-semibold"><?= esc($system['name']) ?></div>
                                                     <div class="small text-secondary"><?= esc($system['slug']) ?></div>
                                                 </div>
                                             </div>
-                                            <div class="d-flex align-items-center gap-2">
+                                            <div class="systems-module-status">
                                                 <span class="badge text-bg-<?= ($system['access_level'] ?? 'view') === 'manage' ? 'dark' : 'secondary' ?>">
-                                                    <?= ($system['access_level'] ?? 'view') === 'manage' ? 'Gestion' : 'Consulta' ?>
+                                                    <?= ($system['access_level'] ?? 'view') === 'manage' ? 'Gestión' : 'Consulta' ?>
                                                 </span>
                                                 <?php if ($isSuperadmin): ?>
                                                     <div class="small <?= (int) ($system['active'] ?? 1) === 1 ? 'text-success' : 'text-danger' ?>">
@@ -76,7 +82,7 @@
                                         </div>
                                         <p class="text-secondary small mb-0"><?= esc($system['description'] ?: 'Sistema disponible sin descripcion adicional.') ?></p>
                                         
-                                        <div class="mt-auto d-flex flex-wrap gap-2">
+                                        <div class="mt-auto d-flex align-items-center justify-content-between gap-2 systems-module-footer">
                                             <?php
                                             $canEnter = $system['entry_url'] !== '#' && (int) ($system['active'] ?? 1) === 1;
                                             $baseHref = $system['entry_url'];
@@ -85,7 +91,8 @@
                                                 : '';
                                             $entryHref = $canEnter ? ($baseHref . $companyQuery) : '#';
                                             ?>
-                                            <a href="<?= esc($entryHref) ?>" class="btn btn-outline-dark btn-sm <?= $canEnter ? '' : 'disabled' ?>" <?= $canEnter ? '' : 'aria-disabled="true"' ?>>Ingresar</a>
+                                            <span class="small text-secondary"><?= $canEnter ? 'Acceso al sistema' : 'Acceso no disponible' ?></span>
+                                            <a href="<?= esc($entryHref) ?>" class="btn btn-outline-dark btn-sm icon-btn <?= $canEnter ? '' : 'disabled' ?>" title="Ingresar a <?= esc($system['name'], 'attr') ?>" aria-label="Ingresar a <?= esc($system['name'], 'attr') ?>" <?= $canEnter ? '' : 'aria-disabled="true" tabindex="-1"' ?>><i class="bi bi-arrow-up-right" aria-hidden="true"></i></a>
                                         </div>
                                     </div>
                                 </div>
@@ -93,14 +100,14 @@
                         <?php endforeach; ?>
                     </div>
                 <?php else: ?>
-                    <div class="text-secondary">No hay sistemas asignados para este contexto.</div>
+                    <div class="systems-empty"><i class="bi bi-grid" aria-hidden="true"></i><strong>No hay sistemas disponibles</strong><span>No hay sistemas asignados para este contexto.</span></div>
                 <?php endif; ?>
             </div>
         </div>
     </div>
 
     <?php if ($selectedCompanyId && ($isSuperadmin || $canManageSystems)): ?>
-        <div class="col-lg-6">
+        <div class="col-lg-6" id="systems-company-assignments">
             <div class="card border-0 shadow-sm rounded-4 h-100">
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-start mb-3">
@@ -140,7 +147,7 @@
             </div>
         </div>
 
-        <div class="col-lg-6">
+        <div class="col-lg-6" id="systems-user-permissions">
             <div class="card border-0 shadow-sm rounded-4 h-100">
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-start mb-3">
@@ -184,12 +191,12 @@
     <?php endif; ?>
 
     <?php if ($isSuperadmin): ?>
-        <div class="col-12 mt-2">
+        <div class="col-12 mt-2" id="systems-catalog">
             <div class="card border-0 shadow-sm rounded-4">
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-start mb-3">
                         <div>
-                            <h2 class="h4 mb-1">Catalogo global de sistemas</h2>
+                            <h2 class="h4 mb-1">Catálogo global de sistemas</h2>
                             <p class="text-secondary mb-0">Gestion centralizada de todos los sistemas del ecosistema.</p>
                         </div>
                         <a href="<?= site_url('sistemas/nuevo') ?>" class="btn btn-dark icon-btn" data-popup="true" data-popup-title="Nuevo sistema" data-popup-subtitle="Registrar un nuevo sistema del ecosistema." title="Nuevo sistema" aria-label="Nuevo sistema"><i class="bi bi-window-plus"></i></a>
@@ -233,5 +240,7 @@
             </div>
         </div>
     <?php endif; ?>
+</div>
+<footer class="systems-footer"><i class="bi bi-shield-check" aria-hidden="true"></i> Los accesos y las acciones disponibles respetan los permisos de tu perfil.</footer>
 </div>
 <?= $this->endSection() ?>

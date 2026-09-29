@@ -12,6 +12,9 @@ class DashboardController extends BaseController
 {
     public function index()
     {
+        if (in_array($this->roleSlug(), ['admin', 'superadmin'], true)) {
+            return $this->insights();
+        }
         $companyId = $this->companyId();
         $isSuperadmin = $this->isSuperadmin();
 
@@ -149,6 +152,31 @@ class DashboardController extends BaseController
             'readiness' => $readiness,
             'user' => $this->currentUser(),
         ]);
+    }
+
+    private function insights()
+    {
+        $superadmin = $this->isSuperadmin();
+        $service = new \App\Libraries\DashboardInsights();
+        try {
+            $filters = $service->filters((array) $this->request->getGet(), $superadmin, $this->companyId());
+        } catch (\InvalidArgumentException $e) {
+            if ($this->request->isAJAX()) return $this->response->setStatusCode(422)->setJSON(['message' => $e->getMessage()]);
+            if (!$superadmin && !$this->companyId()) return $this->response->setStatusCode(403)->setBody(esc($e->getMessage()));
+            return redirect()->to(site_url('dashboard'))->with('error', $e->getMessage());
+        }
+        $companies = (new CompanyModel());
+        if (!$superadmin) $companies->where('id', $this->companyId());
+        $companies = $companies->orderBy('name', 'ASC')->findAll();
+        $currencies = db_connect()->table('sales')->select('currency_code')->distinct();
+        if (!$superadmin) $currencies->where('company_id', $this->companyId());
+        $currencyOptions = array_values(array_unique(array_merge(['ARS', $filters['currency']], array_filter(array_column($currencies->get()->getResultArray(), 'currency_code')))));
+        $data = ['pageTitle' => 'Centro de control', 'user' => $this->currentUser(), 'superadmin' => $superadmin,
+            'filters' => $filters, 'companies' => $companies, 'currencyOptions' => $currencyOptions,
+            'insights' => $service->load($filters, $superadmin)];
+        $this->response->setHeader('Cache-Control', 'no-store, private');
+        if ($this->request->isAJAX()) return $this->response->setJSON(['html' => view('dashboard/insights_panel', $data), 'updated' => $data['insights']['updated']]);
+        return view('dashboard/insights', $data);
     }
 
     public function readiness()

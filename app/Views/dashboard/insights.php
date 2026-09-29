@@ -28,7 +28,13 @@
     <main id="insight-content" aria-label="Indicadores y análisis">
         <?= view('dashboard/insights_panel', compact('insights', 'filters', 'superadmin')) ?>
     </main>
-    <footer class="insight-footer"><span><i class="bi bi-database-check" aria-hidden="true"></i> Datos de operaciones registradas · Importes en <?= esc($filters['currency']) ?>, sin conversión</span><a href="<?= site_url('dashboard/readiness') ?>" title="Diagnóstico del sistema" aria-label="Diagnóstico del sistema"><i class="bi bi-clipboard2-pulse" aria-hidden="true"></i></a></footer>
+    <footer class="insight-footer">
+        <span><i class="bi bi-database-check" aria-hidden="true"></i> Datos de operaciones registradas · Importes en <?= esc($filters['currency']) ?>, sin conversión</span>
+        <div class="d-flex align-items-center gap-3 fs-6">
+            <a href="<?= site_url('dashboard/readiness') ?>" title="Diagnóstico del sistema" aria-label="Diagnóstico del sistema"><i class="bi bi-clipboard2-pulse" aria-hidden="true"></i></a>
+            <a href="<?= site_url('dashboard/qa') ?>" title="QA integral" aria-label="QA integral"><i class="bi bi-shield-check" aria-hidden="true"></i></a>
+        </div>
+    </footer>
 </div>
 <script src="<?= base_url('assets/js/dashboard-insights.js') ?>" defer></script>
 <?= $this->endSection() ?>

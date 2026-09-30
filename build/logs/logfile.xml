@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <testsuites>
-  <testsuite name="PosTicketDesignTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\PosTicketDesignTest.php" tests="4" assertions="14" errors="0" warnings="0" failures="0" skipped="0" time="0.162660">
-    <testcase name="testVisibilityAndEscapingPreserveSaleTotal" class="PosTicketDesignTest" classname="PosTicketDesignTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\PosTicketDesignTest.php" line="8" assertions="5" time="0.136122"/>
-    <testcase name="testRealDocumentWithoutAuthorizationDoesNotInventFiscalData" class="PosTicketDesignTest" classname="PosTicketDesignTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\PosTicketDesignTest.php" line="21" assertions="4" time="0.013120"/>
-    <testcase name="testHiddenPaymentDoesNotAppearAndTotalIsUnchanged" class="PosTicketDesignTest" classname="PosTicketDesignTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\PosTicketDesignTest.php" line="35" assertions="3" time="0.007430"/>
-    <testcase name="testQrCanBeEmbeddedOfflineInPdf" class="PosTicketDesignTest" classname="PosTicketDesignTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\PosTicketDesignTest.php" line="46" assertions="2" time="0.005987"/>
+  <testsuite name="PosTicketDesignTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\PosTicketDesignTest.php" tests="5" assertions="18" errors="0" warnings="0" failures="0" skipped="0" time="0.146515">
+    <testcase name="testVisibilityAndEscapingPreserveSaleTotal" class="PosTicketDesignTest" classname="PosTicketDesignTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\PosTicketDesignTest.php" line="8" assertions="5" time="0.113237"/>
+    <testcase name="testRealDocumentWithoutAuthorizationDoesNotInventFiscalData" class="PosTicketDesignTest" classname="PosTicketDesignTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\PosTicketDesignTest.php" line="21" assertions="4" time="0.011732"/>
+    <testcase name="testHiddenPaymentDoesNotAppearAndTotalIsUnchanged" class="PosTicketDesignTest" classname="PosTicketDesignTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\PosTicketDesignTest.php" line="35" assertions="3" time="0.008066"/>
+    <testcase name="testQrCanBeEmbeddedOfflineInPdf" class="PosTicketDesignTest" classname="PosTicketDesignTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\PosTicketDesignTest.php" line="46" assertions="2" time="0.005536"/>
+    <testcase name="testAuthorizedReceiptAlwaysShowsFiscalSection" class="PosTicketDesignTest" classname="PosTicketDesignTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\PosTicketDesignTest.php" line="53" assertions="4" time="0.007943"/>
   </testsuite>
 </testsuites>

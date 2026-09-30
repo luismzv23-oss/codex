@@ -11,7 +11,7 @@
     };
     window.renderKioskTicket = (settings, data, preview = false) => {
         const get = key => settings['ticket_' + key] ?? settings[key];
-        const show = key => Number(get(key) ?? 1) === 1;
+        const show = key => (!preview && data.cae && ['show_qr', 'show_authorization'].includes(key)) || Number(get(key) ?? 1) === 1;
         const text = (key, fallback = '') => get(key) || fallback;
         const row = (label, value) => `<div class="row"><span>${escape(label)}</span><span>${escape(value)}</span></div>`;
         const block = (flag, content) => show(flag) && content ? `<section>${content}</section>` : '';
@@ -28,7 +28,7 @@
             const discount = base * Number(item.discount_rate || 0) / 100;
             return `<div class="item"><strong>${show('show_sku') && item.sku ? escape(item.sku) + ' · ' : ''}${escape(item.name)}</strong>
                 ${show('show_brand') ? line(item.brand) : ''}
-                ${row(show('show_item_breakdown') ? `${item.quantity} x ${money(item.unit_price)}` : `Cant.: ${item.quantity}`, money(base - discount))}
+                ${row(show('show_item_breakdown') ? `${item.quantity} x ${money(item.unit_price)}` : `Cant.: ${item.quantity}`, money(item.line_total ?? (base - discount)))}
                 ${show('show_discounts') && discount > 0 ? row(`Descuento ${money(item.discount_rate)} %`, '-' + money(discount)) : ''}</div>`;
         }).join('');
         return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Ticket</title><style>
@@ -47,7 +47,7 @@
         ${block('show_discounts',data.discount > 0 ? row('Descuento por medio de pago','-' + money(data.discount)) : '')}
         ${block('show_surcharges',visiblePayments.filter(p=>p.surcharge>0).map(p=>row(`Recargo ${p.code} (${money(p.rate)} %)`,money(p.surcharge))).join(''))}
         <div class="total">${row('TOTAL A PAGAR',money(data.total))}</div>
-        ${block('show_payments',visiblePayments.map(p=>row(p.code + (p.type === 'transfer' ? ' (pendiente)' : ''),money(p.total))).join(''))}
+        ${block('show_payments',visiblePayments.map(p=>row(p.code + (p.status === 'pending' || (!p.status && p.type === 'transfer') ? ' (pendiente)' : ''),money(p.total))).join(''))}
         ${block('show_transparency',line('RÉGIMEN DE TRANSPARENCIA FISCAL AL CONSUMIDOR (Ley 27.743)') + row('IVA contenido:', money(vat)) + row('Otros impuestos nacionales indirectos:', data.nationalTaxes == null ? 'No informado' : money(data.nationalTaxes)) + line('Los impuestos informados son solo los que corresponden a nivel nacional.'))}
         ${block('show_authorization',fiscal)}
         ${block('show_qr',qr ? `<div class="qr">${qr}${preview ? '<small>QR DE EJEMPLO · SIN VALIDEZ FISCAL</small>' : ''}</div>` : (data.cae ? line('QR no disponible: faltan datos de autorización.') : ''))}
@@ -55,6 +55,6 @@
         ${block('show_footer',text('footer_notes') ? `<div class="footer">${escape(text('footer_notes'))}</div>` : '')}
         ${block('show_contact',`<div class="contact">${line(text('contact_title','Atendemos tus consultas'))}${text('contact_phone') ? `<div class="phone">Tel.: ${escape(text('contact_phone'))}</div>` : ''}${text('contact_whatsapp') ? `<div class="phone">WhatsApp: ${escape(text('contact_whatsapp'))}</div>` : ''}</div>`)}
         ${show('show_thanks') && text('thanks_text','Gracias por tu compra') ? `<div class="thanks">${escape(text('thanks_text','Gracias por tu compra'))}</div>` : ''}
-        </article>${preview ? '' : '<div class="actions"><button onclick="window.print()">Imprimir</button><button onclick="window.close()">Cerrar</button></div>'}</body></html>`;
+        </article>${preview ? '' : '<div class="actions"><button onclick="window.print()">Imprimir</button><button onclick="if(window.parent!==window){window.parent.postMessage(\'close-sale-receipt\',window.location.origin)}else{window.close()}">Cerrar</button></div>'}</body></html>`;
     };
 })();

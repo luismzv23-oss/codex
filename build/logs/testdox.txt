@@ -3,4 +3,5 @@ Pos Ticket Design
  [x] Real document without authorization does not invent fiscal data
  [x] Hidden payment does not appear and total is unchanged
  [x] Qr can be embedded offline in pdf
+ [x] Authorized receipt always shows fiscal section
 

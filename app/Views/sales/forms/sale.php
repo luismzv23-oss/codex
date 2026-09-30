@@ -6,6 +6,7 @@ $selectedCompanyId = $selectedCompanyId ?? '';
 <?= $this->extend('layouts/app') ?>
 
 <?= $this->section('content') ?>
+<script src="<?= base_url('assets/js/sale-receipt-window.js') ?>"></script>
 <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
     <div>
         <h1 class="h2 mb-1"><?= empty($sale) ? 'Venta nueva' : 'Editar venta' ?></h1>
@@ -643,9 +644,33 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
             if (previousBase !== paymentBase) paymentRows?.syncBase();
         });
         const paymentForm = paymentsBody.closest('form');
-        paymentForm.addEventListener('submit', event => {
+        let savingPos = false;
+        paymentForm.addEventListener('submit', async event => {
+            event.preventDefault();
+            if (savingPos) return;
             syncTotals();
-            try { paymentRows.validate(); } catch (error) { event.preventDefault(); alert(error.message); }
+            try { paymentRows.validate(); } catch (error) { alert(error.message); return; }
+            const receiptWindow = window.openSaleReceiptWindow(() => window.location.reload());
+            savingPos = true;
+            const buttons = Array.from(paymentForm.querySelectorAll('button[type="submit"], button:not([type])'));
+            buttons.forEach(button => button.disabled = true);
+            let registered = false;
+            try {
+                const response = await fetch(paymentForm.action, {method:'POST', body:new FormData(paymentForm), headers:{'X-Requested-With':'XMLHttpRequest'}});
+                const data = await response.json();
+                if (data.csrf_token) {
+                    const token = paymentForm.querySelector('input[name="<?= csrf_token() ?>"]');
+                    if (token) token.value = data.csrf_token;
+                }
+                if (!response.ok || data.status !== 'ok') throw new Error(data.message || 'No se pudo registrar la venta.');
+                registered = true;
+                receiptWindow.show(data.receipt_url);
+            } catch (error) {
+                receiptWindow.close();
+                alert(registered ? 'La venta se registró. Abre su comprobante desde Ventas; no vuelvas a registrarla.' : error.message);
+            } finally {
+                if (!registered) { savingPos = false; buttons.forEach(button => button.disabled = false); }
+            }
         });
         paymentForm.addEventListener('formdata', event => paymentRows.appendTo(event.formData));
     }

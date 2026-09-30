@@ -267,6 +267,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
 </div>
 <script src="<?= base_url('assets/js/qrcode-generator.js') ?>"></script>
 <script src="<?= base_url('assets/js/kiosk-ticket-design.js') ?>"></script>
+<script src="<?= base_url('assets/js/sale-receipt-window.js') ?>"></script>
 <script src="<?= base_url('assets/js/kiosk-payments.js') ?>"></script>
 <script src="<?= base_url('assets/js/sales-product-search.js') ?>"></script>
 <script>
@@ -793,6 +794,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
 
         // ── Ticket print markup ─────────────────────────────
         let lastPrintedTicket = null;
+        let lastReceiptUrl = null;
         const ticketData = () => {
             const taxes = new Map();
             items.forEach(item => {
@@ -829,6 +831,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
         // ── Continuous flow: AJAX submit ────────────────────
         form.addEventListener('submit', (event) => {
             event.preventDefault();
+            if (submitBtn.disabled) return;
             if (items.size === 0) {
                 beepError();
                 showToast('Agrega al menos un producto', 'exclamation-triangle-fill');
@@ -840,6 +843,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
             submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
 
             const submittedTicket = ticketData();
+            const receiptWindow = window.openSaleReceiptWindow();
             const formData = new FormData(form);
             paymentRows.appendTo(formData);
             fetch(form.action, {
@@ -873,7 +877,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                     return data;
                 })
                 .then(data => {
-                    if (!data) return;
+                    if (!data) { receiptWindow.close(); return; }
 
                     // Refresh the CSRF token for the next submit
                     if (data.csrf_token) {
@@ -881,6 +885,9 @@ $productCatalog = array_values(array_map(static function (array $product): array
                     }
 
                     if (data.status === 'ok') {
+                        lastReceiptUrl = data.receipt_url;
+                        if (lastReceiptUrl) receiptWindow.show(lastReceiptUrl);
+                        else receiptWindow.close();
                         lastPrintedTicket = {...submittedTicket, draft: false, reference: data.sale_number || submittedTicket.reference, ...data.ticket_fiscal};
                         beepConfirm();
                         let toastMsg = 'Venta registrada ✓ ' + (data.sale_number || referenceField.value);
@@ -908,6 +915,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                     }
                 })
                 .catch(err => {
+                    receiptWindow.close();
                     beepError();
                     showToast('Error al registrar: ' + err.message, 'x-circle-fill');
                 })
@@ -918,6 +926,10 @@ $productCatalog = array_values(array_map(static function (array $product): array
         });
 
         printButton.addEventListener('click', () => {
+            if (items.size === 0 && lastReceiptUrl) {
+                window.openSaleReceiptWindow().show(lastReceiptUrl);
+                return;
+            }
             if (items.size === 0 && !lastPrintedTicket) {
                 showToast('Agrega productos antes de imprimir', 'exclamation-triangle-fill');
                 return;

@@ -49,4 +49,18 @@ final class PosTicketDesignTest extends CIUnitTestCase
         $this->assertStringStartsWith('data:image/svg+xml;base64,', $image);
         $this->assertStringContainsString('<svg', base64_decode(explode(',', $image, 2)[1]));
     }
+
+    public function testAuthorizedReceiptAlwaysShowsFiscalSection(): void
+    {
+        helper('url');
+        $data = PosTicketDesign::preview(['name'=>'Demo']);
+        $data['preview'] = false;
+        $data['fiscal']['cae'] = '12345678901234';
+        $data['ticketSettings'] = ['ticket_show_qr'=>0, 'ticket_show_authorization'=>0];
+        $html = view('sales/pdf/pos', $data);
+        $this->assertStringNotContainsString('data-pos-block="show_qr" style="display:none"', $html);
+        $this->assertStringNotContainsString('data-pos-block="show_authorization" style="display:none"', $html);
+        $this->assertStringContainsString('12345678901234', $html);
+        $this->assertStringContainsString('alt="QR fiscal"', $html);
+    }
 }

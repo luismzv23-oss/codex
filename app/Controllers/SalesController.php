@@ -245,7 +245,7 @@ class SalesController extends BaseController
                 $saleFresh = $this->ownedSale($companyId, $saleId);
                 $arcaResult = $this->authorizeSaleInArca($companyId, $saleFresh);
             } else {
-                $this->processArcaAfterConfirmation($companyId, $saleId);
+                $arcaResult = $this->processArcaAfterConfirmation($companyId, $saleId);
             }
             $this->recordHardwareEvent($companyId, 'pos', 'printer', 'sale_confirmed', 'ok', 'sale', $saleId, [
                 'sale_number' => $saleNumber,
@@ -256,6 +256,7 @@ class SalesController extends BaseController
                 return $this->response->setJSON([
                     'status' => 'ok',
                     'message' => 'Venta POS confirmada correctamente.',
+                    'receipt_url' => $this->salesRoute('ventas/' . $saleId . '/pdf', $companyId),
                     'sale_number' => $saleNumber,
                     'sale_id' => $saleId,
                     'arca_cae' => $arcaResult['cae'] ?? null,
@@ -1106,6 +1107,7 @@ class SalesController extends BaseController
                 return $this->response->setJSON([
                     'status' => 'ok',
                     'message' => 'Factura kiosco registrada correctamente.',
+                    'receipt_url' => $this->salesRoute('ventas/' . $saleId . '/ticket', $companyId),
                     'ticket_fiscal' => \App\Libraries\KioskTicketFiscal::fromResult($arcaResult),
                     'sale_number' => $documentReference,
                     'sale_id' => $saleId,
@@ -2069,6 +2071,61 @@ class SalesController extends BaseController
         return $this->popupOrRedirect($this->salesRoute('ventas', $context['company']['id']), 'Devolucion registrada correctamente.');
     }
 
+    public function ticket(string $id)
+    {
+        $context = $this->salesContext('view');
+        if ($context instanceof RedirectResponse) { return $context; }
+        $companyId = $context['company']['id'];
+        $sale = $this->ownedSale($companyId, $id);
+        if (!$sale) { return $this->response->setStatusCode(404)->setBody('Venta no disponible.'); }
+        $settings = [];
+        foreach (db_connect()->table('company_settings')->where('company_id', $companyId)->like('key', 'ticket_', 'after')->get()->getResultArray() as $row) {
+            $settings[$row['key']] = $row['value'];
+        }
+        $ticketSettings = [];
+        foreach ($settings as $key=>$value) {
+            if (!str_starts_with($key, 'ticket_pos_') && !str_starts_with($key, 'ticket_kiosk_')) { $ticketSettings[$key] = $value; }
+        }
+        foreach ($settings as $key=>$value) {
+            if (str_starts_with($key, 'ticket_kiosk_')) { $ticketSettings['ticket_' . substr($key, 13)] = $value; }
+        }
+        $event = !empty($sale['arca_request_id']) ? (new SalesArcaEventModel())->where('company_id', $companyId)->where('sale_id', $id)->find($sale['arca_request_id']) : null;
+        $fiscal = \App\Libraries\KioskTicketFiscal::fromResult([
+            'status'=>$sale['arca_status'] ?? '', 'cae'=>$sale['cae'] ?? null, 'cae_due_date'=>$sale['cae_due_date'] ?? null,
+            'authorized_at'=>$sale['arca_authorized_at'] ?? null, 'environment'=>$event['environment'] ?? '',
+            'request_payload'=>json_decode($event['request_payload'] ?? '{}', true) ?: [],
+        ]);
+        $taxes = [];
+        $items = $this->saleItems($id);
+        foreach ($items as &$item) {
+            $item['name'] = $item['product_name'];
+            $rate = number_format((float)($item['tax_rate'] ?? 0), 2, ',', '.');
+            $taxes[$rate] = ($taxes[$rate] ?? 0) + (float)($item['tax_total'] ?? 0);
+        }
+        unset($item);
+        $payments = [];
+        foreach ($this->salePayments($id) as $line) {
+            if (($line['status'] ?? '') === 'reversed') { continue; }
+            $payments[] = ['code'=>$line['payment_method_code'] ?: $line['payment_method'],
+                'type'=>$line['payment_method'], 'status'=>$line['status'], 'total'=>(float)$line['amount'],
+                'rate'=>(float)($line['surcharge_rate'] ?? 0), 'surcharge'=>(float)($line['surcharge_amount'] ?? 0),
+                'show_on_receipt'=>(int)($line['show_on_receipt'] ?? 1)];
+        }
+        $doc = !empty($sale['document_type_id']) ? (new SalesDocumentTypeModel())->where('company_id', $companyId)->find($sale['document_type_id']) : null;
+        $creator = !empty($sale['created_by']) ? (new \App\Models\UserModel())->find($sale['created_by']) : null;
+        $data = array_merge([
+            'companyName'=>$context['company']['legal_name'] ?: $context['company']['name'], 'taxId'=>$context['company']['tax_id'] ?? '',
+            'document'=>$doc['name'] ?? $sale['document_code'], 'reference'=>$fiscal['documentNumber'] ?? $sale['sale_number'],
+            'date'=>$sale['confirmed_at'] ?? $sale['issue_date'], 'currency'=>$sale['currency_code'],
+            'customer'=>$sale['customer_name_snapshot'] ?? '', 'user'=>$creator['name'] ?? '',
+            'items'=>$items, 'payments'=>$payments, 'subtotal'=>(float)$sale['subtotal'],
+            'discount'=>(float)($sale['global_discount_total'] ?? 0), 'total'=>(float)$sale['total'],
+            'taxes'=>array_map(static fn($rate,$amount)=>['label'=>'IVA '.$rate.' %','amount'=>$amount],array_keys($taxes),array_values($taxes)),
+            'draft'=>($sale['status'] ?? '') === 'draft',
+        ], $fiscal);
+        return $this->response->setHeader('Cache-Control','no-store')->setBody(view('sales/ticket', ['ticketSettings'=>$ticketSettings,'ticketData'=>$data]));
+    }
+
     public function pdf(string $id)
     {
         $context = $this->salesContext('view');
@@ -2207,7 +2264,7 @@ class SalesController extends BaseController
             $allowedForVendedor = [
                 'index', 'pos', 'storePos', 'kiosk', 'storeKiosk', 'posCatalog', 'productSearch',
                 'arcaDiagnostics', 'diagnoseArca', 'testArcaConnection',
-                'createCustomerForm', 'storeCustomer', 'pdf', 'convert', 'confirm', 'cancel',
+                'createCustomerForm', 'storeCustomer', 'pdf', 'ticket', 'convert', 'confirm', 'cancel',
                 'authorizeArca', 'consultArca', 'createReturnForm', 'storeReturn'
             ];
 

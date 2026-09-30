@@ -1,5 +1,9 @@
 <?php
 $cfg = $ticketSettings ?? [];
+if (empty($preview) && !empty($fiscal['cae'])) {
+    $cfg['ticket_show_qr'] = 1;
+    $cfg['ticket_show_authorization'] = 1;
+}
 $flag = static fn ($key) => 'data-pos-block="'.$key.'"'.((int)($cfg['ticket_'.$key] ?? 1) === 1 ? '' : ' style="display:none"');
 $money = static fn ($amount) => number_format((float)$amount, 2, ',', '.');
 $value = static fn ($key, $fallback = '') => (string)($cfg['ticket_'.$key] ?? $fallback);

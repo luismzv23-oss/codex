@@ -9,7 +9,7 @@ window.createKioskPayments = function (container, methods, getBase, onChange) {
         const surcharge = Math.round(base * rate / 10000);
         const total = base + surcharge;
         const received = total;
-        return {id:method?.id || '', code:method?.code || '', type:method?.type === 'wallet' ? 'qr' : method?.type,
+        return {id:method?.id || '', code:method?.code || '', show_on_receipt:Number(method?.show_on_receipt ?? 1), type:method?.type === 'wallet' ? 'qr' : method?.type,
             rate:rate/100, base:base/100, surcharge:surcharge/100, total:total/100,
             received:received/100, change:Math.max(0,received-total)/100};
     });

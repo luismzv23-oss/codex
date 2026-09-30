@@ -961,6 +961,7 @@ class SalesController extends BaseController
             'show_user' => 1,
         ];
 
+        $defaults += \App\Libraries\KioskTicketDesign::defaults();
         $ticketSettings = [];
         foreach ($defaults as $subKey => $defaultVal) {
             $kioskKey = 'ticket_kiosk_' . $subKey;
@@ -1094,7 +1095,7 @@ class SalesController extends BaseController
                 $saleFresh  = $this->ownedSale($companyId, $saleId);
                 $arcaResult = $this->authorizeSaleInArca($companyId, $saleFresh);
             } else {
-                $this->processArcaAfterConfirmation($companyId, $saleId);
+                $arcaResult = $this->processArcaAfterConfirmation($companyId, $saleId);
             }
             $this->recordHardwareEvent($companyId, 'kiosk', 'printer', 'sale_confirmed', 'ok', 'sale', $saleId, [
                 'sale_number' => $documentReference,
@@ -1105,6 +1106,7 @@ class SalesController extends BaseController
                 return $this->response->setJSON([
                     'status' => 'ok',
                     'message' => 'Factura kiosco registrada correctamente.',
+                    'ticket_fiscal' => \App\Libraries\KioskTicketFiscal::fromResult($arcaResult),
                     'sale_number' => $documentReference,
                     'sale_id' => $saleId,
                     'arca_cae'     => $arcaResult['cae'] ?? null,
@@ -2097,7 +2099,7 @@ class SalesController extends BaseController
             'company_address' => '',
             'company_phone' => '',
             'footer_notes' => '',
-            'paper_width' => '80mm',
+            'paper_width' => 'A4',
             'font_size' => 'medium',
             'font_family' => 'DejaVu Sans',
             'bold_top_left' => 1,
@@ -2113,6 +2115,7 @@ class SalesController extends BaseController
             'show_user' => 1,
         ];
 
+        $defaults += \App\Libraries\PosTicketDesign::defaults();
         $ticketSettings = [];
         foreach ($defaults as $subKey => $defaultVal) {
             $posKey = 'ticket_pos_' . $subKey;
@@ -2130,7 +2133,18 @@ class SalesController extends BaseController
         $creator = (new \App\Models\UserModel())->find($sale['created_by'] ?? '');
         $creatorName = $creator ? $creator['name'] : '-';
 
-        return $this->renderPdf('sales/pdf/sale', [
+        $event = !empty($sale['arca_request_id']) ? (new SalesArcaEventModel())->where('company_id', $context['company']['id'])->where('sale_id', $id)->find($sale['arca_request_id']) : null;
+        $fiscal = \App\Libraries\KioskTicketFiscal::fromResult([
+            'status'=>$sale['arca_status'] ?? '', 'cae'=>$sale['cae'] ?? null, 'cae_due_date'=>$sale['cae_due_date'] ?? null,
+            'authorized_at'=>$sale['arca_authorized_at'] ?? null, 'environment'=>$event['environment'] ?? '',
+            'request_payload'=>json_decode($event['request_payload'] ?? '{}', true) ?: [],
+        ]);
+        return $this->renderPdf('sales/pdf/pos', [
+            'fiscal'=>$fiscal,
+            'qrDataUri'=>\App\Libraries\PosTicketDesign::qrDataUri($fiscal['qrUrl'] ?? null),
+            'documentType'=>!empty($sale['document_type_id']) ? (new SalesDocumentTypeModel())->where('company_id', $context['company']['id'])->find($sale['document_type_id']) : [],
+            'conditionName'=>!empty($sale['sales_condition_id']) ? ($db->table('sales_conditions')->where('company_id', $context['company']['id'])->where('id', $sale['sales_condition_id'])->get()->getRowArray()['name'] ?? '-') : 'Contado',
+
             'company' => $context['company'],
             'sale' => $sale,
             'customer' => $sale['customer_id'] ? (new CustomerModel())->find($sale['customer_id']) : null,
@@ -3842,7 +3856,11 @@ class SalesController extends BaseController
 
     private function salePayments(string $saleId): array
     {
-        return (new SalePaymentModel())->where('sale_id', $saleId)->findAll();
+        return (new SalePaymentModel())
+            ->select('sale_payments.*, COALESCE(cpm.show_on_receipt, 1) AS show_on_receipt')
+            ->join('sales s', 's.id = sale_payments.sale_id')
+            ->join('company_payment_methods cpm', 'cpm.id = sale_payments.payment_method_id AND cpm.company_id = s.company_id', 'left')
+            ->where('sale_payments.sale_id', $saleId)->findAll();
     }
 
     private function saleReturns(string $saleId): array
@@ -4527,19 +4545,19 @@ class SalesController extends BaseController
             ->getResultArray();
     }
 
-    private function processArcaAfterConfirmation(string $companyId, string $saleId): void
+    private function processArcaAfterConfirmation(string $companyId, string $saleId): array
     {
         $settings = $this->salesSettings($companyId);
         if ((int) ($settings['arca_auto_authorize'] ?? 0) !== 1) {
-            return;
+            return [];
         }
 
         $sale = $this->ownedSale($companyId, $saleId);
         if (!$sale) {
-            return;
+            return [];
         }
 
-        $this->authorizeSaleInArca($companyId, $sale);
+        return $this->authorizeSaleInArca($companyId, $sale);
     }
 
     private function authorizeSaleInArca(string $companyId, array $sale): array
@@ -4709,7 +4727,7 @@ class SalesController extends BaseController
 
         $dompdf = new Dompdf($options);
         $dompdf->loadHtml(view($view, $data));
-        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->setPaper(($data['ticketSettings']['ticket_paper_width'] ?? 'A4') === 'letter' ? 'letter' : 'A4', 'portrait');
         $dompdf->render();
 
         return $this->response

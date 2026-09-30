@@ -129,12 +129,27 @@ final class SettingsIntegrityTest extends CIUnitTestCase
         $this->web(['ticket_pos_header_title' => 'Changed', 'ticket_pos_custom_text_bottom_left' => 'Forbidden'])->updateTicketSettings();
         $this->assertSame(2, $this->db->table('company_settings')->countAllResults());
         $this->assertSame('Original', $this->db->table('company_settings')->where('key', 'ticket_pos_custom_text_bottom_left')->get()->getRowArray()['value']);
-        $this->settings->tickets('a', ['ticket_pos_header_title' => 'Allowed'], false);
+        $this->rejected(fn() => $this->settings->tickets('a', ['ticket_pos_header_title' => 'Forbidden'], false));
+        $this->settings->tickets('a', ['ticket_pos_header_title' => 'Allowed'], true);
         $this->assertSame('1', $this->db->table('company_settings')->where('key', 'ticket_pos_show_sku')->get()->getRowArray()['value']);
-        $this->settings->tickets('a', ['ticket_pos_show_sku' => '0'], false);
+        $this->settings->tickets('a', ['ticket_pos_show_sku' => '0', 'ticket_pos_show_qr'=>'0', 'ticket_pos_show_dates'=>'1'], true);
+        $this->assertSame('0', $this->db->table('company_settings')->where('company_id','a')->where('key','ticket_pos_show_qr')->get()->getRowArray()['value']);
         $this->assertSame('0', $this->db->table('company_settings')->where('key', 'ticket_pos_show_sku')->get()->getRowArray()['value']);
         $this->rejected(fn() => $this->settings->tickets('a', ['ticket_pos_header_title' => 'Broken', 'ticket_pos_paper_width' => 'invalid'], true));
         $this->assertSame('Allowed', $this->db->table('company_settings')->where('key', 'ticket_pos_header_title')->get()->getRowArray()['value']);
+    }
+
+    public function testKioskDesignVisibilityIsScopedAndRestricted(): void
+    {
+        $this->settings->tickets('a', ['ticket_kiosk_show_transparency'=>'0', 'ticket_kiosk_show_qr'=>'1', 'ticket_kiosk_contact_phone'=>'0800-123', 'ticket_kiosk_thanks_text'=>'Gracias'], true);
+        $this->assertSame('0800-123', $this->db->table('company_settings')->where('company_id', 'a')->where('key', 'ticket_kiosk_contact_phone')->get()->getRowArray()['value']);
+        $this->assertSame('0', $this->db->table('company_settings')->where('company_id', 'a')->where('key', 'ticket_kiosk_show_transparency')->get()->getRowArray()['value']);
+        $this->settings->tickets('a', ['ticket_kiosk_show_taxes' => '0', 'ticket_kiosk_show_payments' => '1', 'ticket_kiosk_font_size' => 'large'], true);
+        $this->assertSame('0', $this->db->table('company_settings')->where('company_id', 'a')->where('key', 'ticket_kiosk_show_taxes')->get()->getRowArray()['value']);
+        $this->assertSame(0, $this->db->table('company_settings')->where('company_id', 'b')->countAllResults());
+        $this->rejected(fn() => $this->settings->tickets('a', ['ticket_kiosk_show_taxes' => '1'], false));
+        $this->rejected(fn() => $this->settings->tickets('a', ['ticket_kiosk_show_taxes' => '1', 'ticket_kiosk_font_size' => 'invalid'], true));
+        $this->assertSame('0', $this->db->table('company_settings')->where('company_id', 'a')->where('key', 'ticket_kiosk_show_taxes')->get()->getRowArray()['value']);
     }
 
     public function testCreatingBranchesDoesNotChangePermissions(): void

@@ -14,7 +14,7 @@ final class CompanyPaymentMethodTest extends CIUnitTestCase
         helper('app');
         $db = db_connect('tests');
         foreach (['companies' => 'id', 'currencies' => 'id,company_id', 'branches' => 'id,company_id', 'sales_points_of_sale' => 'id,company_id',
-            'company_payment_methods' => 'id,company_id,code,name,type,active,currency_ids,funds_destination,required_fields,allows_installments,requires_confirmation,branch_ids,point_of_sale_ids,percentage,created_at,updated_at,deleted_at'] as $table => $fields) {
+            'company_payment_methods' => 'id,company_id,code,name,type,active,currency_ids,funds_destination,required_fields,allows_installments,requires_confirmation,branch_ids,point_of_sale_ids,percentage,show_on_receipt,created_at,updated_at,deleted_at'] as $table => $fields) {
             $columns = array_map(static fn($field) => '"' . $field . '" TEXT' . ($field === 'id' ? ' PRIMARY KEY' : ''), explode(',', $fields));
             $db->query('CREATE TABLE ' . $db->prefixTable($table) . ' (' . implode(',', $columns) . ')');
             $this->tables[] = $table;
@@ -38,6 +38,19 @@ final class CompanyPaymentMethodTest extends CIUnitTestCase
         return ['code' => 'transfer', 'name' => 'Transferencia', 'type' => 'transfer', 'active' => '1',
             'funds_destination' => 'bank', 'currency_ids' => ['a'], 'branch_ids' => ['a'], 'point_of_sale_ids' => ['a'],
             'required_fields' => ['referencia', 'entidad'], 'allows_installments' => '0', 'requires_confirmation' => '1'];
+    }
+
+    public function testReceiptVisibilityDefaultsAndPersists(): void
+    {
+        $service = new CompanyPaymentMethodService();
+        $method = $service->save('a', $this->input());
+        $this->assertSame(1, (int)$method['show_on_receipt']);
+        $hidden = $service->save('a', $this->input() + ['show_on_receipt'=>'0'], $method['id']);
+        $this->assertSame(0, (int)$hidden['show_on_receipt']);
+        $preserved = $service->save('a', $this->input(), $method['id']);
+        $this->assertSame(0, (int)$preserved['show_on_receipt']);
+        $visible = $service->save('a', $this->input() + ['show_on_receipt'=>'1'], $method['id']);
+        $this->assertSame(1, (int)$visible['show_on_receipt']);
     }
 
     public function testCrudKeepsGuidAndLogicalHistory(): void

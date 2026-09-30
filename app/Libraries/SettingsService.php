@@ -173,16 +173,21 @@ class SettingsService
 
     public function tickets(string $companyId, array $input, bool $admin): void
     {
+        if (! $admin && array_filter(array_keys($input), static fn ($key) => str_starts_with((string) $key, 'ticket_kiosk_') || str_starts_with((string) $key, 'ticket_pos_'))) {
+            throw new RuntimeException('Solo administrador y superadmin pueden editar el diseño de impresión.');
+        }
         $this->transaction($companyId, function () use ($companyId, $input, $admin) {
             $flags = ['bold_top_left', 'bold_top_right', 'show_sku', 'show_brand', 'show_item_breakdown', 'show_customer', 'show_user'];
             $restricted = ['custom_text_top_left', 'custom_text_top_right', 'custom_text_bottom_left', 'custom_text_bottom_right', 'bold_top_left', 'bold_top_right', 'font_family'];
             $keys = array_merge($flags, ['header_title', 'company_subtitle', 'company_address', 'company_phone', 'footer_notes', 'paper_width', 'font_size', 'font_family', 'custom_text_top_left', 'custom_text_top_right', 'custom_text_bottom_left', 'custom_text_bottom_right']);
             foreach (['ticket_pos_', 'ticket_kiosk_'] as $prefix) {
-                foreach ($keys as $key) {
+                $designFlags = $prefix === 'ticket_kiosk_' ? array_keys(KioskTicketDesign::BLOCKS) : array_keys(PosTicketDesign::BLOCKS);
+                $designTexts = $prefix === 'ticket_kiosk_' ? array_keys(KioskTicketDesign::TEXTS) : [];
+                foreach (array_merge($keys, $designFlags, $designTexts) as $key) {
                     $full = $prefix . $key;
                     if (! array_key_exists($full, $input)) { continue; }
                     if (! $admin && in_array($key, $restricted, true)) { throw new RuntimeException('No tienes permiso para modificar los textos personalizados o la fuente.'); }
-                    $value = in_array($key, $flags, true) ? (string) $this->flag($input[$full]) : $this->text($input[$full], $key, 4000);
+                    $value = in_array($key, array_merge($flags, $designFlags), true) ? (string) $this->flag($input[$full]) : $this->text($input[$full], $key, 4000);
                     $options = ['paper_width' => $prefix === 'ticket_pos_' ? ['A4', 'letter'] : ['58mm', '80mm'],
                         'font_size' => ['small', 'medium', 'large'], 'font_family' => ['DejaVu Sans', 'DejaVu Serif', 'Courier', 'Helvetica', 'Helvetica 75 Bold', 'Times-Roman']];
                     if (isset($options[$key]) && ! in_array($value, $options[$key], true)) { throw new RuntimeException('Opcion de impresion invalida: ' . $key); }

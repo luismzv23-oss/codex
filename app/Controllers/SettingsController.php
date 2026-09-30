@@ -334,6 +334,8 @@ class SettingsController extends BaseController
 
         $posSettings = [];
         $kioskSettings = [];
+        $defaults += \App\Libraries\KioskTicketDesign::defaults();
+        $defaults += \App\Libraries\PosTicketDesign::defaults();
 
         foreach ($defaults as $subKey => $defaultVal) {
             $posKey = 'ticket_pos_' . $subKey;
@@ -365,13 +367,14 @@ class SettingsController extends BaseController
                     $kioskSettings[$subKey] = $val;
                 }
             } else {
-                $kioskSettings[$subKey] = ($subKey === 'paper_width') ? '80mm' : $defaultVal;
+                $kioskSettings[$subKey] = $subKey === 'font_family' ? 'Courier' : (($subKey === 'paper_width') ? '80mm' : $defaultVal);
             }
         }
 
         return view('settings/forms/tickets', [
             'pageTitle' => 'Configuracion de Impresion y Tickets',
             'posSettings' => $posSettings,
+            'posPreviewHtml' => view('sales/pdf/pos', \App\Libraries\PosTicketDesign::preview($company)),
             'kioskSettings' => $kioskSettings,
             'companyId' => $companyId,
             'companyName' => $company['name'],

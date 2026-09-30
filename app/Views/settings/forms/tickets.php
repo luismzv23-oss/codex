@@ -1,6 +1,8 @@
 <?= $this->extend('layouts/app') ?>
 <?= $this->section('content') ?>
 <link rel="stylesheet" href="<?= base_url('assets/css/settings-forms.css') ?>">
+<script src="<?= base_url('assets/js/qrcode-generator.js') ?>"></script>
+<script src="<?= base_url('assets/js/kiosk-ticket-design.js') ?>"></script>
 <div class="settings-form">
 <?php
 $currentUser = auth_user();
@@ -39,6 +41,17 @@ $disabledAttr = !$isAdminOrSuperadmin ? 'disabled' : '';
                     <div class="tab-content" id="ticketConfigTabContent">
                         <!-- POS Settings Tab -->
                         <div class="tab-pane fade show active" id="pos-tab-pane" role="tabpanel" aria-labelledby="pos-tab" tabindex="0">
+                            <fieldset <?= $disabledAttr ?> class="border-0 p-0 m-0">
+                            <legend class="h6">Bloques y columnas del comprobante POS</legend>
+                            <div class="row g-2 mb-4">
+                            <?php foreach (\App\Libraries\PosTicketDesign::BLOCKS as $key => $label): ?>
+                                <div class="col-md-6"><div class="form-check form-switch">
+                                    <input type="hidden" name="ticket_pos_<?= esc($key) ?>" value="0">
+                                    <input class="form-check-input ticket-input" type="checkbox" id="pos_<?= esc($key) ?>" name="ticket_pos_<?= esc($key) ?>" value="1" <?= (int)($posSettings[$key] ?? 1) === 1 ? 'checked' : '' ?>>
+                                    <label class="form-check-label" for="pos_<?= esc($key) ?>"><?= esc($label) ?></label>
+                                </div></div>
+                            <?php endforeach; ?>
+                            </div>
                             <div class="row g-3">
                                 <div class="col-md-6">
                                     <label class="form-label">Nombre de fantasía / Cabecera (POS)</label>
@@ -118,46 +131,38 @@ $disabledAttr = !$isAdminOrSuperadmin ? 'disabled' : '';
                                     </div>
                                 </div>
 
-                                <div class="col-12">
-                                    <label class="form-label fw-semibold text-dark">Opciones de visualización (POS)</label>
-                                    <div class="row g-2 mt-1">
-                                        <div class="col-md-6">
-                                            <div class="form-check form-switch">
-                                                <input type="hidden" name="ticket_pos_show_sku" value="0" ><input class="form-check-input ticket-input" type="checkbox" name="ticket_pos_show_sku" id="pos_show_sku" value="1" <?= (int) ($posSettings['show_sku'] ?? 1) === 1 ? 'checked' : '' ?>>
-                                                <label class="form-check-label" for="pos_show_sku">Mostrar SKU del producto</label>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <div class="form-check form-switch">
-                                                <input type="hidden" name="ticket_pos_show_brand" value="0" ><input class="form-check-input ticket-input" type="checkbox" name="ticket_pos_show_brand" id="pos_show_brand" value="1" <?= (int) ($posSettings['show_brand'] ?? 1) === 1 ? 'checked' : '' ?>>
-                                                <label class="form-check-label" for="pos_show_brand">Mostrar Marca del producto</label>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <div class="form-check form-switch">
-                                                <input type="hidden" name="ticket_pos_show_item_breakdown" value="0" ><input class="form-check-input ticket-input" type="checkbox" name="ticket_pos_show_item_breakdown" id="pos_show_item_breakdown" value="1" <?= (int) ($posSettings['show_item_breakdown'] ?? 1) === 1 ? 'checked' : '' ?>>
-                                                <label class="form-check-label" for="pos_show_item_breakdown">Mostrar desglose de cantidades (2 x $100)</label>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <div class="form-check form-switch">
-                                                <input type="hidden" name="ticket_pos_show_customer" value="0" ><input class="form-check-input ticket-input" type="checkbox" name="ticket_pos_show_customer" id="pos_show_customer" value="1" <?= (int) ($posSettings['show_customer'] ?? 1) === 1 ? 'checked' : '' ?>>
-                                                <label class="form-check-label" for="pos_show_customer">Mostrar datos del cliente</label>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <div class="form-check form-switch">
-                                                <input type="hidden" name="ticket_pos_show_user" value="0" ><input class="form-check-input ticket-input" type="checkbox" name="ticket_pos_show_user" id="pos_show_user" value="1" <?= (int) ($posSettings['show_user'] ?? 1) === 1 ? 'checked' : '' ?>>
-                                                <label class="form-check-label" for="pos_show_user">Mostrar cajero/vendedor emisor</label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
                             </div>
+                            </fieldset>
                         </div>
 
                         <!-- Kiosk Settings Tab -->
                         <div class="tab-pane fade" id="kiosk-tab-pane" role="tabpanel" aria-labelledby="kiosk-tab" tabindex="0">
+                            <p class="text-secondary">Diseña el ticket térmico de tu empresa. La vista previa utiliza el mismo formato que la impresión de kiosco. Los importes de ejemplo no modifican las ventas.</p>
+                            <fieldset <?= $disabledAttr ?> class="border-0 p-0 m-0">
+                            <legend class="h6">Bloques del ticket</legend>
+                            <div class="row g-3 mb-4">
+                                <?php foreach (['contact_title'=>'Título de atención al cliente', 'contact_phone'=>'Teléfono de atención', 'contact_whatsapp'=>'WhatsApp', 'thanks_text'=>'Mensaje de agradecimiento'] as $key => $label): ?>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="kiosk_<?= esc($key) ?>"><?= esc($label) ?></label>
+                                        <input class="form-control ticket-input" id="kiosk_<?= esc($key) ?>" name="ticket_kiosk_<?= esc($key) ?>" value="<?= esc($kioskSettings[$key] ?? \App\Libraries\KioskTicketDesign::TEXTS[$key]) ?>" maxlength="4000">
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                            <div class="row g-2 mb-4">
+                                <?php foreach (\App\Libraries\KioskTicketDesign::BLOCKS as $key => $label): ?>
+                                    <div class="col-md-6"><div class="form-check form-switch">
+                                        <input type="hidden" name="ticket_kiosk_<?= esc($key) ?>" value="0">
+                                        <input type="checkbox" class="form-check-input ticket-input" name="ticket_kiosk_<?= esc($key) ?>" id="kiosk_<?= esc($key) ?>" value="1" <?= (int) ($kioskSettings[$key] ?? 1) === 1 ? 'checked' : '' ?>>
+                                        <label class="form-check-label" for="kiosk_<?= esc($key) ?>"><?= esc($label) ?></label>
+                                    </div></div>
+                                <?php endforeach; ?>
+                            </div>
+                            <label class="form-label" for="kiosk_font_size">Tamaño de letra</label>
+                            <select id="kiosk_font_size" name="ticket_kiosk_font_size" class="form-select ticket-input mb-3">
+                                <?php foreach (['small'=>'Pequeño', 'medium'=>'Mediano', 'large'=>'Grande'] as $value => $label): ?>
+                                    <option value="<?= esc($value) ?>" <?= ($kioskSettings['font_size'] ?? 'medium') === $value ? 'selected' : '' ?>><?= esc($label) ?></option>
+                                <?php endforeach; ?>
+                            </select>
                             <div class="row g-3">
                                 <div class="col-md-6">
                                     <label class="form-label">Nombre de fantasía / Cabecera (Kiosco)</label>
@@ -257,6 +262,7 @@ $disabledAttr = !$isAdminOrSuperadmin ? 'disabled' : '';
                                     </div>
                                 </div>
                             </div>
+                            </fieldset>
                         </div>
                     </div>
 
@@ -314,6 +320,8 @@ $disabledAttr = !$isAdminOrSuperadmin ? 'disabled' : '';
 
                 <!-- Ticket Outer Wrapper -->
                 <div class="ticket-preview-box w-100 d-flex justify-content-center p-3 border rounded-4 bg-white flex-grow-1 align-items-start" style="min-height: 480px; overflow-y: auto;">
+                    <iframe id="pos-design-preview" title="Vista previa POS" style="width:100%;height:850px;border:0" sandbox="allow-same-origin"></iframe>
+                    <iframe id="kiosk-design-preview" title="Vista previa del ticket de kiosco" style="display:none;width:100%;height:850px;border:0" sandbox="allow-same-origin"></iframe>
                     <div id="live-ticket" class="ticket-paper shadow-sm">
                         <!-- ======================================================= -->
                         <!-- 1. TICKET FORMAT PREVIEW (80mm / 58mm)                  -->
@@ -563,281 +571,61 @@ document.addEventListener('DOMContentLoaded', () => {
     function updatePreview() {
         const isActivePos = posTab.classList.contains('active');
         const prefix = isActivePos ? 'pos' : 'kiosk';
-
-        const headerTitleInput = document.getElementById(`${prefix}_header_title`);
-        const companySubtitleInput = document.getElementById(`${prefix}_company_subtitle`);
-        const companyAddressInput = document.getElementById(`${prefix}_company_address`);
-        const companyPhoneInput = document.getElementById(`${prefix}_company_phone`);
-        const paperWidthSelect = document.getElementById(`${prefix}_paper_width`);
-        const footerNotesTextarea = document.getElementById(`${prefix}_footer_notes`);
-        
-        const showSkuCheckbox = document.getElementById(`${prefix}_show_sku`);
-        const showBrandCheckbox = document.getElementById(`${prefix}_show_brand`);
-        const showBreakdownCheckbox = document.getElementById(`${prefix}_show_item_breakdown`);
-        const showCustomerCheckbox = document.getElementById(`${prefix}_show_customer`);
-        const showUserCheckbox = document.getElementById(`${prefix}_show_user`);
-
-        // Tab-specific extra controls
-        const fontSizeSelect = document.getElementById(`${prefix}_font_size`);
-        const fontFamilySelect = document.getElementById(`${prefix}_font_family`);
-
-        const customTitle = headerTitleInput ? headerTitleInput.value.trim() : '';
-        const titleText = customTitle !== '' ? customTitle.toUpperCase() : companyName.toUpperCase();
-        const subtitleText = companySubtitleInput ? companySubtitleInput.value.trim().toUpperCase() : '';
-        const addressText = companyAddressInput ? companyAddressInput.value.trim() : '';
-        const phoneText = companyPhoneInput ? companyPhoneInput.value.trim() : '';
-        const footerText = footerNotesTextarea ? footerNotesTextarea.value.trim() : '';
-
-        const showSku = showSkuCheckbox ? showSkuCheckbox.checked : true;
-        const showBrand = showBrandCheckbox ? showBrandCheckbox.checked : true;
-        const showBreakdown = showBreakdownCheckbox ? showBreakdownCheckbox.checked : true;
-        const showCustomer = showCustomerCheckbox ? showCustomerCheckbox.checked : true;
-        const showUser = showUserCheckbox ? showUserCheckbox.checked : true;
-
-        const paperWidth = paperWidthSelect ? paperWidthSelect.value : '80mm';
-        const isPageFormat = isActivePos && (paperWidth === 'A4' || paperWidth === 'letter');
-
-        const testVoucherContainer = document.getElementById('test-voucher-container');
-        if (testVoucherContainer) {
-            testVoucherContainer.style.display = isPageFormat ? 'block' : 'none';
+        const designPreview = document.getElementById('kiosk-design-preview');
+        designPreview.style.display = isActivePos ? 'none' : 'block';
+        liveTicket.style.display = 'none';
+        const posFrame = document.getElementById('pos-design-preview');
+        posFrame.style.display = isActivePos ? 'block' : 'none';
+        if (isActivePos) {
+            const doc = new DOMParser().parseFromString(<?= json_encode($posPreviewHtml ?? '', JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, 'text/html');
+            doc.querySelectorAll('[data-pos-block]').forEach(el => {
+                const input = document.getElementById('pos_' + el.dataset.posBlock);
+                el.style.display = !input || input.checked ? '' : 'none';
+            });
+            doc.querySelectorAll('[data-pos-text]').forEach(el => {
+                const input = document.getElementById('pos_' + el.dataset.posText);
+                if (input) el.textContent = input.value || (el.dataset.posText === 'header_title' ? companyLegalName || companyName : '');
+            });
+            doc.querySelectorAll('[data-pos-bold]').forEach(el => {
+                el.style.fontWeight = document.getElementById('pos_' + el.dataset.posBold)?.checked ? 'bold' : 'normal';
+            });
+            const style = doc.createElement('style');
+            const example = {factura_a:['A','001','FACTURA'],factura_b:['B','006','FACTURA'],factura_c:['C','011','FACTURA'],factura_m:['M','051','FACTURA'],presupuesto:['X','','PRESUPUESTO'],remito:['R','','REMITO']}[document.getElementById('test_voucher_type').value];
+            if (example) {
+                doc.querySelector('[data-pos-letter]').textContent = example[0];
+                doc.querySelector('[data-pos-code]').textContent = example[1];
+                doc.querySelector('[data-pos-document]').textContent = example[2] + ':';
+            }
+            const paper = document.getElementById('pos_paper_width').value === 'letter' ? '216mm' : '210mm';
+            const size = {small:9,medium:11,large:13}[document.getElementById('pos_font_size').value] || 11;
+            const fonts = {'Courier':'Courier, monospace','DejaVu Sans':'DejaVu Sans, sans-serif','DejaVu Serif':'DejaVu Serif, serif','Helvetica':'Arial, sans-serif','Helvetica 75 Bold':'Arial, sans-serif','Times-Roman':'Times New Roman, serif'};
+            const family = fonts[document.getElementById('pos_font_family').value] || fonts.Courier;
+            const fit = Math.min(1, Math.max(200, posFrame.clientWidth) / (paper === '216mm' ? 817 : 794));
+            style.textContent = `body{width:${paper};padding:12mm;font-size:${size}px;font-family:${family};font-weight:${document.getElementById('pos_font_family').value === 'Helvetica 75 Bold' ? 'bold' : 'normal'};margin:auto;zoom:${fit}}table{width:100%}`;
+            doc.head.append(style);
+            posFrame.srcdoc = '<!doctype html>' + doc.documentElement.outerHTML;
+            return;
         }
 
-        if (isPageFormat) {
-            document.getElementById('ticket-format-layout').style.display = 'none';
-            document.getElementById('invoice-format-layout').style.display = 'block';
-        } else {
-            document.getElementById('ticket-format-layout').style.display = 'block';
-            document.getElementById('invoice-format-layout').style.display = 'none';
+        if (!isActivePos) {
+            const design = {};
+            document.querySelectorAll('#kiosk-tab-pane [name^="ticket_kiosk_"]').forEach(input => {
+                const key = input.name.replace('ticket_kiosk_', '');
+                design[key] = input.type === 'checkbox' ? (input.checked ? 1 : 0) : input.value;
+            });
+            designPreview.srcdoc = window.renderKioskTicket(design, {
+                companyName: companyLegalName || companyName, taxId: '30-00000000-0',
+                document: 'TICKET DE EJEMPLO', reference: '0001-00000001', date: new Date().toLocaleString('es-AR'),
+                currency: 'ARS', customer: 'Cliente de ejemplo', user: 'Cajero de ejemplo',
+                items: [{sku:'0001',name:'Producto de ejemplo',brand:'Marca',quantity:2,unit_price:1000,discount_rate:10}],
+                subtotal:1487.60, taxes:[{label:'IVA 21 %',amount:312.40}], total:1845,
+                payments:[{code:'TARJETA',total:1845,surcharge:45,rate:2.5}], cae:'EJEMPLO SIN VALIDEZ',
+                caeDueDate:'10/10/2026 (ejemplo)', processedAt:'30/09/2026 10:30 (ejemplo)', nationalTaxes:0, draft:false
+            }, true);
+            return;
         }
 
-        // Apply paper width class
-        liveTicket.classList.remove('width-58mm', 'width-80mm', 'width-a4', 'width-letter');
-        if (paperWidth === '58mm') {
-            liveTicket.classList.add('width-58mm');
-        } else if (paperWidth === 'A4') {
-            liveTicket.classList.add('width-a4');
-        } else if (paperWidth === 'letter') {
-            liveTicket.classList.add('width-letter');
-        } else {
-            liveTicket.classList.add('width-80mm');
-        }
 
-        // Apply Font Size (only for POS tab, or if active)
-        if (isActivePos && fontSizeSelect) {
-            const size = fontSizeSelect.value;
-            if (size === 'small') {
-                liveTicket.style.fontSize = '9px';
-            } else if (size === 'large') {
-                liveTicket.style.fontSize = '13px';
-            } else {
-                liveTicket.style.fontSize = '11px';
-            }
-        } else {
-            liveTicket.style.fontSize = '11px';
-        }
-
-        // Apply Font Family
-        if (fontFamilySelect) {
-            const selectedFont = fontFamilySelect.value;
-            if (selectedFont === 'Helvetica 75 Bold') {
-                liveTicket.style.fontFamily = '"Helvetica 75 Bold", "Helvetica Neue", Helvetica, Arial, sans-serif';
-                liveTicket.style.fontWeight = 'bold';
-            } else if (selectedFont === 'DejaVu Sans') {
-                liveTicket.style.fontFamily = '"DejaVu Sans", sans-serif';
-                liveTicket.style.fontWeight = 'normal';
-            } else if (selectedFont === 'DejaVu Serif') {
-                liveTicket.style.fontFamily = '"DejaVu Serif", serif';
-                liveTicket.style.fontWeight = 'normal';
-            } else if (selectedFont === 'Helvetica') {
-                liveTicket.style.fontFamily = 'Helvetica, Arial, sans-serif';
-                liveTicket.style.fontWeight = 'normal';
-            } else if (selectedFont === 'Times-Roman') {
-                liveTicket.style.fontFamily = '"Times New Roman", Times, serif';
-                liveTicket.style.fontWeight = 'normal';
-            } else {
-                liveTicket.style.fontFamily = '"Courier New", Courier, monospace';
-                liveTicket.style.fontWeight = 'normal';
-            }
-        } else {
-            liveTicket.style.fontFamily = "'Courier New', Courier, monospace";
-            liveTicket.style.fontWeight = 'normal';
-        }
-
-        if (isPageFormat) {
-            // Update A4 layout fields
-            document.getElementById('preview-inv-header-title').textContent = titleText;
-            document.getElementById('preview-inv-footer-notes').textContent = footerText;
-
-            // Subtitle, Address, Phone
-            const previewSubtitle = document.getElementById('preview-inv-company-subtitle');
-            if (previewSubtitle) {
-                previewSubtitle.textContent = subtitleText;
-                previewSubtitle.style.display = subtitleText !== '' ? 'block' : 'none';
-            }
-            const previewAddress = document.getElementById('preview-inv-company-address');
-            if (previewAddress) {
-                const finalAddressText = addressText !== '' ? addressText : companyAddress;
-                previewAddress.textContent = finalAddressText !== '' ? finalAddressText : 'El Salvador 689 - (1406) Capital Federal';
-            }
-            const previewPhone = document.getElementById('preview-inv-company-phone');
-            if (previewPhone) {
-                const finalPhoneText = phoneText !== '' ? phoneText : companyPhone;
-                previewPhone.textContent = finalPhoneText !== '' ? finalPhoneText : 'Tel. 4616-1112 / 4639-0048';
-            }
-
-            // Update letter badge dynamically based on test voucher selection
-            const testVoucherType = document.getElementById('test_voucher_type').value;
-            let letter = 'A';
-            let code = 'Código Nº 01';
-            let docTitle = 'FACTURA';
-
-            if (testVoucherType === 'factura_b') {
-                letter = 'B';
-                code = 'Código Nº 06';
-                docTitle = 'FACTURA';
-            } else if (testVoucherType === 'factura_c') {
-                letter = 'C';
-                code = 'Código Nº 11';
-                docTitle = 'FACTURA';
-            } else if (testVoucherType === 'factura_m') {
-                letter = 'M';
-                code = 'Código Nº 51';
-                docTitle = 'FACTURA';
-            } else if (testVoucherType === 'presupuesto') {
-                letter = 'X';
-                code = 'Código Nº --';
-                docTitle = 'PRESUPUESTO';
-            } else if (testVoucherType === 'remito') {
-                letter = 'R';
-                code = 'Código Nº --';
-                docTitle = 'REMITO';
-            }
-
-            document.getElementById('preview-inv-letter-badge').textContent = letter;
-            document.getElementById('preview-inv-letter-code').textContent = code;
-            document.getElementById('preview-inv-doc-title').textContent = docTitle;
-
-            // Margins position texts
-            const topLeftVal = document.getElementById('pos_custom_text_top_left').value.trim() || 'IVA: Responsable Inscripto';
-            const topRightVal = document.getElementById('pos_custom_text_top_right').value.trim() || 'Ing. Brutos: CM. 901-111111-0\nInicio de Actividades: 01/04/1994';
-            const bottomLeftVal = document.getElementById('pos_custom_text_bottom_left').value.trim() || 'Imprenta Su Imprenta CUIT: 30-12345678-9 Habil. 22222';
-            const bottomRightVal = document.getElementById('pos_custom_text_bottom_right').value.trim() || 'Fecha Impresión: <?= date("d/m/Y") ?> Numeración: 0001-00001601 al 0001-00001700';
-
-            document.getElementById('preview-inv-text-top-left').textContent = topLeftVal;
-            document.getElementById('preview-inv-text-top-right').textContent = topRightVal;
-            document.getElementById('preview-inv-text-bottom-left').textContent = bottomLeftVal;
-            document.getElementById('preview-inv-text-bottom-right').textContent = bottomRightVal;
-
-            const boldTopLeft = document.getElementById(`${prefix}_bold_top_left`) ? document.getElementById(`${prefix}_bold_top_left`).checked : true;
-            const boldTopRight = document.getElementById(`${prefix}_bold_top_right`) ? document.getElementById(`${prefix}_bold_top_right`).checked : false;
-            document.getElementById('preview-inv-text-top-left').style.fontWeight = boldTopLeft ? 'bold' : 'normal';
-            document.getElementById('preview-inv-text-top-right').style.fontWeight = boldTopRight ? 'bold' : 'normal';
-
-            // Visibility checkboxes
-            document.getElementById('preview-inv-customer-name').textContent = showCustomer ? 'Juan Pérez' : 'Consumidor Final';
-            document.getElementById('preview-inv-customer-tax').textContent = showCustomer ? 'Responsable Inscripto' : '-';
-            document.getElementById('preview-inv-seller-row').style.display = showUser ? 'flex' : 'none';
-
-            // Items list in Table format
-            const item1BrandHtml = showBrand ? `<span style="display:block; font-style:italic; font-size:7.5px;">Coca Cola</span>` : '';
-            const item1BreakdownHtml = showBreakdown ? `<span style="display:block; font-size:7.5px; color:#555;">2.00 u x $ 1.100,00</span>` : '';
-
-            const item2BrandHtml = showBrand ? `<span style="display:block; font-style:italic; font-size:7.5px;">Pringles</span>` : '';
-            const item2BreakdownHtml = showBreakdown ? `<span style="display:block; font-size:7.5px; color:#555;">1.00 u x $ 1.800,00</span>` : '';
-
-            document.getElementById('preview-inv-items-body').innerHTML = `
-                <tr style="border-bottom: 1px solid #ccc;">
-                    <td style="border-right: 1px solid #000; padding: 4px; font-family: monospace;">${showSku ? 'PROD-004' : '-'}</td>
-                    <td style="border-right: 1px solid #000; padding: 4px; text-align: center;">2.00</td>
-                    <td style="border-right: 1px solid #000; padding: 4px;">
-                        <strong>Coca Cola 1.5L</strong>
-                        ${item1BrandHtml}
-                        ${item1BreakdownHtml}
-                    </td>
-                    <td style="border-right: 1px solid #000; padding: 4px; text-align: right;">$ 1.100,00</td>
-                    <td style="padding: 4px; text-align: right; font-weight: bold;">$ 2.200,00</td>
-                </tr>
-                <tr style="border-bottom: 1px solid #ccc;">
-                    <td style="border-right: 1px solid #000; padding: 4px; font-family: monospace;">${showSku ? 'PROD-012' : '-'}</td>
-                    <td style="border-right: 1px solid #000; padding: 4px; text-align: center;">1.00</td>
-                    <td style="border-right: 1px solid #000; padding: 4px;">
-                        <strong>Pringles Original 124g</strong>
-                        ${item2BrandHtml}
-                        ${item2BreakdownHtml}
-                    </td>
-                    <td style="border-right: 1px solid #000; padding: 4px; text-align: right;">$ 1.800,00</td>
-                    <td style="padding: 4px; text-align: right; font-weight: bold;">$ 1.800,00</td>
-                </tr>
-            `;
-
-        } else {
-            // Update Ticket layout fields
-            document.getElementById('preview-ticket-title').textContent = titleText;
-            document.getElementById('preview-ticket-company-name').textContent = customTitle !== '' ? companyLegalName : '';
-            document.getElementById('preview-ticket-company-name').style.display = customTitle !== '' ? 'block' : 'none';
-            document.getElementById('preview-ticket-footer-block').textContent = footerText;
-            document.getElementById('preview-ticket-footer-block').style.display = footerText !== '' ? 'block' : 'none';
-
-            // Custom headers in ticket preview
-            const ticketTopLeft = document.getElementById('preview-ticket-text-top-left');
-            const ticketTopRight = document.getElementById('preview-ticket-text-top-right');
-            const ticketCustomHeaders = document.getElementById('preview-ticket-custom-headers');
-            
-            const activeTopLeft = document.getElementById(`${prefix}_custom_text_top_left`) ? document.getElementById(`${prefix}_custom_text_top_left`).value.trim() : '';
-            const activeTopRight = document.getElementById(`${prefix}_custom_text_top_right`) ? document.getElementById(`${prefix}_custom_text_top_right`).value.trim() : '';
-            const activeBoldTopLeft = document.getElementById(`${prefix}_bold_top_left`) ? document.getElementById(`${prefix}_bold_top_left`).checked : true;
-            const activeBoldTopRight = document.getElementById(`${prefix}_bold_top_right`) ? document.getElementById(`${prefix}_bold_top_right`).checked : false;
-
-            if (ticketTopLeft) {
-                ticketTopLeft.textContent = activeTopLeft || 'IVA: Responsable Inscripto';
-                ticketTopLeft.style.fontWeight = activeBoldTopLeft ? 'bold' : 'normal';
-            }
-            if (ticketTopRight) {
-                ticketTopRight.textContent = activeTopRight || 'Ing. Brutos: CM. 901-111111-0';
-                ticketTopRight.style.fontWeight = activeBoldTopRight ? 'bold' : 'normal';
-            }
-            if (ticketCustomHeaders) {
-                ticketCustomHeaders.style.display = (activeTopLeft || activeTopRight) ? 'flex' : 'none';
-            }
-
-            // Visibility checkboxes
-            document.getElementById('preview-ticket-customer-block').style.display = showCustomer ? 'block' : 'none';
-            document.getElementById('preview-ticket-cashier-block').style.display = showUser ? 'block' : 'none';
-
-            // Items list in Ticket format
-            const item1SkuHtml = showSku ? `<span style="display:block;">[PROD-004]</span>` : '';
-            const item1BrandHtml = showBrand ? `<span style="display:block; font-style:italic;">Marca: Coca Cola</span>` : '';
-            const item1BreakdownHtml = showBreakdown ? `<span style="display:block; font-size:10px;">2.00 u x $ 1.100,00</span>` : '';
-            
-            const item2SkuHtml = showSku ? `<span style="display:block;">[PROD-012]</span>` : '';
-            const item2BrandHtml = showBrand ? `<span style="display:block; font-style:italic;">Marca: Pringles</span>` : '';
-            const item2BreakdownHtml = showBreakdown ? `<span style="display:block; font-size:10px;">1.00 u x $ 1.800,00</span>` : '';
-
-            document.getElementById('preview-ticket-items-list').innerHTML = `
-                <div class="mb-2">
-                    <div class="d-flex justify-content-between">
-                        <span>Coca Cola 1.5L</span>
-                        <span class="fw-bold">$ 2.200,00</span>
-                    </div>
-                    <div class="text-secondary small ms-1" style="font-size:9.5px;">
-                        ${item1SkuHtml}
-                        ${item1BrandHtml}
-                        ${item1BreakdownHtml}
-                    </div>
-                </div>
-                <div class="mb-2">
-                    <div class="d-flex justify-content-between">
-                        <span>Pringles Original 124g</span>
-                        <span class="fw-bold">$ 1.800,00</span>
-                    </div>
-                    <div class="text-secondary small ms-1" style="font-size:9.5px;">
-                        ${item2SkuHtml}
-                        ${item2BrandHtml}
-                        ${item2BreakdownHtml}
-                    </div>
-                </div>
-            `;
-        }
     }
 
     document.querySelectorAll('.ticket-input').forEach(input => {
@@ -868,6 +656,8 @@ document.addEventListener('DOMContentLoaded', () => {
         zoomLevel = Math.round(zoomLevel * 10) / 10;
         zoomPercentageEl.textContent = `${Math.round(zoomLevel * 100)}%`;
         liveTicket.style.zoom = zoomLevel;
+        document.getElementById('kiosk-design-preview').style.zoom = zoomLevel;
+        document.getElementById('pos-design-preview').style.zoom = zoomLevel;
     }
 
     if (btnZoomIn && btnZoomOut && btnZoomReset) {

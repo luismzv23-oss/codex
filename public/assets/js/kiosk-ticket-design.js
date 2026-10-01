@@ -19,7 +19,7 @@
         const fonts = {'Courier':'"Courier New",monospace','Helvetica':'Arial,sans-serif','Helvetica 75 Bold':'Arial,sans-serif','DejaVu Sans':'"DejaVu Sans",sans-serif','DejaVu Serif':'"DejaVu Serif",serif','Times-Roman':'"Times New Roman",serif'};
         const width = text('paper_width') === '58mm' ? '58mm' : '80mm';
         const size = {small:10,medium:12,large:14}[text('font_size')] || 12;
-        const visiblePayments = (data.payments || []).filter(p => Number(p.show_on_receipt ?? 1) === 1);
+        const visiblePayments = (data.payments || []).filter(payment => Number(payment.show_on_receipt ?? 1) === 1);
         const vat = data.containedVat ?? (data.taxes || []).reduce((sum, tax) => sum + Number(tax.amount || 0), 0);
         const qr = show('show_qr') ? qrImage(data.qrUrl || (preview ? 'VISTA PREVIA SIN VALIDEZ FISCAL' : '')) : '';
         const fiscal = data.cae ? `<strong class="fiscal-title">FACTURACIÓN ELECTRÓNICA</strong>${line('CAE: ' + data.cae)}${data.caeDueDate ? line('Fecha Vto.: ' + data.caeDueDate) : ''}${data.processedAt ? line('Fecha proceso: ' + data.processedAt) : ''}${data.testEnvironment ? '<strong>HOMOLOGACIÓN · SIN VALIDEZ FISCAL</strong>' : ''}` : '<div>Comprobante sin autorización fiscal disponible</div>';
@@ -45,7 +45,6 @@
         ${block('show_subtotal',row('Subtotal neto',money(data.subtotal)))}
         ${block('show_taxes',(data.taxes || []).map(t=>row(t.label,money(t.amount))).join(''))}
         ${block('show_discounts',data.discount > 0 ? row('Descuento por medio de pago','-' + money(data.discount)) : '')}
-        ${block('show_surcharges',visiblePayments.filter(p=>p.surcharge>0).map(p=>row(`Recargo ${p.code} (${money(p.rate)} %)`,money(p.surcharge))).join(''))}
         <div class="total">${row('TOTAL A PAGAR',money(data.total))}</div>
         ${block('show_payments',visiblePayments.map(p=>row(p.code + (p.status === 'pending' || (!p.status && p.type === 'transfer') ? ' (pendiente)' : ''),money(p.total))).join(''))}
         ${block('show_transparency',line('RÉGIMEN DE TRANSPARENCIA FISCAL AL CONSUMIDOR (Ley 27.743)') + row('IVA contenido:', money(vat)) + row('Otros impuestos nacionales indirectos:', data.nationalTaxes == null ? 'No informado' : money(data.nationalTaxes)) + line('Los impuestos informados son solo los que corresponden a nivel nacional.'))}

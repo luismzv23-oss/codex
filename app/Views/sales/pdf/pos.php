@@ -10,8 +10,7 @@ $value = static fn ($key, $fallback = '') => (string)($cfg['ticket_'.$key] ?? $f
 $date = static fn ($input) => $input && strtotime($input) !== false ? date('d/m/Y', strtotime($input)) : '-';
 $fiscal = $fiscal ?? [];
 $payments = array_values(array_filter($payments ?? [], static fn ($p) => ($p['status'] ?? '') !== 'reversed'));
-$visiblePayments = array_values(array_filter($payments, static fn ($p) => (int)($p['show_on_receipt'] ?? 1) === 1));
-$visibleSurcharge = $payments ? array_sum(array_column($visiblePayments, 'surcharge_amount')) : (float)($sale['payment_surcharge_amount'] ?? 0);
+$visiblePayments = array_values(array_filter($payments, static fn ($payment) => (int)($payment['show_on_receipt'] ?? 1) === 1));
 $taxes = [];
 foreach ($items as $item) { $rate = $money($item['tax_rate'] ?? 0); $taxes[$rate] = ($taxes[$rate] ?? 0) + (float)($item['tax_total'] ?? 0); }
 $fonts = ['Courier'=>'Courier','DejaVu Sans'=>'DejaVu Sans','DejaVu Serif'=>'DejaVu Serif','Helvetica'=>'Helvetica','Helvetica 75 Bold'=>'Helvetica','Times-Roman'=>'Times-Roman'];
@@ -62,7 +61,6 @@ $fontSize = ['small'=>9,'medium'=>11,'large'=>13][$value('font_size','medium')] 
     <?php foreach ($taxes as $rate=>$amount): ?><tr <?= $flag('show_taxes') ?>><td>IVA <?= esc($rate) ?> %</td><td class="right"><?= $money($amount) ?></td></tr><?php endforeach; ?>
     <tr <?= $flag('show_discounts') ?>><td>Descuentos de productos</td><td class="right"><?= $money($sale['item_discount_total'] ?? 0) ?></td></tr>
     <tr <?= $flag('show_discounts') ?>><td>Descuento general</td><td class="right"><?= $money($sale['global_discount_total'] ?? 0) ?></td></tr>
-    <?php if ($visibleSurcharge > 0): ?><tr <?= $flag('show_surcharges') ?>><td>Recargos por medios de pago</td><td class="right"><?= $money($visibleSurcharge) ?></td></tr><?php endif; ?>
     <tr class="grand"><td>Importe total</td><td class="right"><?= $money($sale['total']) ?></td></tr>
 </table><p <?= $flag('show_currency') ?> class="right">Moneda: <?= esc($sale['currency_code']) ?></p></td></tr></table></div>
 <?php if ($visiblePayments): ?><div <?= $flag('show_payments') ?>><table class="payments"><tr><td><b>Medio de pago</b></td><td class="right"><b>Importe</b></td></tr><?php foreach ($visiblePayments as $payment): ?><tr><td><?= esc($payment['payment_method_code'] ?? $payment['payment_method'] ?? '') ?><?= ($payment['status'] ?? '') === 'pending' ? ' (pendiente)' : '' ?></td><td class="right"><?= $money($payment['amount']) ?></td></tr><?php endforeach; ?></table></div><?php endif; ?>

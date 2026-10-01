@@ -323,6 +323,7 @@ class ArcaService
             ];
         }
 
+        [$sale, $items] = PaymentFiscalPolicy::forSale($sale, $items);
         $readiness = $this->readiness($settings);
         $payload = $this->buildPayloadPreview($sale, $documentType, $company, $settings, $items, $pointOfSale, $service);
         $environment = $settings['arca_environment'] ?? 'homologacion';
@@ -1116,7 +1117,7 @@ class ArcaService
         ];
     }
 
-    /** Payment surcharges remain in local collections, outside the ARCA voucher. */
+    /** Only the surcharges selected by the payment-method policy enter ARCA. */
     public static function fiscalTotal(array $sale): float
     {
         $total = (float) ($sale['total'] ?? 0);
@@ -1124,7 +1125,11 @@ class ArcaService
         if (!is_finite($total) || !is_finite($surcharge) || $surcharge < 0 || round($surcharge, 2) > round($total, 2)) {
             throw new \InvalidArgumentException('Los importes del comprobante no permiten calcular el total para ARCA.');
         }
-        return (round($total * 100) - round($surcharge * 100)) / 100;
+        $included = (float) ($sale['fiscal_payment_surcharge_amount'] ?? 0);
+        if (!is_finite($included) || $included < 0 || round($included, 2) > round($surcharge, 2)) {
+            throw new \InvalidArgumentException('El recargo incluido en ARCA no es válido.');
+        }
+        return (round($total * 100) - round($surcharge * 100) + round($included * 100)) / 100;
     }
 
     private function buildPayloadPreview(

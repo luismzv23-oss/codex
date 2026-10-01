@@ -102,6 +102,7 @@ class ArcaAsyncWorker
         }
 
         try {
+            [$sale] = PaymentFiscalPolicy::forSale($sale, []);
             // Build fiscal voucher payload
             $voucher = [
                 'DocTipo'    => $sale['customer_doc_type'] ?? 96,

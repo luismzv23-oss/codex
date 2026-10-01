@@ -32,15 +32,38 @@ final class PosTicketDesignTest extends CIUnitTestCase
         $this->assertNull(PosTicketDesign::qrDataUri(null));
     }
 
-    public function testHiddenPaymentDoesNotAppearAndTotalIsUnchanged(): void
+    public function testPaymentFlagNeverPrintsSurchargeAndTotalIsUnchanged(): void
     {
         helper('url');
         $data = PosTicketDesign::preview(['name'=>'Demo']);
-        $data['payments'][0]['show_on_receipt'] = 0;
-        $html = view('sales/pdf/pos', $data);
-        $this->assertStringNotContainsString('TARJETA', $html);
-        $this->assertStringNotContainsString('Recargos por medios de pago', $html);
-        $this->assertStringContainsString('12.350,00', $html);
+        foreach ([0, 1] as $flag) {
+            $data['payments'][0]['show_on_receipt'] = $flag;
+            $html = view('sales/pdf/pos', $data);
+            if ($flag === 1) {
+                $this->assertStringContainsString('TARJETA', $html);
+            } else {
+                $this->assertStringNotContainsString('TARJETA', $html);
+            }
+            $this->assertStringNotContainsString('Recargo', $html);
+            $this->assertStringContainsString('12.350,00', $html);
+        }
+    }
+
+    public function testMixedPaymentVisibilityIsIndependent(): void
+    {
+        helper('url');
+        $data = PosTicketDesign::preview(['name'=>'Demo']);
+        foreach ([0, 1] as $cashVisible) {
+            $data['payments'] = [
+                ['payment_method_code'=>'EFECTIVO_PRUEBA','amount'=>1000,'show_on_receipt'=>$cashVisible],
+                ['payment_method_code'=>'DEBITO_PRUEBA','amount'=>11350,'show_on_receipt'=>1-$cashVisible],
+            ];
+            $html = view('sales/pdf/pos', $data);
+            $this->assertSame($cashVisible === 1, str_contains($html, 'EFECTIVO_PRUEBA'));
+            $this->assertSame($cashVisible === 0, str_contains($html, 'DEBITO_PRUEBA'));
+            $this->assertStringNotContainsString('Recargo', $html);
+            $this->assertStringContainsString('12.350,00', $html);
+        }
     }
 
     public function testQrCanBeEmbeddedOfflineInPdf(): void

@@ -87,18 +87,24 @@ class CashController extends BaseController
             $filterRegisterId = array_column($registers, 'id');
         }
 
-        $sessions = $service->recentSessions($companyId, 20, $filterRegisterId);
-        $movements = $service->recentMovements($companyId, 20, $filterRegisterId);
+        [$dashboardFrom, $dashboardTo] = \App\Libraries\CashDashboard::period($this->request->getGet('from'), $this->request->getGet('to'));
+        $dashboardRegisters = array_values(array_filter(array_column($registers, 'id'), static fn($id) => $cashRegisterId === '' || $id === $cashRegisterId));
+        $dashboard = (new \App\Libraries\CashDashboard())->load($companyId, $dashboardRegisters, $dashboardFrom, $dashboardTo);
+        if ($this->request->getGet('cash_dashboard') === '1') {
+            return $this->response->setHeader('Cache-Control', 'no-store')->setJSON(['html'=>view('cash/dashboard', ['dashboard'=>$dashboard])]);
+        }
+        $sessions = $service->recentSessions($companyId, 50, $filterRegisterId);
+        $movements = $service->recentMovements($companyId, 100, $filterRegisterId);
         $paymentMethods = $service->paymentMethodBreakdown($companyId, $filterRegisterId);
 
         return view('cash/index', [
             'pageTitle' => 'Caja y Tesoreria',
+            'dashboard' => $dashboard,
             'hasAnyOpenSessionByMe' => $hasAnyOpenSessionByMe,
             'context' => $context,
             'companies' => $this->cashCompanies(),
             'selectedCompanyId' => $companyId,
             'selectedRegisterId' => $cashRegisterId,
-            'summary' => $service->summary($companyId, $cashRegisterId),
             'registers' => $registers,
             'sessions' => $sessions,
             'activeSessionsMap' => $activeSessionsMap,

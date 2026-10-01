@@ -1361,7 +1361,7 @@ class InventoryController extends BaseApiController
             'overstock' => array_values(array_filter($this->productRows($companyId), static fn(array $row): bool => (bool) ($row['is_overstock'] ?? false))),
             'reservations' => $this->activeReservations($companyId, null, 10),
             'unusual' => db_connect()->table('inventory_movements m')
-                ->select('m.occurred_at, m.quantity, m.movement_type, p.name AS product_name')
+                ->select('m.occurred_at, m.quantity, m.movement_type, p.name AS product_name, p.sku')
                 ->join('inventory_products p', 'p.id = m.product_id')
                 ->where('m.company_id', $companyId)
                 ->where('m.quantity >=', $threshold)

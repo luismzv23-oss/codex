@@ -2674,7 +2674,7 @@ class InventoryController extends BaseController
         $rotationDate = date('Y-m-d H:i:s', strtotime('-' . $rotationDays . ' days'));
 
         $unusualMovements = db_connect()->table('inventory_movements m')
-            ->select('m.occurred_at, m.quantity, m.movement_type, p.name AS product_name')
+            ->select('m.occurred_at, m.quantity, m.movement_type, p.name AS product_name, p.sku')
             ->join('inventory_products p', 'p.id = m.product_id')
             ->where('m.company_id', $companyId)
             ->where('m.quantity >=', $threshold)

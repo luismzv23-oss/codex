@@ -506,21 +506,19 @@ $productCatalog = array_values(array_map(static function (array $product): array
         const surchargeBase = () => Math.max(0, roundMoney(productsTotal() - paymentDiscount()));
         const surchargeAmount = () => roundMoney((paymentRows?.data() || []).reduce((sum,line)=>sum+line.surcharge,0));
         const totalAmount = () => roundMoney(surchargeBase() + surchargeAmount());
+        const displayedItems = (target = totalAmount()) => window.distributePaymentTotal(
+            Array.from(items.values()).map(item => ({item, gross: lineGrossAmount(item), rate: Number(item.tax_rate ?? defaultTax?.rate ?? 0)})), target);
         const escapeSummary = value => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[char]));
         const summaryHtml = () => {
             const taxesByRate = new Map();
-            items.forEach(item => {
-                const rate = Number(item.tax_rate ?? defaultTax?.rate ?? 0);
-                const gross = lineGrossAmount(item);
-                const tax = roundMoney(gross - roundMoney(gross / (1 + rate / 100)));
+            const displayed = displayedItems();
+            displayed.forEach(({rate, tax}) => {
                 taxesByRate.set(rate, roundMoney((taxesByRate.get(rate) || 0) + tax));
             });
             const row = (label, amount) => `<div style="display:flex;justify-content:space-between;gap:24px"><span>${escapeSummary(label)}</span><span>${formatMoney(amount)}</span></div>`;
-            return row('Subtotal neto', subtotalAmount())
+            return row('Subtotal neto', roundMoney(displayed.reduce((sum,line)=>sum+line.net,0)))
                 + Array.from(taxesByRate, ([rate, amount]) => row(`IVA ${formatMoney(rate)} %`, amount)).join('')
-                + (paymentDiscount() > 0 ? row('Descuento por medio de pago', -paymentDiscount()) : '')
-                + row('Total con impuestos', surchargeBase())
-                + (paymentRows?.data() || []).filter(line=>line.rate>0).map(line=>row(`Recargo ${line.code} (${formatMoney(line.rate)} %)`,line.surcharge)).join('');
+                + row('Total con impuestos', totalAmount());
         };
 
 
@@ -533,6 +531,14 @@ $productCatalog = array_values(array_map(static function (array $product): array
 
         // ── Change (vuelto) calculation ─────────────────────
         const updatePaymentSummary = () => {
+            displayedItems().forEach(({item, gross}) => {
+                const quantityField = Array.from(ticketBody.querySelectorAll('.kiosk-qty')).find(field => field.dataset.id === String(item.id));
+                const row = quantityField?.closest('tr');
+                if (row) {
+                    row.querySelector('.line-total').textContent = formatMoney(gross);
+                    row.querySelector('input[readonly]').value = (gross / Number(item.quantity)).toFixed(2);
+                }
+            });
             totalLabel.textContent = formatMoney(totalAmount());
             taxBreakdownLabel.innerHTML = items.size ? summaryHtml() : '';
             taxBreakdownLabel.style.display = items.size ? 'block' : 'none';
@@ -797,16 +803,16 @@ $productCatalog = array_values(array_map(static function (array $product): array
         let lastReceiptUrl = null;
         const ticketData = () => {
             const taxes = new Map();
-            items.forEach(item => {
-                const rate = Number(item.tax_rate ?? defaultTax?.rate ?? 0);
-                const gross = lineGrossAmount(item);
-                taxes.set(rate, roundMoney((taxes.get(rate) || 0) + roundMoney(gross - roundMoney(gross / (1 + rate / 100)))));
+            const receiptTotal = totalAmount();
+            const displayed = displayedItems(receiptTotal);
+            displayed.forEach(({rate, tax}) => {
+                taxes.set(rate, roundMoney((taxes.get(rate) || 0) + tax));
             });
             return {companyName: companyLegalName || companyName, taxId: companyTaxId,
                 date: new Date().toLocaleString('es-AR'), document: kioskDocumentDisplay?.value || defaultKioskDocLabel,
                 reference: referenceField.value, currency: currencyField.value, customer: kioskCustomerName.value,
-                user: userName, items: Array.from(items.values()).map(item => ({...item})),
-                subtotal: subtotalAmount(), discount: paymentDiscount(), total: totalAmount(),
+                user: userName, items: displayed.map(({item,gross}) => ({...item, unit_price:gross/Number(item.quantity), line_total:gross, discount_rate:0})),
+                subtotal: roundMoney(displayed.reduce((sum,line)=>sum+line.net,0)), discount: 0, total: receiptTotal,
                 taxes: Array.from(taxes, ([rate, amount]) => ({label: `IVA ${formatMoney(rate)} %`, amount})),
                 payments: paymentRows.data().map(line => ({...line})), draft: true};
         };

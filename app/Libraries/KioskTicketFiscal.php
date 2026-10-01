@@ -54,6 +54,7 @@ final class KioskTicketFiscal
         if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) && strlen((string) $payload['cuit']) === 11
             && $payload['ptoVta'] > 0 && $payload['tipoCmp'] > 0 && $payload['nroCmp'] > 0 && $payload['ctz'] > 0 && $payload['moneda'] !== '') {
             $output['qrUrl'] = 'https://www.arca.gob.ar/fe/qr/?p=' . base64_encode(json_encode($payload, JSON_UNESCAPED_SLASHES));
+            $output['fiscalTotal'] = $payload['importe'];
             $output['documentNumber'] = sprintf('%05d-%08d', $payload['ptoVta'], $payload['nroCmp']);
             $output['documentTypeCode'] = str_pad((string)$payload['tipoCmp'], 3, '0', STR_PAD_LEFT);
         }

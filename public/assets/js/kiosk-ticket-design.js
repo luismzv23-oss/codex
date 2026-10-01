@@ -20,7 +20,9 @@
         const width = text('paper_width') === '58mm' ? '58mm' : '80mm';
         const size = {small:10,medium:12,large:14}[text('font_size')] || 12;
         const visiblePayments = (data.payments || []).filter(payment => Number(payment.show_on_receipt ?? 1) === 1);
-        const vat = data.containedVat ?? (data.taxes || []).reduce((sum, tax) => sum + Number(tax.amount || 0), 0);
+        const vat = Array.isArray(data.taxes)
+            ? data.taxes.reduce((sum, tax) => sum + Math.round(Number(tax.amount || 0) * 100), 0) / 100
+            : Number(data.containedVat || 0);
         const qr = show('show_qr') ? qrImage(data.qrUrl || (preview ? 'VISTA PREVIA SIN VALIDEZ FISCAL' : '')) : '';
         const fiscal = data.cae ? `<strong class="fiscal-title">FACTURACIÓN ELECTRÓNICA</strong>${line('CAE: ' + data.cae)}${data.caeDueDate ? line('Fecha Vto.: ' + data.caeDueDate) : ''}${data.processedAt ? line('Fecha proceso: ' + data.processedAt) : ''}${data.testEnvironment ? '<strong>HOMOLOGACIÓN · SIN VALIDEZ FISCAL</strong>' : ''}` : '<div>Comprobante sin autorización fiscal disponible</div>';
         const items = (data.items || []).map(item => {

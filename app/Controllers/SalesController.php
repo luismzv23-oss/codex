@@ -2097,6 +2097,8 @@ class SalesController extends BaseController
         ]);
         $taxes = [];
         $items = $this->saleItems($id);
+        $paymentLines = $this->salePayments($id);
+        [$sale, $items] = \App\Libraries\PaymentFiscalPolicy::forReceipt($sale, $items, $paymentLines, $fiscal);
         foreach ($items as &$item) {
             $item['name'] = $item['product_name'];
             $rate = number_format((float)($item['tax_rate'] ?? 0), 2, ',', '.');
@@ -2104,7 +2106,7 @@ class SalesController extends BaseController
         }
         unset($item);
         $payments = [];
-        foreach ($this->salePayments($id) as $line) {
+        foreach ($paymentLines as $line) {
             if (($line['status'] ?? '') === 'reversed') { continue; }
             $payments[] = ['code'=>$line['payment_method_code'] ?: $line['payment_method'],
                 'type'=>$line['payment_method'], 'status'=>$line['status'], 'total'=>(float)$line['amount'],
@@ -2196,6 +2198,8 @@ class SalesController extends BaseController
             'authorized_at'=>$sale['arca_authorized_at'] ?? null, 'environment'=>$event['environment'] ?? '',
             'request_payload'=>json_decode($event['request_payload'] ?? '{}', true) ?: [],
         ]);
+        $paymentLines = $this->salePayments($id);
+        [$sale, $items] = \App\Libraries\PaymentFiscalPolicy::forReceipt($sale, $this->saleItems($id), $paymentLines, $fiscal);
         return $this->renderPdf('sales/pdf/pos', [
             'fiscal'=>$fiscal,
             'qrDataUri'=>\App\Libraries\PosTicketDesign::qrDataUri($fiscal['qrUrl'] ?? null),
@@ -2205,8 +2209,8 @@ class SalesController extends BaseController
             'company' => $context['company'],
             'sale' => $sale,
             'customer' => $sale['customer_id'] ? (new CustomerModel())->find($sale['customer_id']) : null,
-            'items' => $this->saleItems($id),
-            'payments' => $this->salePayments($id),
+            'items' => $items,
+            'payments' => $paymentLines,
             'returns' => $this->saleReturns($id),
             'generatedAt' => date('d/m/Y H:i'),
             'ticketSettings' => $ticketSettings,

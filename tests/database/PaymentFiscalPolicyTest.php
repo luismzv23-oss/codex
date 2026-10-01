@@ -25,16 +25,16 @@ final class PaymentFiscalPolicyTest extends CIUnitTestCase
         parent::tearDown();
     }
 
-    public function testReadsActualCompanyCheckboxAndExcludesForeignMethod(): void
+    public function testReceiptAmountsDoNotDependOnPaymentVisibility(): void
     {
         $sale = ['id'=>'sale','company_id'=>'company','total'=>2255,'subtotal'=>1818.18,'tax_total'=>381.82,'payment_surcharge_amount'=>55];
         [$fiscal] = PaymentFiscalPolicy::forSale($sale, []);
-        $this->assertSame(2200.0, ArcaService::fiscalTotal($fiscal));
+        $this->assertSame(2255.0, ArcaService::fiscalTotal($fiscal));
         db_connect('tests')->table('company_payment_methods')->where('id','card')->update(['show_on_receipt'=>1]);
         [$fiscal] = PaymentFiscalPolicy::forSale($sale, []);
         $this->assertSame(2255.0, ArcaService::fiscalTotal($fiscal));
         db_connect('tests')->table('company_payment_methods')->where('id','card')->update(['company_id'=>'other']);
         [$fiscal] = PaymentFiscalPolicy::forSale($sale, []);
-        $this->assertSame(2200.0, ArcaService::fiscalTotal($fiscal));
+        $this->assertSame(2255.0, ArcaService::fiscalTotal($fiscal));
     }
 }

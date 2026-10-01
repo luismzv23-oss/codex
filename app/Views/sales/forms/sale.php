@@ -469,6 +469,7 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
 
     const syncTotals = () => {
         let subtotal = 0; let taxTotal = 0; let paidTotal = 0;
+        const displayRows = [];
         body.querySelectorAll('tr').forEach((row) => {
             const qty = Number(row.querySelector('.sale-quantity')?.value || 0);
             const price = Number(row.querySelector('.sale-unit-price')?.value || 0);
@@ -481,6 +482,7 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
             const tax = Math.round((lineGross - net) * 100) / 100;
             subtotal += net;
             taxTotal += tax;
+            displayRows.push({row, gross:lineGross, rate:taxRate});
         });
         paymentsBody.querySelectorAll('.sale-payment-amount').forEach((field) => { paidTotal += Number(field.value || 0); });
         const types = (paymentRows?.data() || []).map(line => line.type);
@@ -489,6 +491,12 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
         paymentBase = Math.max(0, Math.round((subtotal + taxTotal - Number(globalDiscount.value || 0) - paymentDiscount) * 100) / 100);
         const lines = paymentRows?.data() || [];
         const total = paymentBase + lines.reduce((sum,line) => sum + line.surcharge, 0);
+        if (useConfiguredPayments) {
+            const display = window.distributePaymentTotal(displayRows, total);
+            subtotal = display.reduce((sum,line)=>sum+line.net,0);
+            taxTotal = display.reduce((sum,line)=>sum+line.tax,0);
+            display.forEach(line => { line.row.querySelector('.sale-line-total').textContent = formatMoney(line.gross); });
+        }
         if (useConfiguredPayments) {
             paidTotal = lines.filter(line => line.type !== 'transfer').reduce((sum,line) => sum + line.total, 0);
             const assigned = lines.reduce((sum,line) => sum + line.total, 0);

@@ -58,8 +58,16 @@
                 <?php if (! empty($accessibleSystems)): ?>
                     <div class="row g-3" id="accessible-systems-grid">
                         <?php foreach ($accessibleSystems as $system): ?>
+                            <?php
+                            $canEnter = $system['entry_url'] !== '#' && (int) ($system['active'] ?? 1) === 1;
+                            $baseHref = $system['entry_url'];
+                            $companyQuery = (! empty($selectedCompanyId) && in_array($system['slug'], ['inventario', 'ventas', 'compras', 'caja', 'contabilidad', 'impuestos', 'comercial'], true)) 
+                                ? (str_contains($baseHref, '?') ? '&' : '?') . 'company_id=' . $selectedCompanyId 
+                                : '';
+                            $entryHref = $canEnter ? ($baseHref . $companyQuery) : '#';
+                            ?>
                             <div class="col-md-6 col-xl-4 system-card-item">
-                                <div class="card h-100 border rounded-4 systems-module">
+                                <div class="card h-100 border rounded-4 systems-module <?= $canEnter ? 'is-clickable' : '' ?>" <?= $canEnter ? 'onclick="if (!event.target.closest(\'button, a\')) window.location.href=\'' . esc($entryHref, 'js') . '\';"' : '' ?> style="<?= $canEnter ? 'cursor: pointer;' : '' ?>">
                                     <div class="card-body d-flex flex-column gap-3">
                                         <div class="systems-module-heading">
                                             <div class="d-flex align-items-center gap-3">
@@ -83,14 +91,6 @@
                                         <p class="text-secondary small mb-0"><?= esc($system['description'] ?: 'Sistema disponible sin descripcion adicional.') ?></p>
                                         
                                         <div class="mt-auto d-flex align-items-center justify-content-between gap-2 systems-module-footer">
-                                            <?php
-                                             $canEnter = $system['entry_url'] !== '#' && (int) ($system['active'] ?? 1) === 1;
-                                            $baseHref = $system['entry_url'];
-                                            $companyQuery = (! empty($selectedCompanyId) && in_array($system['slug'], ['inventario', 'ventas', 'compras', 'caja', 'contabilidad', 'impuestos', 'comercial'], true)) 
-                                                ? '?company_id=' . $selectedCompanyId 
-                                                : '';
-                                            $entryHref = $canEnter ? ($baseHref . $companyQuery) : '#';
-                                            ?>
                                             <span class="small text-secondary"><?= $canEnter ? 'Acceso al sistema' : 'Acceso no disponible' ?></span>
                                             <a href="<?= esc($entryHref) ?>" class="btn btn-outline-dark btn-sm icon-btn <?= $canEnter ? '' : 'disabled' ?>" title="Ingresar a <?= esc($system['name'], 'attr') ?>" aria-label="Ingresar a <?= esc($system['name'], 'attr') ?>" <?= $canEnter ? '' : 'aria-disabled="true" tabindex="-1"' ?>><i class="bi bi-arrow-up-right" aria-hidden="true"></i></a>
                                         </div>

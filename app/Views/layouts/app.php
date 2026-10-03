@@ -209,19 +209,43 @@ if (auth_check() && !$isPopup) {
                 <div class="collapse navbar-collapse" id="mainNav">
                     <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                         <?php if (auth_can('dashboard.view') && (auth_user()['role_slug'] ?? '') !== 'vendedor'): ?>
-                            <li class="nav-item"><a class="nav-link" href="<?= site_url('dashboard') ?>">Dashboard</a></li>
+                            <li class="nav-item"><a class="nav-link d-flex align-items-center" href="<?= site_url('dashboard') ?>"><i class="bi bi-speedometer2 me-1.5 text-secondary"></i> Dashboard</a></li>
                         <?php endif; ?>
                         <?php if (auth_can('users.view')): ?>
-                            <li class="nav-item"><a class="nav-link" href="<?= site_url('usuarios') ?>">Usuarios</a></li>
+                            <li class="nav-item"><a class="nav-link d-flex align-items-center" href="<?= site_url('usuarios') ?>"><i class="bi bi-people-fill me-1.5 text-secondary"></i> Usuarios</a></li>
                         <?php endif; ?>
                         <?php if (auth_can('systems.view') && (auth_user()['role_slug'] ?? '') !== 'vendedor'): ?>
-                            <li class="nav-item"><a class="nav-link" href="<?= site_url('sistemas') ?>">Sistemas</a></li>
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle d-flex align-items-center" href="<?= site_url('sistemas') ?>" id="systemsNavDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="bi bi-grid-3x3-gap-fill me-1.5 text-dark"></i> Sistemas
+                                </a>
+                                <div class="dropdown-menu p-3 border-0 shadow-lg rounded-4 mt-2" aria-labelledby="systemsNavDropdown" style="width: 320px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(0,0,0,0.06) !important; z-index: 2000;">
+                                    <div class="dropdown-header px-2 py-1 text-uppercase tracking-wider text-secondary small fw-bold mb-2">Ecosistema de Sistemas</div>
+                                    <?php if (!empty($switcherSystems)): ?>
+                                        <div class="row g-2">
+                                            <?php foreach ($switcherSystems as $sys): ?>
+                                                <div class="col-6">
+                                                    <a href="<?= esc($sys['entry_url']) ?>" class="d-flex flex-column align-items-center text-center p-2 rounded-3 text-decoration-none text-dark switcher-card" style="transition: all 0.2s ease;">
+                                                        <span class="icon-btn mb-1.5 rounded-3 bg-light text-dark d-flex align-items-center justify-content-center" style="width: 42px; height: 42px; font-size: 20px;"><i class="bi <?= esc($sys['icon']) ?>"></i></span>
+                                                        <span style="font-size: 11.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;"><?= esc($sys['name']) ?></span>
+                                                    </a>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    <?php else: ?>
+                                        <div class="text-secondary small text-center py-2">No hay sistemas disponibles</div>
+                                    <?php endif; ?>
+                                    <div class="border-top mt-3 pt-2 text-center">
+                                        <a href="<?= site_url('sistemas') ?>" class="text-decoration-none text-secondary small fw-medium" style="font-size: 11px;"><i class="bi bi-gear-fill me-1"></i>Gestionar sistemas y asignaciones</a>
+                                    </div>
+                                </div>
+                            </li>
                         <?php endif; ?>
                         <?php if (auth_can('companies.view')): ?>
-                            <li class="nav-item"><a class="nav-link" href="<?= site_url('empresas') ?>">Empresas</a></li>
+                            <li class="nav-item"><a class="nav-link d-flex align-items-center" href="<?= site_url('empresas') ?>"><i class="bi bi-buildings-fill me-1.5 text-secondary"></i> Empresas</a></li>
                         <?php endif; ?>
                         <?php if (auth_can('settings.view')): ?>
-                            <li class="nav-item"><a class="nav-link" href="<?= site_url('configuracion') ?>">Configuracion</a></li>
+                            <li class="nav-item"><a class="nav-link d-flex align-items-center" href="<?= site_url('configuracion') ?>"><i class="bi bi-gear-fill me-1.5 text-secondary"></i> Configuración</a></li>
                         <?php endif; ?>
                     </ul>
                     <div class="d-flex align-items-center gap-3">

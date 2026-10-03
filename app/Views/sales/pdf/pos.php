@@ -34,7 +34,7 @@ $fontSize = ['small'=>9,'medium'=>11,'large'=>13][$value('font_size','medium')] 
 <td class="document">
     <div <?= $flag('show_document') ?>><b data-pos-document><?= esc($documentType['name'] ?? 'COMPROBANTE') ?>:</b> <?= esc($fiscal['documentNumber'] ?? $sale['sale_number'] ?? '') ?></div>
     <div <?= $flag('show_dates') ?>><p><b>Fecha de emisión:</b> <?= $date($sale['issue_date'] ?? null) ?></p><p><b>Fecha de vencimiento:</b> <?= $date($sale['due_date'] ?? null) ?></p></div>
-    <div <?= $flag('show_tax_id') ?>><p><b>CUIT:</b> <?= esc($company['tax_id'] ?? '') ?></p></div>
+    <div <?= $flag('show_tax_id') ?>><p><b>CUIT:</b> <?= esc($fiscal['taxId'] ?? $company['tax_id'] ?? '') ?></p></div>
     <div <?= $flag('show_custom_header') ?>><p class="preserve" data-pos-text="custom_text_top_right" data-pos-bold="bold_top_right" style="font-weight:<?= (int)$value('bold_top_right',0) ? 'bold' : 'normal' ?>"><?= esc($value('custom_text_top_right')) ?></p></div>
 </td></tr></table>
 <div class="client">

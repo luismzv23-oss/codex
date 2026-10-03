@@ -1,0 +1,13 @@
+{
+    "ticket": "OK",
+    "sale": {
+        "total": "885.76",
+        "arca_status": "authorized",
+        "cae": "86400944643938"
+    },
+    "stock": {
+        "quantity": "158.00"
+    },
+    "trial_balanced": true,
+    "income_query": "OK"
+}

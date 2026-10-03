@@ -1,0 +1,12 @@
+{
+  "total": 885.76,
+  "net": 732.03,
+  "iva": 153.73,
+  "ivaContenido": 153.73,
+  "qrTotal": 885.76,
+  "qrCae": 86400944643938,
+  "qrSvg": true,
+  "cashVisible": true,
+  "cardHidden": true,
+  "surchargeHidden": true
+}

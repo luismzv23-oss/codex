@@ -78,6 +78,39 @@ class AccountingService
 
     public function journalFromSale(string $companyId, array $sale, array $map): array
     {
+        $db = db_connect();
+        $db->transBegin();
+        try {
+            if (!empty($sale['id'])) {
+                // Serialize both confirmation paths on the same sale.
+                $sql = 'SELECT id FROM ' . $db->prefixTable('sales') . ' WHERE id = ? AND company_id = ?';
+                if ($db->DBDriver === 'MySQLi') { $sql .= ' FOR UPDATE'; }
+                if (!$db->query($sql, [$sale['id'], $companyId])->getRowArray()) {
+                    throw new \RuntimeException('Venta no disponible para esta empresa.');
+                }
+                $existing = $db->table('journal_entries')->where('company_id', $companyId)
+                    ->where('reference_type', 'sale')->where('reference_id', $sale['id'])->get()->getRowArray();
+                if ($existing) {
+                    $db->transCommit();
+                    return ['ok' => true, 'already_synced' => true, 'entry_id' => $existing['id']];
+                }
+            }
+            $result = $this->createSaleJournal($companyId, $sale, $map);
+            if (!$result['ok'] || !$db->transStatus()) {
+                throw new \RuntimeException($result['error'] ?? 'No se pudo contabilizar la venta.');
+            }
+            $db->transCommit();
+            return $result;
+        } catch (\Throwable $e) {
+            $db->transRollback();
+            return ['ok' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    private function createSaleJournal(string $companyId, array $sale, array $map): array
+    {
+        $items = !empty($sale['id']) ? db_connect()->table('sale_items')->where('sale_id', $sale['id'])->orderBy('line_number')->get()->getResultArray() : [];
+        [$sale] = PaymentFiscalPolicy::forSale($sale, $items);
         $lines = [];
         $total = (float) ($sale['total'] ?? 0);
         $sub   = (float) ($sale['subtotal'] ?? 0) - (float) ($sale['global_discount_total'] ?? 0);
@@ -85,13 +118,11 @@ class AccountingService
 
         if (!empty($map['receivable'])) $lines[] = ['account_id' => $map['receivable'], 'debit' => $total, 'credit' => 0, 'description' => 'Venta #' . ($sale['sale_number'] ?? '')];
         if (!empty($map['revenue']))    $lines[] = ['account_id' => $map['revenue'], 'debit' => 0, 'credit' => $sub, 'description' => 'Ingreso por venta'];
-        if (!empty($map['revenue']) && (float) ($sale['payment_surcharge_amount'] ?? 0) > 0) {
-            $lines[] = ['account_id' => $map['revenue'], 'debit' => 0, 'credit' => (float) $sale['payment_surcharge_amount'], 'description' => 'Recargo por medio de pago'];
-        }
         if (!empty($map['iva_debito']) && $tax > 0) $lines[] = ['account_id' => $map['iva_debito'], 'debit' => 0, 'credit' => $tax, 'description' => 'IVA Debito Fiscal'];
 
         return $this->createJournalEntry($companyId, [
-            'description' => 'Venta #' . ($sale['sale_number'] ?? ''), 'entry_date' => $sale['sale_date'] ?? date('Y-m-d'),
+            'description' => 'Venta #' . ($sale['sale_number'] ?? ''), 'entry_date' => substr($sale['issue_date'] ?? $sale['sale_date'] ?? date('Y-m-d'), 0, 10),
+            'user_id' => $sale['user_id'] ?? $sale['created_by'] ?? null,
             'reference_type' => 'sale', 'reference_id' => $sale['id'] ?? null, 'status' => 'posted',
         ], $lines);
     }
@@ -115,13 +146,16 @@ class AccountingService
 
     public function trialBalance(string $companyId, string $asOfDate): array
     {
-        $rows = db_connect()->query("
+        $db = db_connect();
+        $accountsTable = $db->prefixTable('accounts');
+        $linesTable = $db->prefixTable('journal_entry_lines');
+        $entriesTable = $db->prefixTable('journal_entries');
+        $rows = $db->query("
             SELECT a.id, a.code, a.name, a.account_type, a.is_group, a.level,
                 COALESCE(SUM(jl.debit),0) AS total_debit, COALESCE(SUM(jl.credit),0) AS total_credit,
                 COALESCE(SUM(jl.debit),0) - COALESCE(SUM(jl.credit),0) AS balance
-            FROM accounts a
-            LEFT JOIN journal_entry_lines jl ON jl.account_id = a.id
-            LEFT JOIN journal_entries je ON je.id = jl.journal_entry_id AND je.status='posted' AND je.entry_date <= ?
+            FROM {$accountsTable} a
+            LEFT JOIN ({$linesTable} jl INNER JOIN {$entriesTable} je ON je.id = jl.journal_entry_id AND je.status='posted' AND je.entry_date <= ?) ON jl.account_id = a.id
             WHERE a.company_id = ? AND a.active = 1
             GROUP BY a.id, a.code, a.name, a.account_type, a.is_group, a.level ORDER BY a.code
         ", [$asOfDate, $companyId])->getResultArray();
@@ -153,12 +187,15 @@ class AccountingService
 
     public function incomeStatement(string $companyId, string $from, string $to): array
     {
-        $rows = db_connect()->query("
+        $db = db_connect();
+        $accountsTable = $db->prefixTable('accounts');
+        $linesTable = $db->prefixTable('journal_entry_lines');
+        $entriesTable = $db->prefixTable('journal_entries');
+        $rows = $db->query("
             SELECT a.id, a.code, a.name, a.account_type,
                 COALESCE(SUM(jl.credit),0) - COALESCE(SUM(jl.debit),0) AS balance
-            FROM accounts a
-            LEFT JOIN journal_entry_lines jl ON jl.account_id = a.id
-            LEFT JOIN journal_entries je ON je.id = jl.journal_entry_id AND je.status='posted' AND je.entry_date BETWEEN ? AND ?
+            FROM {$accountsTable} a
+            LEFT JOIN ({$linesTable} jl INNER JOIN {$entriesTable} je ON je.id = jl.journal_entry_id AND je.status='posted' AND je.entry_date BETWEEN ? AND ?) ON jl.account_id = a.id
             WHERE a.company_id = ? AND a.active = 1 AND a.account_type IN ('revenue','expense')
             GROUP BY a.id, a.code, a.name, a.account_type ORDER BY a.account_type DESC, a.code
         ", [$from, $to, $companyId])->getResultArray();
@@ -208,7 +245,7 @@ class AccountingService
     public function syncSale(string $companyId, string $saleId, string $userId): array
     {
         $db = db_connect();
-        $sale = $db->table('sales')->where('id', $saleId)->get()->getRowArray();
+        $sale = $db->table('sales')->where('id', $saleId)->where('company_id', $companyId)->get()->getRowArray();
         if (!$sale || ($sale['status'] ?? '') !== 'confirmed') {
             return ['ok' => false, 'error' => 'Sale not found or not confirmed'];
         }

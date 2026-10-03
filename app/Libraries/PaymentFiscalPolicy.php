@@ -45,13 +45,18 @@ final class PaymentFiscalPolicy
 
     public static function forSale(array $sale, array $items): array
     {
+        if (!isset($sale['total']) || !is_numeric($sale['total']) || !is_finite((float)$sale['total']) || (float)$sale['total'] < 0) {
+            throw new \InvalidArgumentException('La venta requiere un total v?lido.');
+        }
         // ARCA and the customer receipt share the exact same calculation.
         // Payment visibility cannot change an invoice's fiscal amounts.
         if (!$items) {
-            $base = (float)($sale['subtotal'] ?? 0) + (float)($sale['tax_total'] ?? 0);
+            $net = (float)($sale['subtotal'] ?? 0) - (float)($sale['global_discount_total'] ?? 0);
+            $base = $net + (float)($sale['tax_total'] ?? 0);
             if ($base > 0) {
-                $sale['subtotal'] = round((float)$sale['total'] * (float)($sale['subtotal'] ?? 0) / $base, 2);
+                $sale['subtotal'] = round((float)$sale['total'] * $net / $base, 2);
                 $sale['tax_total'] = round((float)$sale['total'] - $sale['subtotal'], 2);
+                $sale['global_discount_total'] = 0;
             }
         }
         return self::forReceipt($sale, $items, []);

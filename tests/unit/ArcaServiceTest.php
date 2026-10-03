@@ -13,10 +13,22 @@ final class ArcaServiceTest extends CIUnitTestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->tempDir = rtrim(WRITEPATH, '\\/') . DIRECTORY_SEPARATOR . 'tests-arca';
+        $this->tempDir = rtrim(WRITEPATH, '\\/') . DIRECTORY_SEPARATOR . 'tests-arca-' . bin2hex(random_bytes(6));
         if (! is_dir($this->tempDir)) {
             mkdir($this->tempDir, 0775, true);
         }
+    }
+
+    protected function tearDown(): void
+    {
+        // Remove only the known artifacts in this test's unique directory.
+        foreach (['cache/ta-homologacion.json', 'test-cert.pem', 'test-key.pem'] as $file) {
+            $path = $this->tempDir . DIRECTORY_SEPARATOR . $file;
+            if (is_file($path)) { unlink($path); }
+        }
+        if (is_dir($this->tempDir . '/cache')) { rmdir($this->tempDir . '/cache'); }
+        if (is_dir($this->tempDir)) { rmdir($this->tempDir); }
+        parent::tearDown();
     }
 
     public function testSanitizeSettingsCreatesDefaultWritableCachePath(): void

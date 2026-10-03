@@ -61,7 +61,7 @@ class LibroIvaDigitalService
             ->where('s.company_id', $companyId)
             ->where('s.status', 'confirmed')
             ->where('s.issue_date >=', $periodFrom)
-            ->where('s.issue_date <=', $periodTo)
+            ->where('s.issue_date <', date('Y-m-d', strtotime($periodTo . ' +1 day')))
             ->orderBy('s.issue_date', 'ASC')
             ->orderBy('s.sale_number', 'ASC')
             ->get()
@@ -71,6 +71,23 @@ class LibroIvaDigitalService
         $totals  = ['neto_gravado' => 0, 'iva' => 0, 'exento' => 0, 'no_gravado' => 0, 'total' => 0, 'percepciones' => 0];
 
         foreach ($sales as $sale) {
+            $items = $db->table('sale_items')->where('sale_id', $sale['id'])->orderBy('line_number')->get()->getResultArray();
+            [$sale, $items] = PaymentFiscalPolicy::forSale($sale, $items);
+            $fiscal = [];
+            $authorizedDetail = [];
+            if (!empty($sale['arca_request_id'])) {
+                $event = $db->table('sales_arca_events')->where('id', $sale['arca_request_id'])
+                    ->where('company_id', $companyId)->where('sale_id', $sale['id'])->get()->getRowArray();
+                $request = json_decode($event['request_payload'] ?? '{}', true) ?: [];
+                $fiscal = KioskTicketFiscal::fromResult(['status'=>$sale['arca_status'] ?? '', 'cae'=>$sale['cae'] ?? null,
+                    'request_payload'=>$request, 'environment'=>$event['environment'] ?? '']);
+                if (!empty($fiscal['qrUrl'])) {
+                    $authorizedDetail = $request['FeCAEReq']['FeDetReq']['FECAEDetRequest'] ?? [];
+                    if (isset($authorizedDetail[0])) { $authorizedDetail = $authorizedDetail[0]; }
+                }
+            }
+            $fiscalNumber = isset($fiscal['documentNumber']) ? explode('-', $fiscal['documentNumber']) : [];
+
             $netoGravado = (float) ($sale['subtotal'] ?? 0);
             $iva         = (float) ($sale['tax_total'] ?? 0);
             $total       = (float) ($sale['total'] ?? 0);
@@ -78,7 +95,6 @@ class LibroIvaDigitalService
             $noGravado   = (float) ($sale['non_taxable_total'] ?? 0);
 
             // Load items to compute breakdown by tax rate
-            $items = $db->table('sale_items')->where('sale_id', $sale['id'])->get()->getResultArray();
             $alicuotas = [];
             foreach ($items as $item) {
                 $rate = (float) ($item['tax_rate'] ?? 0);
@@ -111,12 +127,12 @@ class LibroIvaDigitalService
             $records[] = [
                 'id'               => $sale['id'],
                 'fecha'            => $sale['issue_date'] ?? $sale['sale_date'] ?? '',
-                'tipo_cbte'        => $sale['doc_type_code'] ?? $sale['document_code'] ?? '6',
+                'tipo_cbte'        => $fiscal['documentTypeCode'] ?? $sale['doc_type_code'] ?? $sale['document_code'] ?? '6',
                 'tipo_cbte_nombre' => $sale['doc_type_name'] ?? '',
-                'punto_venta'      => str_pad((string) ($sale['point_of_sale_number'] ?? '1'), 5, '0', STR_PAD_LEFT),
-                'numero_cbte'      => str_pad((string) ($sale['sale_number'] ?? '0'), 8, '0', STR_PAD_LEFT),
-                'doc_tipo'         => $sale['customer_document_type'] ?? '80',
-                'doc_nro'          => $sale['customer_document_snapshot'] ?? '',
+                'punto_venta'      => str_pad((string) ($fiscalNumber[0] ?? $sale['point_of_sale_number'] ?? '1'), 5, '0', STR_PAD_LEFT),
+                'numero_cbte'      => str_pad((string) ($fiscalNumber[1] ?? $sale['sale_number'] ?? '0'), 8, '0', STR_PAD_LEFT),
+                'doc_tipo'         => $authorizedDetail['DocTipo'] ?? $sale['customer_document_type'] ?? '80',
+                'doc_nro'          => $authorizedDetail['DocNro'] ?? $sale['customer_document_snapshot'] ?? '',
                 'razon_social'     => $sale['customer_name_snapshot'] ?? '',
                 'neto_gravado'     => $netoGravado,
                 'iva_21'           => $iva,

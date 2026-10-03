@@ -15,6 +15,7 @@ final class KioskTicketFiscalTest extends CIUnitTestCase
                 ]]]]];
         $data = KioskTicketFiscal::fromResult($result);
         $payload = json_decode(base64_decode(explode('?p=', $data['qrUrl'])[1]), true);
+        $this->assertSame('30123456789', $data['taxId']);
         $this->assertSame(121, $payload['importe']);
         $this->assertSame(123, $payload['nroCmp']);
         $this->assertSame('2026-09-30', $payload['fecha']);

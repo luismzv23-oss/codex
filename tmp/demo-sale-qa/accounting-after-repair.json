@@ -1,0 +1,49 @@
+{
+    "corrections": [],
+    "balances": [
+        {
+            "account_id": "029aaab2-d940-4be9-88c8-66b0d27834bb",
+            "balance": "-153.73"
+        },
+        {
+            "account_id": "755f2969-a626-41bf-9c7c-e9aafb2f4b72",
+            "balance": "885.76"
+        },
+        {
+            "account_id": "a6c6f50c-9595-4f7c-9c75-3eb4e0299a20",
+            "balance": "-732.03"
+        }
+    ],
+    "retry": {
+        "ok": true,
+        "already_synced": true
+    },
+    "vat_record": {
+        "id": "54afb42c-201e-4fa0-ad45-198dd5b60131",
+        "fecha": "2026-10-03 09:56:26",
+        "tipo_cbte": "006",
+        "tipo_cbte_nombre": "Factura B",
+        "punto_venta": "00001",
+        "numero_cbte": "00000054",
+        "doc_tipo": 99,
+        "doc_nro": 0,
+        "razon_social": "Consumidor Final",
+        "neto_gravado": 732.03,
+        "iva_21": 153.73,
+        "exento": 0,
+        "no_gravado": 0,
+        "percepciones": 0,
+        "total": 885.76,
+        "cae": "86400944643938",
+        "cae_vto": "2026-10-13 00:00:00",
+        "moneda": "ARS",
+        "cambio": 1,
+        "alicuotas": [
+            {
+                "codigo_alicuota": 5,
+                "neto_gravado": 732.03,
+                "iva": 153.73
+            }
+        ]
+    }
+}

@@ -4298,7 +4298,8 @@ class SalesController extends BaseController
             $this->syncReceivableForSale($saleId);
             $this->syncCashMovementsForSale($companyId, $saleId);
             $this->syncSaleCommission($companyId, $saleId);
-            (new AccountingService())->syncSale($companyId, $saleId, $this->currentUser()['id']);
+            $accounting = (new AccountingService())->syncSale($companyId, $saleId, $this->currentUser()['id']);
+            if (!$accounting['ok']) { throw new \RuntimeException($accounting['error'] ?? 'No se pudo contabilizar la venta.'); }
 
             // Link to converted order
             $order = $db->table('sales_orders')->where('company_id', $companyId)->where('converted_to_sale_id', $saleId)->get()->getRowArray();

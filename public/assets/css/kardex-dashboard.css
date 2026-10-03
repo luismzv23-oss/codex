@@ -1,0 +1,21 @@
+.kardex-filter-card{margin-bottom:24px}.kardex-shell .kardex-filter-card .insight-filters{margin-bottom:0}.kardex-advanced{padding:16px 24px;background:#fff;border:1px solid #e5e9f2;border-radius:18px;margin-top:12px}.kardex-advanced summary{font-size:13px;color:#66748b;cursor:pointer}.kardex-type{margin:18px 0;font-size:13px}.kardex-bar{height:9px;border-radius:8px;background:#f0eff9;margin-top:8px;overflow:hidden}.kardex-bar span{display:block;height:100%;background:#6354db;border-radius:8px}.kardex-shell .card-body{padding:0!important}.kardex-shell .insight-panel h2{font-size:21px}.kardex-shell #kardex-refresh-status:not(:empty){padding:8px 0 16px}
+
+/* Fit every field to the panel; narrow screens use labelled records. */
+.kardex-shell .kardex-table-wrap{overflow:visible;min-width:0;max-width:100%}
+.kardex-table-wrap .table{table-layout:fixed;width:100%;min-width:0}
+.kardex-table-wrap th,.kardex-table-wrap td{white-space:normal!important;overflow-wrap:anywhere;vertical-align:top;font-size:13px;padding:12px 8px}
+.kardex-table-wrap td>*{min-width:0;max-width:100%}
+#kardex-products th:first-child{width:23%}
+#kardex-products th:last-child{width:12%}
+#kardex-movements th:nth-child(2){width:17%}
+.kardex-shell .codex-pagination,.kardex-shell .codex-pagination__controls,.kardex-shell .codex-pagination__pages{flex-wrap:wrap;max-width:100%;min-width:0}
+@media(max-width:1199px){
+ .kardex-table-wrap .table,.kardex-table-wrap tbody{display:block;width:100%}
+ .kardex-table-wrap thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+ .kardex-table-wrap tbody tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 20px;padding:16px 0;border-bottom:1px solid #e5e9f2}
+ .kardex-table-wrap td{display:block;width:auto;min-width:0;border:0;padding:8px 0;box-shadow:none!important}
+ .kardex-table-wrap td[data-label]::before{content:attr(data-label);display:block;font-size:11px;font-weight:600;color:#66748b;margin-bottom:5px}
+ .kardex-table-wrap td[colspan]{grid-column:1/-1}
+ #kardex-products td:first-child{grid-column:1/-1}
+}
+@media(max-width:575px){.kardex-table-wrap tbody tr{grid-template-columns:minmax(0,1fr)}}

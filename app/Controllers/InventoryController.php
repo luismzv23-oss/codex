@@ -51,7 +51,7 @@ class InventoryController extends BaseController
             'companies' => $this->inventoryCompanies(),
             'selectedCompanyId' => $context['company']['id'],
             'settings' => $settings,
-            'summary' => $this->summaryMetrics($context['company']['id']),
+            'dashboard' => (new \App\Libraries\InventoryDashboard())->build($context['company']['id'], $this->request->getGet()),
             'alerts' => $this->alerts($context['company']['id'], $settings),
             'warehouses' => $this->warehouseOverview($context['company']['id']),
             'products' => $this->productStockRows($context['company']['id']),
@@ -103,9 +103,23 @@ class InventoryController extends BaseController
         }
 
         $filters = $this->kardexFilters();
+        foreach (['start_date','end_date'] as $key) {
+            $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $filters[$key]);
+            if (!$date || $date->format('Y-m-d') !== $filters[$key]) { $filters[$key] = ''; }
+        }
+        $filters['end_date'] = $filters['end_date'] ?: date('Y-m-d');
+        $filters['start_date'] = $filters['start_date'] ?: date('Y-m-d', strtotime($filters['end_date'].' -29 days'));
+        if ($filters['start_date'] > $filters['end_date']) { $filters['start_date'] = $filters['end_date']; }
         $productId = $filters['product_id'];
+        $dashboard = $this->kardexDashboard($context['company']['id'], $filters);
+        if ($this->request->getGet('summary_refresh') === '1') {
+            return $this->response->setHeader('Cache-Control', 'no-store')->setJSON([
+                'html' => view('inventory/kardex_dashboard', ['dashboard'=>$dashboard]),
+            ]);
+        }
 
         return view('inventory/kardex', [
+            'dashboard' => $dashboard,
             'pageTitle' => 'Kardex de Inventario',
             'user' => $this->currentUser(),
             'context' => $context,
@@ -2565,6 +2579,18 @@ class InventoryController extends BaseController
         }
 
         return array_values($latestByProduct);
+    }
+
+    private function kardexDashboard(string $companyId, array $filters): array
+    {
+        $query = db_connect()->table('inventory_movements m')->where('m.company_id', $companyId);
+        $this->applyKardexFilters($query, $filters);
+        $groups = $query->select('DATE(m.occurred_at) AS day, m.movement_type, COUNT(*) AS total', false)
+            ->groupBy('DATE(m.occurred_at), m.movement_type', false)->orderBy('day')->get()->getResultArray();
+        $query = db_connect()->table('inventory_movements m')->where('m.company_id', $companyId);
+        $this->applyKardexFilters($query, $filters);
+        $products = $query->select('COUNT(DISTINCT m.product_id) AS total', false)->get()->getRowArray();
+        return \App\Libraries\KardexDashboard::summarize($groups, (int)($products['total'] ?? 0));
     }
 
     private function kardexRows(string $companyId, array $filters = [], int $limit = 200): array

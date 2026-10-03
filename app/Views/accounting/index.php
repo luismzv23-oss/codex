@@ -1,34 +1,11 @@
 <?= $this->extend('layouts/app') ?>
 <?= $this->section('content') ?>
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h1 class="h2 mb-1">Contabilidad</h1>
-        <p class="text-secondary mb-0">Estructura del plan contable, libros y balances.</p>
-    </div>
-    <div class="d-flex gap-2">
-        <?php if (!empty($companies)): ?>
-            <form method="get" action="<?= site_url('contabilidad') ?>" class="d-flex gap-2">
-                <select name="company_id" class="form-select">
-                    <?php foreach ($companies as $company): ?>
-                        <option value="<?= esc($company['id']) ?>" <?= $selectedCompanyId === $company['id'] ? 'selected' : '' ?>>
-                            <?= esc($company['name']) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-                <button class="btn btn-outline-dark icon-btn" title="Cambiar empresa" aria-label="Cambiar empresa"><i class="bi bi-arrow-repeat"></i></button>
-            </form>
-        <?php endif; ?>
-        <a href="<?= site_url('contabilidad?company_id=' . $selectedCompanyId) ?>" class="btn btn-outline-dark icon-btn" title="Plan de Cuentas" aria-label="Plan de Cuentas"><i class="bi bi-list-columns-reverse"></i></a>
-        <a href="<?= site_url('contabilidad/diario?company_id=' . $selectedCompanyId) ?>" class="btn btn-outline-dark icon-btn" title="Libro Diario" aria-label="Libro Diario"><i class="bi bi-journal-text"></i></a>
-        <a href="<?= site_url('contabilidad/balance-comprobacion?company_id=' . $selectedCompanyId) ?>" class="btn btn-outline-dark icon-btn" title="Balance Comp." aria-label="Balance Comp."><i class="bi bi-calculator"></i></a>
-        <a href="<?= site_url('contabilidad/balance-general?company_id=' . $selectedCompanyId) ?>" class="btn btn-outline-dark icon-btn" title="Balance General" aria-label="Balance General"><i class="bi bi-bar-chart"></i></a>
-        <a href="<?= site_url('contabilidad/resultados?company_id=' . $selectedCompanyId) ?>" class="btn btn-outline-dark icon-btn" title="Resultados" aria-label="Resultados"><i class="bi bi-graph-up"></i></a>
-        <a href="<?= site_url('contabilidad/asientos/nuevo?company_id=' . $selectedCompanyId) ?>" class="btn btn-dark icon-btn" data-popup="true" data-popup-title="Asiento contable" data-popup-subtitle="Registrar nuevo asiento." title="Nuevo Asiento" aria-label="Nuevo Asiento"><i class="bi bi-plus-lg"></i></a>
-    </div>
-</div>
+<?php $section = 'index'; ?>
+<?= view('accounting/shell', get_defined_vars()) ?>
+<?= view('accounting/overview', get_defined_vars()) ?>
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body p-0">
-        <table class="table table-hover align-middle mb-0">
+        <table data-accounting-table class="table table-hover align-middle mb-0">
             <thead class="table-light"><tr>
                 <th>Codigo</th><th>Cuenta</th><th>Tipo</th><th>Grupo</th><th>Nivel</th><th>Saldo Apertura</th><th class="text-end">Mayor</th>
             </tr></thead>
@@ -39,14 +16,14 @@
                     <?php foreach ($accounts as $a): ?>
                         <tr class="<?= (int)($a['is_group'] ?? 0) === 1 ? 'fw-semibold' : '' ?>">
                             <td><code><?= esc($a['code']) ?></code></td>
-                            <td><?= str_repeat('&nbsp;&nbsp;', max(0, (int)($a['level'] ?? 1) - 1)) ?><?= esc($a['name']) ?></td>
-                            <td><span class="badge bg-<?= match($a['account_type'] ?? '') { 'asset' => 'primary', 'liability' => 'danger', 'equity' => 'info', 'revenue' => 'success', 'expense' => 'warning', default => 'secondary' } ?>"><?= esc(ucfirst($a['account_type'] ?? '')) ?></span></td>
-                            <td><?= (int)($a['is_group'] ?? 0) === 1 ? '<i class="bi bi-folder text-warning"></i>' : '<i class="bi bi-file-earmark text-secondary"></i>' ?></td>
+                            <td><?= esc($a['name']) ?></td>
+                            <td><span class="badge bg-light text-secondary"><?= esc(['asset'=>'Activo','liability'=>'Pasivo','equity'=>'Patrimonio','revenue'=>'Ingreso','expense'=>'Egreso'][$a['account_type'] ?? ''] ?? '') ?></span></td>
+                            <td><?= (int)($a['is_group'] ?? 0) === 1 ? '<i class="bi bi-folder text-secondary"></i>' : '<i class="bi bi-file-earmark text-secondary"></i>' ?></td>
                             <td><?= esc($a['level'] ?? 1) ?></td>
                             <td><?= number_format((float)($a['opening_balance'] ?? 0), 2, ',', '.') ?></td>
                             <td class="text-end">
                                 <?php if ((int)($a['accepts_entries'] ?? 1) === 1): ?>
-                                    <a href="<?= site_url('contabilidad/mayor/' . $a['id'] . '?company_id=' . $selectedCompanyId) ?>" class="btn btn-outline-dark btn-sm icon-btn" title="Ver mayor"><i class="bi bi-list-ul"></i></a>
+                                    <a href="<?= site_url('contabilidad/mayor/' . $a['id'] . '?' . http_build_query(['company_id'=>$selectedCompanyId] + $filters)) ?>" class="btn btn-outline-dark btn-sm icon-btn" title="Ver mayor"><i class="bi bi-list-ul"></i></a>
                                 <?php endif; ?>
                             </td>
                         </tr>
@@ -56,4 +33,6 @@
         </table>
     </div>
 </div>
+
+<?= view('accounting/end') ?>
 <?= $this->endSection() ?>

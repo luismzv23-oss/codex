@@ -1,6 +1,8 @@
 <?= $this->extend('layouts/app') ?>
 <?= $this->section('content') ?>
-<div class="mb-3"><h2 class="h5 mb-0">Nueva Cuenta Contable</h2></div>
+<?php $section = 'account'; ?>
+<?= view('accounting/shell', get_defined_vars()) ?>
+<div class="insight-panel">
 <form method="post" action="<?= esc($formAction) ?>">
     <?= csrf_field() ?>
     <input type="hidden" name="company_id" value="<?= esc($companyId) ?>">
@@ -46,4 +48,6 @@
         <div class="col-12 text-end"><button class="btn btn-dark icon-btn" title="Guardar" aria-label="Guardar"><i class="bi bi-check-lg"></i></button></div>
     </div>
 </form>
+</div>
+<?= view('accounting/end') ?>
 <?= $this->endSection() ?>

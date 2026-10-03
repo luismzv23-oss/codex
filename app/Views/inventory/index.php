@@ -1,27 +1,22 @@
 <?= $this->extend('layouts/app') ?>
 
 <?= $this->section('content') ?>
-<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+<link rel="stylesheet" href="<?= base_url('assets/css/dashboard-insights.css') ?>">
+<link rel="stylesheet" href="<?= base_url('assets/css/inventory-dashboard.css') ?>">
+<div class="insight-shell inventory-shell">
+
+<header class="insight-hero">
     <div>
-        <h1 class="h2 mb-1">Inventario</h1>
-        <p class="text-secondary mb-0">Control operativo de stock, movimientos, depositos, alertas y trazabilidad.</p>
+        <div class="insight-eyebrow"><span class="insight-orbit"></span>CODEX / INVENTARIO</div><h1>Inventario</h1>
+        <p>Disponibilidad, reposición y actividad de tus depósitos.</p>
+        <div class="insight-identity">
+            <i class="bi bi-box-seam" aria-hidden="true"></i>
+            <span>Gestión de inventario · <?= esc($context['company']['name']) ?></span>
+        </div>
     </div>
-    <div class="d-flex flex-wrap gap-2">
-        <?php if (!empty($companies)): ?>
-            <form method="get" action="<?= site_url('inventario') ?>" class="d-flex gap-2">
-                <select name="company_id" class="form-select">
-                    <?php foreach ($companies as $company): ?>
-                        <option value="<?= esc($company['id']) ?>" <?= $selectedCompanyId === $company['id'] ? 'selected' : '' ?>>
-                            <?= esc($company['name']) ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <button class="btn btn-outline-dark icon-btn" title="Cambiar empresa" aria-label="Cambiar empresa"><i
-                        class="bi bi-arrow-repeat"></i></button>
-            </form>
-        <?php endif; ?>
+    <div class="d-flex flex-wrap gap-2 align-items-center"><button type="button" id="inventory-refresh" class="btn btn-outline-dark icon-btn" title="Actualizar resumen" aria-label="Actualizar resumen"><i class="bi bi-arrow-clockwise"></i></button>
         <a href="<?= site_url('inventario/kardex' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
-            class="btn btn-outline-dark icon-btn" title="Kardex" aria-label="Kardex"><i
-                class="bi bi-journal-list"></i></a>
+            class="btn btn-outline-dark icon-btn" title="Kardex" aria-label="Kardex"><i class="bi bi-journal-text" aria-hidden="true"></i></a>
         <?php if ($context['canManage']): ?>
             <a href="<?= site_url('inventario/reservas/nueva' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
                 class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Reserva de stock"
@@ -33,68 +28,36 @@
                 aria-label="Nuevo movimiento"><i class="bi bi-arrow-left-right"></i></a>
         <?php endif; ?>
     </div>
-</div>
+</header>
 
-<div class="card border-0 shadow-sm rounded-4 mb-4" id="inventory-summary-card">
-    <div class="card-body p-4">
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
-            <div>
-                <h2 class="h4 mb-1"><?= esc($context['company']['name']) ?></h2>
-                <p class="text-secondary mb-0">Sistema asignado con acceso
-                    <?= $context['canManage'] ? 'de gestion' : 'de consulta' ?>.</p>
-            </div>
-            <div class="small text-secondary">Alertas por email:
-                <?= (int) ($settings['email_notifications'] ?? 0) === 1 ? 'activas' : 'inactivas' ?></div>
-        </div>
-        <div class="row g-3">
-            <div class="col-md-3">
-                <div class="border rounded-4 p-3 h-100">
-                    <div class="text-secondary small">Productos activos</div>
-                    <div class="display-6 fw-semibold"><?= esc((string) $summary['products']) ?></div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="border rounded-4 p-3 h-100">
-                    <div class="text-secondary small">Depositos</div>
-                    <div class="display-6 fw-semibold"><?= esc((string) $summary['warehouses']) ?></div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="border rounded-4 p-3 h-100">
-                    <div class="text-secondary small">Stock consolidado</div>
-                    <div class="display-6 fw-semibold"><?= number_format((int) $summary['total_stock'], 0, ',', '.') ?>
-                    </div>
-                    <div class="small text-secondary mt-2">Reservado:
-                        <?= number_format((int) ($summary['reserved_stock'] ?? 0), 0, ',', '.') ?></div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="border rounded-4 p-3 h-100">
-                    <div class="text-secondary small">Items criticos</div>
-                    <div class="display-6 fw-semibold text-danger"><?= esc((string) $summary['critical_products']) ?>
-                    </div>
-                    <div class="small text-secondary mt-2">Reservas activas:
-                        <?= esc((string) ($summary['active_reservations'] ?? 0)) ?></div>
-                </div>
-            </div>
-        </div>
-        <div class="row g-3 mt-1">
-            <div class="col-md-6">
-                <div class="border rounded-4 p-3 h-100">
-                    <div class="text-secondary small">Ventas del dia</div>
-                    <div class="display-6 fw-semibold"><?= esc((string) ($summary['sales_today'] ?? 0)) ?></div>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="border rounded-4 p-3 h-100">
-                    <div class="text-secondary small">Tickets kiosco del dia</div>
-                    <div class="display-6 fw-semibold"><?= esc((string) ($summary['sales_kiosk_today'] ?? 0)) ?></div>
-                </div>
-            </div>
-        </div>
+<?php $df = $dashboard['filters']; ?>
+<form id="inventory-dashboard-filters" class="insight-filters" action="<?= site_url('inventario') ?>" method="get">
+    <label>
+        Empresa activa
+        <select name="company_id" class="form-select">
+            <?php foreach (($companies ?: [$context['company']]) as $company): ?>
+                <option value="<?= esc($company['id']) ?>" <?= $selectedCompanyId === $company['id'] ? 'selected' : '' ?>><?= esc($company['name']) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </label>
+    <label>
+        Filtrar por depósito
+        <select class="form-select" name="warehouse">
+            <option value="">Todos los depósitos (Consolidado)</option>
+            <?php foreach ($dashboard['warehouses'] as $w): ?>
+                <option value="<?= esc($w['id']) ?>" <?= $df['warehouse'] === $w['id'] ? 'selected' : '' ?>><?= esc($w['name']) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </label>
+    <label>Resumen desde<input class="form-control" type="date" name="from" value="<?= esc($df['from']) ?>" required></label>
+    <label>Resumen hasta<input class="form-control" type="date" name="to" value="<?= esc($df['to']) ?>" required></label>
+    <div class="insight-filter-actions">
+        <button class="btn insight-action" title="Aplicar filtros y actualizar" aria-label="Aplicar filtros y actualizar"><i class="bi bi-arrow-repeat"></i></button>
     </div>
-</div>
-
+</form>
+<span id="inventory-refresh-status" class="visually-hidden" role="status" aria-live="polite"></span>
+<?= view('inventory/dashboard', ['dashboard'=>$dashboard,'context'=>$context,'selectedCompanyId'=>$selectedCompanyId]) ?>
+<div class="insight-section-label"><span>DETALLE OPERATIVO / TODA LA EMPRESA</span><span>Consulta productos, depósitos, movimientos y reservas</span></div>
 <div class="row g-4">
     <div class="col-xl-4">
         <div class="card border-0 shadow-sm rounded-4 h-100" id="inventory-alerts-card">
@@ -1081,10 +1044,18 @@
         bindReservationReleaseForms();
 
         // Seamless AJAX refresh of the entire Inventory Dashboard
+        document.getElementById('inventory-refresh')?.addEventListener('click', () => reloadInventoryData());
+        setInterval(() => {
+            if (!document.hidden && !document.querySelector('.modal.show')) reloadInventoryData();
+        }, 60000);
         let isInventoryReloading = false;
         async function reloadInventoryData() {
             if (isInventoryReloading) return;
             isInventoryReloading = true;
+            const refreshButton = document.getElementById('inventory-refresh');
+            const refreshStatus = document.getElementById('inventory-refresh-status');
+            if (refreshButton) refreshButton.disabled = true;
+            if (refreshStatus) refreshStatus.textContent = 'Actualizando...';
 
             try {
                 const response = await fetch(window.location.href, {
@@ -1097,6 +1068,7 @@
                 const parser = new DOMParser();
                 const doc = parser.parseFromString(html, 'text/html');
 
+                if (!doc.getElementById('inventory-summary-card')) throw new Error('Respuesta sin datos de inventario');
                 // 1. Update KPI Summary Cards
                 const newSummary = doc.getElementById('inventory-summary-card');
                 const curSummary = document.getElementById('inventory-summary-card');
@@ -1154,8 +1126,11 @@
                 }
             } catch (err) {
                 console.error('Error al actualizar datos de inventario:', err);
+                if (refreshStatus) refreshStatus.textContent = 'No se pudo actualizar. Se conservan los últimos datos.';
             } finally {
                 isInventoryReloading = false;
+                if (refreshButton) refreshButton.disabled = false;
+                if (refreshStatus?.textContent === 'Actualizando...') refreshStatus.textContent = 'Datos actualizados';
             }
         }
         window.reloadInventoryData = reloadInventoryData;
@@ -1173,4 +1148,5 @@
         });
     });
 </script>
+</div>
 <?= $this->endSection() ?>

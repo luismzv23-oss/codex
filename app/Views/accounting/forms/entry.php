@@ -1,6 +1,8 @@
 <?= $this->extend('layouts/app') ?>
 <?= $this->section('content') ?>
-<div class="mb-3"><h2 class="h5 mb-0">Nuevo Asiento Contable</h2></div>
+<?php $section = 'entry'; ?>
+<?= view('accounting/shell', get_defined_vars()) ?>
+<div class="insight-panel">
 <form method="post" action="<?= esc($formAction) ?>" id="entryForm">
     <?= csrf_field() ?>
     <input type="hidden" name="company_id" value="<?= esc($companyId) ?>">
@@ -69,4 +71,6 @@ function updateTotals() {
     document.getElementById('balanceIndicator').innerHTML = diff < 0.01 ? '<span class="text-success">✓</span>' : '<span class="text-danger">Dif: ' + diff.toFixed(2) + '</span>';
 }
 </script>
+</div>
+<?= view('accounting/end') ?>
 <?= $this->endSection() ?>

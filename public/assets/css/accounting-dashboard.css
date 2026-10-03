@@ -1,0 +1,32 @@
+.accounting-shell{min-width:0}
+.accounting-hero-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-left:auto;flex-shrink:0}
+.accounting-shell .accounting-hero-actions [aria-current=page]{background:#ffffff20;border-color:#c1c9ed;color:#fff}
+.accounting-hero-actions .icon-btn{flex-shrink:0}
+@media(max-width:575px){.accounting-hero-actions{gap:4px;flex-shrink:1;flex-wrap:wrap}.accounting-hero-actions .icon-btn{width:34px;height:34px;padding:6px}}
+.accounting-shell .card{border:1px solid var(--line)!important;border-radius:20px!important;box-shadow:none!important;min-width:0}
+.accounting-shell .card-header{background:#f6f7fc!important;color:var(--ink)!important;padding:20px 24px;border-bottom:1px solid var(--line)}
+.accounting-shell table{width:100%;table-layout:fixed;white-space:normal}
+.accounting-shell th,.accounting-shell td{padding:14px 12px;overflow-wrap:anywhere;white-space:normal;border-color:var(--line);font-size:13px}
+.accounting-shell th{background:#f7f9fc;color:var(--muted);font-size:11px;font-weight:700}
+.accounting-shell .badge{white-space:normal;line-height:1.5}
+.accounting-shell td code{color:#5d528b}
+.accounting-shell tfoot td{--bs-table-bg:#f2f3fa;--bs-table-color:var(--ink);color:var(--ink);font-weight:700}
+.accounting-shell .table-responsive{overflow:visible}
+.accounting-shell input,.accounting-shell select{max-width:100%;min-width:0}
+.accounting-shell .form-control,.accounting-shell .form-select{border-color:var(--line);border-radius:9px}
+.accounting-pager{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:16px 20px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+.accounting-pager div{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.accounting-search{display:grid;gap:6px;font-size:12px;color:var(--muted);padding:16px 20px;max-width:480px}
+.accounting-shell [hidden]{display:none!important}
+.accounting-shell .insight-hero>div{min-width:0}
+.accounting-shell .insight-hero h1{overflow-wrap:anywhere}
+@media(max-width:1100px){
+ .accounting-shell table,.accounting-shell tbody,.accounting-shell tfoot{display:block;width:100%}
+ .accounting-shell thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+ .accounting-shell tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border-bottom:1px solid var(--line);padding:10px}
+ .accounting-shell td{display:block;border:0;text-align:left!important;min-width:0}
+ .accounting-shell td:before{content:attr(data-label);display:block;color:var(--muted);font-size:10px;font-weight:700;margin-bottom:5px}
+ .accounting-shell td[colspan]{grid-column:1/-1}
+ .accounting-shell .insight-hero{flex-wrap:wrap}
+}
+@media(max-width:575px){.accounting-shell tr{grid-template-columns:1fr}.accounting-shell .insight-filters label{min-width:100%}}

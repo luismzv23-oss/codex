@@ -19,19 +19,34 @@ $disabledAttr = !$isAdminOrSuperadmin ? 'disabled' : '';
                     <p class="text-secondary mb-0">Personaliza la cabecera, pie de página, dimensiones y visualización de datos de tus comprobantes de venta.</p>
                 </div>
 
-                <!-- Navigation Tabs -->
-                <ul class="nav nav-pills mb-4 gap-2 bg-light p-1 rounded-3" id="ticketConfigTab" role="tablist" style="width: fit-content;">
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link active py-2 px-3 fw-medium" title="Punto de venta (POS)" aria-label="Punto de venta (POS)" id="pos-tab" data-bs-toggle="tab" data-bs-target="#pos-tab-pane" type="button" role="tab" aria-controls="pos-tab-pane" aria-selected="true">
-                            <i class="bi bi-display" aria-hidden="true"></i>
-                        </button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link py-2 px-3 fw-medium" title="Kiosco" aria-label="Kiosco" id="kiosk-tab" data-bs-toggle="tab" data-bs-target="#kiosk-tab-pane" type="button" role="tab" aria-controls="kiosk-tab-pane" aria-selected="false">
-                            <i class="bi bi-tablet" aria-hidden="true"></i>
-                        </button>
-                    </li>
-                </ul>
+                <!-- Single Line Toolbar: Company Selector + Navigation Tabs -->
+                <div class="d-flex flex-wrap align-items-center gap-3 mb-4">
+                    <?php if (! empty($companies)): ?>
+                        <form method="get" action="<?= site_url('configuracion/tickets') ?>" class="d-flex align-items-center gap-2 mb-0">
+                            <?php if ($isPopup ?? false): ?><input type="hidden" name="popup" value="1"><?php endif; ?>
+                            <select name="company_id" class="form-select form-select-sm" style="width: auto; min-width: 190px;">
+                                <?php foreach ($companies as $c): ?>
+                                    <option value="<?= esc($c['id']) ?>" <?= ($selectedCompanyId ?? $companyId) === $c['id'] ? 'selected' : '' ?>><?= esc($c['name']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <button type="submit" class="btn btn-outline-dark btn-sm icon-btn" title="Cambiar empresa" aria-label="Cambiar empresa"><i class="bi bi-arrow-repeat"></i></button>
+                        </form>
+                    <?php endif; ?>
+
+                    <!-- Navigation Tabs -->
+                    <ul class="nav nav-pills gap-1 bg-light p-1 rounded-3 mb-0" id="ticketConfigTab" role="tablist" style="width: fit-content;">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active py-1.5 px-3 fw-medium" title="Punto de venta (POS)" aria-label="Punto de venta (POS)" id="pos-tab" data-bs-toggle="tab" data-bs-target="#pos-tab-pane" type="button" role="tab" aria-controls="pos-tab-pane" aria-selected="true">
+                                <i class="bi bi-display" aria-hidden="true"></i>
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link py-1.5 px-3 fw-medium" title="Kiosco" aria-label="Kiosco" id="kiosk-tab" data-bs-toggle="tab" data-bs-target="#kiosk-tab-pane" type="button" role="tab" aria-controls="kiosk-tab-pane" aria-selected="false">
+                                <i class="bi bi-tablet" aria-hidden="true"></i>
+                            </button>
+                        </li>
+                    </ul>
+                </div>
 
                 <form method="post" action="<?= esc($formAction) . ($isPopup ? '?popup=1' : '') ?>" id="ticket-settings-form">
                     <?= csrf_field() ?>

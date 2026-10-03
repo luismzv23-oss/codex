@@ -103,7 +103,7 @@ if (auth_check() && !$isPopup) {
             display: flex;
         }
         .popup-card {
-            width: min(860px, 100%);
+            width: min(1180px, 96vw);
             max-height: min(92vh, 920px);
             display: flex;
             flex-direction: column;
@@ -112,6 +112,7 @@ if (auth_check() && !$isPopup) {
             overflow: hidden;
             box-shadow: 0 24px 80px rgba(0,0,0,.25);
             border: 1px solid rgba(0,0,0,.08);
+            transition: width 0.2s ease;
         }
         .popup-head {
             display: flex;
@@ -209,15 +210,15 @@ if (auth_check() && !$isPopup) {
                 <div class="collapse navbar-collapse" id="mainNav">
                     <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                         <?php if (auth_can('dashboard.view') && (auth_user()['role_slug'] ?? '') !== 'vendedor'): ?>
-                            <li class="nav-item"><a class="nav-link d-flex align-items-center" href="<?= site_url('dashboard') ?>"><i class="bi bi-speedometer2 me-1.5 text-secondary"></i> Dashboard</a></li>
+                            <li class="nav-item"><a class="nav-link d-flex align-items-center gap-2" href="<?= site_url('dashboard') ?>"><i class="bi bi-speedometer2 text-secondary"></i><span>Dashboard</span></a></li>
                         <?php endif; ?>
                         <?php if (auth_can('users.view')): ?>
-                            <li class="nav-item"><a class="nav-link d-flex align-items-center" href="<?= site_url('usuarios') ?>"><i class="bi bi-people-fill me-1.5 text-secondary"></i> Usuarios</a></li>
+                            <li class="nav-item"><a class="nav-link d-flex align-items-center gap-2" href="<?= site_url('usuarios') ?>"><i class="bi bi-people-fill text-secondary"></i><span>Usuarios</span></a></li>
                         <?php endif; ?>
                         <?php if (auth_can('systems.view') && (auth_user()['role_slug'] ?? '') !== 'vendedor'): ?>
                             <li class="nav-item dropdown">
-                                <a class="nav-link dropdown-toggle d-flex align-items-center" href="<?= site_url('sistemas') ?>" id="systemsNavDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="bi bi-grid-3x3-gap-fill me-1.5 text-dark"></i> Sistemas
+                                <a class="nav-link dropdown-toggle d-flex align-items-center gap-2" href="<?= site_url('sistemas') ?>" id="systemsNavDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="bi bi-grid-3x3-gap-fill text-dark"></i><span>Sistemas</span>
                                 </a>
                                 <div class="dropdown-menu p-3 border-0 shadow-lg rounded-4 mt-2" aria-labelledby="systemsNavDropdown" style="width: 320px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(0,0,0,0.06) !important; z-index: 2000;">
                                     <div class="dropdown-header px-2 py-1 text-uppercase tracking-wider text-secondary small fw-bold mb-2">Ecosistema de Sistemas</div>
@@ -242,10 +243,44 @@ if (auth_check() && !$isPopup) {
                             </li>
                         <?php endif; ?>
                         <?php if (auth_can('companies.view')): ?>
-                            <li class="nav-item"><a class="nav-link d-flex align-items-center" href="<?= site_url('empresas') ?>"><i class="bi bi-buildings-fill me-1.5 text-secondary"></i> Empresas</a></li>
+                            <li class="nav-item"><a class="nav-link d-flex align-items-center gap-2" href="<?= site_url('empresas') ?>"><i class="bi bi-buildings-fill text-secondary"></i><span>Empresas</span></a></li>
                         <?php endif; ?>
                         <?php if (auth_can('settings.view')): ?>
-                            <li class="nav-item"><a class="nav-link d-flex align-items-center" href="<?= site_url('configuracion') ?>"><i class="bi bi-gear-fill me-1.5 text-secondary"></i> Configuración</a></li>
+                            <?php
+                            $reqCompanyId = service('request')->getGet('company_id') ?: (session('active_company_id') ?: (auth_user()['company_id'] ?? ''));
+                            $compQuery = !empty($reqCompanyId) ? '?company_id=' . $reqCompanyId : '';
+                            ?>
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle d-flex align-items-center gap-2" href="<?= site_url('configuracion' . $compQuery) ?>" id="settingsNavDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="bi bi-gear-fill text-secondary"></i><span>Configuración</span>
+                                </a>
+                                <div class="dropdown-menu p-3 border-0 shadow-lg rounded-4 mt-2" aria-labelledby="settingsNavDropdown" style="width: 320px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(0,0,0,0.06) !important; z-index: 2000;">
+                                    <div class="dropdown-header px-2 py-1 text-uppercase tracking-wider text-secondary small fw-bold mb-2">Panel de Configuración</div>
+                                    <div class="row g-2">
+                                        <div class="col-6">
+                                            <a href="<?= site_url('inventario/configuracion' . $compQuery) ?>" class="d-flex flex-column align-items-center text-center p-2 rounded-3 text-decoration-none text-dark switcher-card" style="transition: all 0.2s ease;">
+                                                <span class="icon-btn mb-1.5 rounded-3 bg-light text-dark d-flex align-items-center justify-content-center" style="width: 42px; height: 42px; font-size: 20px;"><i class="bi bi-box-seam"></i></span>
+                                                <span style="font-size: 11.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;">Inventario</span>
+                                            </a>
+                                        </div>
+                                        <div class="col-6">
+                                            <a href="<?= site_url('ventas/configuracion' . $compQuery) ?>" class="d-flex flex-column align-items-center text-center p-2 rounded-3 text-decoration-none text-dark switcher-card" style="transition: all 0.2s ease;">
+                                                <span class="icon-btn mb-1.5 rounded-3 bg-light text-dark d-flex align-items-center justify-content-center" style="width: 42px; height: 42px; font-size: 20px;"><i class="bi bi-receipt"></i></span>
+                                                <span style="font-size: 11.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;">Ventas</span>
+                                            </a>
+                                        </div>
+                                        <div class="col-12">
+                                            <a href="<?= site_url('configuracion/tickets' . $compQuery) ?>" class="d-flex flex-column align-items-center text-center p-2 rounded-3 text-decoration-none text-dark switcher-card" style="transition: all 0.2s ease;" data-popup="true" data-popup-title="Configuracion de Impresion y Tickets" data-popup-subtitle="Personalizar cabeceras, pie de pagina, dimensiones y visibilidad de datos.">
+                                                <span class="icon-btn mb-1.5 rounded-3 bg-light text-dark d-flex align-items-center justify-content-center" style="width: 42px; height: 42px; font-size: 20px;"><i class="bi bi-printer"></i></span>
+                                                <span style="font-size: 11.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;">Impresión y Tickets</span>
+                                            </a>
+                                        </div>
+                                    </div>
+                                    <div class="border-top mt-3 pt-2 text-center">
+                                        <a href="<?= site_url('configuracion' . $compQuery) ?>" class="text-decoration-none text-secondary small fw-medium" style="font-size: 11px;"><i class="bi bi-sliders me-1"></i>Configuraciones Generales</a>
+                                    </div>
+                                </div>
+                            </li>
                         <?php endif; ?>
                     </ul>
                     <div class="d-flex align-items-center gap-3">
@@ -386,6 +421,11 @@ if (auth_check() && !$isPopup) {
                     frame.src = url.toString();
                     title.textContent = link.dataset.popupTitle || link.textContent.trim() || 'Formulario';
                     subtitle.textContent = link.dataset.popupSubtitle || 'Gestion del registro actual.';
+                    if (link.dataset.popupWidth) {
+                        card.style.width = link.dataset.popupWidth;
+                    } else {
+                        card.style.width = '';
+                    }
                     overlay.classList.add('is-open');
                 };
 
@@ -393,6 +433,7 @@ if (auth_check() && !$isPopup) {
                     overlay.classList.remove('is-open');
                     frame.src = 'about:blank';
                     frame.style.height = '420px';
+                    card.style.width = '';
                 };
 
                 document.addEventListener('click', (event) => {

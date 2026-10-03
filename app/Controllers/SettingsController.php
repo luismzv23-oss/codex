@@ -272,20 +272,7 @@ class SettingsController extends BaseController
 
     private function resolveCompanyId(): ?string
     {
-        if ($this->isSuperadmin()) {
-            $fromPost = trim((string) $this->request->getPost('company_id'));
-            $fromQuery = trim((string) $this->request->getGet('company_id'));
-
-            if ($fromPost !== '') {
-                return $fromPost;
-            }
-
-            if ($fromQuery !== '') {
-                return $fromQuery;
-            }
-        }
-
-        return $this->companyId();
+        return $this->resolveActiveCompanyId();
     }
 
 
@@ -377,6 +364,8 @@ class SettingsController extends BaseController
             'posPreviewHtml' => view('sales/pdf/pos', \App\Libraries\PosTicketDesign::preview($company)),
             'kioskSettings' => $kioskSettings,
             'companyId' => $companyId,
+            'selectedCompanyId' => $companyId,
+            'companies' => $this->isSuperadmin() ? (new CompanyModel())->where('active', 1)->orderBy('name', 'ASC')->findAll() : [],
             'companyName' => $company['name'],
             'companyLegalName' => $company['legal_name'] ?? $company['name'],
             'companyAddress' => $company['address'] ?? '',

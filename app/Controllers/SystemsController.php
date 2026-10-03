@@ -128,7 +128,7 @@ class SystemsController extends BaseController
 
         (new SystemModel())->insert($this->systemPayload());
 
-        return $this->popupOrRedirect('/sistemas', 'Sistema creado correctamente.');
+        return $this->popupOrRedirect('/sistemas', 'Sistema creado correctamente.', ['entity' => 'system']);
     }
 
     public function edit(string $id)
@@ -169,7 +169,7 @@ class SystemsController extends BaseController
 
         (new SystemModel())->update($id, $this->systemPayload());
 
-        return $this->popupOrRedirect('/sistemas', 'Sistema actualizado correctamente.');
+        return $this->popupOrRedirect('/sistemas', 'Sistema actualizado correctamente.', ['entity' => 'system']);
     }
 
     public function delete(string $id)
@@ -256,7 +256,7 @@ class SystemsController extends BaseController
             $this->syncAdminAssignment($companyId, $systemId, $active);
         }
 
-        return $this->popupOrRedirect('/sistemas?company_id=' . $companyId, 'Sistema asignado a la empresa correctamente.');
+        return $this->popupOrRedirect('/sistemas?company_id=' . $companyId, 'Sistema asignado a la empresa correctamente.', ['entity' => 'system']);
     }
 
     public function toggleCompanyAssignment(string $id)
@@ -343,7 +343,7 @@ class SystemsController extends BaseController
             ]);
         }
 
-        return $this->popupOrRedirect('/sistemas?company_id=' . $companyId, 'Permiso del operador actualizado correctamente.');
+        return $this->popupOrRedirect('/sistemas?company_id=' . $companyId, 'Permiso del operador actualizado correctamente.', ['entity' => 'system']);
     }
 
     public function toggleUserAssignment(string $id)

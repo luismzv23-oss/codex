@@ -35,7 +35,7 @@
     </div>
 </div>
 
-<div class="card border-0 shadow-sm rounded-4 mb-4">
+<div class="card border-0 shadow-sm rounded-4 mb-4" id="inventory-summary-card">
     <div class="card-body p-4">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
             <div>
@@ -97,7 +97,7 @@
 
 <div class="row g-4">
     <div class="col-xl-4">
-        <div class="card border-0 shadow-sm rounded-4 h-100">
+        <div class="card border-0 shadow-sm rounded-4 h-100" id="inventory-alerts-card">
             <div class="card-body p-4">
                 <h2 class="h4 mb-3">Alertas inteligentes</h2>
                 <div class="mb-3">
@@ -204,7 +204,7 @@
     </div>
 
     <div class="col-xl-8">
-        <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card border-0 shadow-sm rounded-4 mb-4" id="inventory-products-card">
             <div class="card-body p-4">
                 <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
                     <div>
@@ -283,7 +283,7 @@
                                         <?= number_format((int) ($product['max_stock'] ?? 0), 0, ',', '.') ?></td>
                                     <td>
                                         <?php if ((int) ($product['active'] ?? 1) === 0): ?>
-                                            <span class="badge bg-secondary-subtle text-secondary border px-2 py-1">Inactivo</span>
+                                             <span class="badge bg-secondary-subtle text-secondary border px-2 py-1">Inactivo</span>
                                         <?php else: ?>
                                             <span class="<?= $product['is_critical'] ? 'text-danger fw-semibold' : (($product['is_overstock'] ?? false) ? 'text-warning fw-semibold' : 'text-success fw-semibold') ?>">
                                                 <?= $product['is_critical'] ? 'Critico' : (($product['is_overstock'] ?? false) ? 'Sobre stock' : 'Saludable') ?>
@@ -328,7 +328,7 @@
 
         <div class="row g-4">
             <div class="col-lg-6">
-                <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card border-0 shadow-sm rounded-4 h-100" id="inventory-reservations-card">
                     <div class="card-body p-4">
                         <h2 class="h4 mb-3">Reservas activas</h2>
                         <div id="inventory-reservations-list">
@@ -348,7 +348,7 @@
                                             <?php if ($context['canManage']): ?>
                                                 <form method="post"
                                                     action="<?= site_url('inventario/reservas/' . $row['id'] . '/liberar' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
-                                                    class="mt-2">
+                                                    class="mt-2 release-reservation-form">
                                                     <?= csrf_field() ?>
                                                     <button class="btn btn-sm btn-outline-success icon-btn" title="Liberar reserva"
                                                         aria-label="Liberar reserva"><i class="bi bi-unlock"></i></button>
@@ -366,7 +366,7 @@
             </div>
 
             <div class="col-lg-6">
-                <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card border-0 shadow-sm rounded-4 h-100" id="inventory-warehouses-card">
                     <div class="card-body p-4">
                         <div class="d-flex justify-content-between align-items-start mb-3">
                             <div>
@@ -405,7 +405,7 @@
             </div>
 
             <div class="col-12">
-                <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card border-0 shadow-sm rounded-4 h-100" id="inventory-movements-card">
                     <div class="card-body p-4">
                         <h2 class="h4 mb-3">Ultimos movimientos</h2>
                         <div id="recent-movements-list">
@@ -870,29 +870,32 @@
         });
 
         // Connect smart alerts
-        document.querySelectorAll('.alert-search-trigger').forEach(trigger => {
-            trigger.addEventListener('click', () => {
-                const searchTerm = trigger.dataset.searchTerm || '';
-                searchInput.value = searchTerm;
+        function connectAlertTriggers() {
+            document.querySelectorAll('.alert-search-trigger').forEach(trigger => {
+                trigger.onclick = () => {
+                    const searchTerm = trigger.dataset.searchTerm || '';
+                    searchInput.value = searchTerm;
 
-                // Highlight search input briefly
-                searchInput.focus();
-                searchInput.classList.add('is-valid');
-                setTimeout(() => {
-                    searchInput.classList.remove('is-valid');
-                }, 1000);
+                    // Highlight search input briefly
+                    searchInput.focus();
+                    searchInput.classList.add('is-valid');
+                    setTimeout(() => {
+                        searchInput.classList.remove('is-valid');
+                    }, 1000);
 
-                // Reset status filter to "all"
-                const allPill = document.querySelector('.filter-pill[data-filter="all"]');
-                if (allPill) {
-                    allPill.click();
-                } else {
-                    currentFilter = 'all';
-                    currentPage = 1;
-                    updateFilters();
-                }
+                    // Reset status filter to "all"
+                    const allPill = document.querySelector('.filter-pill[data-filter="all"]');
+                    if (allPill) {
+                        allPill.click();
+                    } else {
+                        currentFilter = 'all';
+                        currentPage = 1;
+                        updateFilters();
+                    }
+                };
             });
-        });
+        }
+        connectAlertTriggers();
 
         // Initial render for products table
         updateFilters();
@@ -900,19 +903,29 @@
         // Generic Client-side Card List Pagination (5 items per page)
         function setupListPagination(containerId, itemSelector, pageSize = 5) {
             const container = document.getElementById(containerId);
-            if (!container) return;
-            const items = Array.from(container.querySelectorAll(itemSelector));
-            if (items.length <= pageSize) return;
+            if (!container) return null;
+
+            let paginationWrapper = container.parentNode.querySelector(`.codex-pagination[data-for="${containerId}"]`);
+            if (!paginationWrapper) {
+                paginationWrapper = document.createElement('div');
+                paginationWrapper.className = 'codex-pagination mt-3';
+                paginationWrapper.dataset.for = containerId;
+                container.after(paginationWrapper);
+            }
 
             let currentPage = 1;
-            const paginationWrapper = document.createElement('div');
-            paginationWrapper.className = 'codex-pagination mt-3';
-            container.after(paginationWrapper);
 
             function render() {
+                const items = Array.from(container.querySelectorAll(itemSelector));
                 const totalItems = items.length;
-                const pageCount = Math.ceil(totalItems / pageSize);
 
+                if (totalItems <= pageSize) {
+                    items.forEach(item => { item.style.display = ''; });
+                    paginationWrapper.innerHTML = '';
+                    return;
+                }
+
+                const pageCount = Math.ceil(totalItems / pageSize);
                 if (currentPage > pageCount) currentPage = pageCount;
                 if (currentPage < 1) currentPage = 1;
 
@@ -1026,57 +1039,137 @@
             }
 
             render();
+
+            return {
+                refresh: () => {
+                    currentPage = 1;
+                    render();
+                },
+                render
+            };
         }
 
         // Initialize 5-items pagination on all card lists
-        setupListPagination('inventory-reservations-list', '.reservation-item', 5);
-        setupListPagination('inventory-warehouses-list', '.warehouse-item', 5);
-        setupListPagination('recent-movements-list', '.recent-movement-item', 5);
+        const reservationsPaginator = setupListPagination('inventory-reservations-list', '.reservation-item', 5);
+        const warehousesPaginator = setupListPagination('inventory-warehouses-list', '.warehouse-item', 5);
+        const movementsPaginator = setupListPagination('recent-movements-list', '.recent-movement-item', 5);
 
-        // Listen for real-time product updates/creations
-        window.addEventListener('codex:product-saved', (event) => {
-            const data = event.detail;
-            if (!data || !data.item) return;
-            const item = data.item;
+        // Bind liberation form handlers for instant AJAX execution without full reload
+        function bindReservationReleaseForms() {
+            document.querySelectorAll('.release-reservation-form').forEach(form => {
+                form.onsubmit = async (e) => {
+                    e.preventDefault();
+                    const submitBtn = form.querySelector('button[type="submit"], button');
+                    if (submitBtn) submitBtn.disabled = true;
+                    try {
+                        const response = await fetch(form.action, {
+                            method: 'POST',
+                            body: new FormData(form),
+                            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                        });
+                        if (window.showCodexToast) {
+                            window.showCodexToast('Reserva liberada correctamente.', 'success');
+                        }
+                        await reloadInventoryData();
+                    } catch (err) {
+                        console.error('Error al liberar reserva:', err);
+                        form.submit();
+                    }
+                };
+            });
+        }
+        bindReservationReleaseForms();
 
-            let row = tableBody.querySelector(`tr.product-row[data-product-id="${item.id}"]`);
-            const isCritical = Boolean(item.is_critical);
-            const isOverstock = Boolean(item.is_overstock);
-            const statusType = isCritical ? 'critical' : (isOverstock ? 'overstock' : 'healthy');
-            const catBrand = ((item.category || '') + ' ' + (item.brand || '')).trim();
+        // Seamless AJAX refresh of the entire Inventory Dashboard
+        let isInventoryReloading = false;
+        async function reloadInventoryData() {
+            if (isInventoryReloading) return;
+            isInventoryReloading = true;
 
-            if (row) {
-                row.dataset.sku = item.sku || '';
-                row.dataset.name = item.name || '';
-                row.dataset.categoryBrand = catBrand;
-                row.dataset.status = statusType;
-                row.dataset.active = String(item.active ?? 1);
-                row.innerHTML = buildInventoryProductRowHtml(item);
-            } else {
-                row = document.createElement('tr');
-                row.className = 'product-row';
-                row.dataset.productId = item.id;
-                row.dataset.sku = item.sku || '';
-                row.dataset.name = item.name || '';
-                row.dataset.categoryBrand = catBrand;
-                row.dataset.status = statusType;
-                row.dataset.active = String(item.active ?? 1);
-                row.innerHTML = buildInventoryProductRowHtml(item);
+            try {
+                const response = await fetch(window.location.href, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    cache: 'no-store'
+                });
+                if (!response.ok) throw new Error('Error al recargar dashboard');
 
-                if (noResultsRow) {
-                    tableBody.insertBefore(row, noResultsRow);
-                } else {
-                    tableBody.appendChild(row);
+                const html = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+
+                // 1. Update KPI Summary Cards
+                const newSummary = doc.getElementById('inventory-summary-card');
+                const curSummary = document.getElementById('inventory-summary-card');
+                if (newSummary && curSummary) {
+                    curSummary.innerHTML = newSummary.innerHTML;
                 }
+
+                // 2. Update Smart Alerts Card
+                const newAlerts = doc.getElementById('inventory-alerts-card');
+                const curAlerts = document.getElementById('inventory-alerts-card');
+                if (newAlerts && curAlerts) {
+                    curAlerts.innerHTML = newAlerts.innerHTML;
+                    connectAlertTriggers();
+                }
+
+                // 3. Update Products Table Body
+                const newProductsTable = doc.getElementById('inventory-products-table');
+                if (newProductsTable) {
+                    const newTbody = newProductsTable.querySelector('tbody');
+                    if (newTbody) {
+                        tableBody.innerHTML = newTbody.innerHTML;
+                        allRows = Array.from(tableBody.querySelectorAll('.product-row'));
+                        updateFilters();
+                    }
+                }
+
+                // 4. Update Reservations List
+                const newReservations = doc.getElementById('inventory-reservations-list');
+                const curReservations = document.getElementById('inventory-reservations-list');
+                if (newReservations && curReservations) {
+                    curReservations.innerHTML = newReservations.innerHTML;
+                    reservationsPaginator?.refresh();
+                    bindReservationReleaseForms();
+                }
+
+                // 5. Update Warehouses List
+                const newWarehouses = doc.getElementById('inventory-warehouses-list');
+                const curWarehouses = document.getElementById('inventory-warehouses-list');
+                if (newWarehouses && curWarehouses) {
+                    curWarehouses.innerHTML = newWarehouses.innerHTML;
+                    warehousesPaginator?.refresh();
+                }
+
+                // 6. Update Recent Movements List
+                const newMovements = doc.getElementById('recent-movements-list');
+                const curMovements = document.getElementById('recent-movements-list');
+                if (newMovements && curMovements) {
+                    curMovements.innerHTML = newMovements.innerHTML;
+                    movementsPaginator?.refresh();
+                }
+
+                // 7. Re-bind popups in updated elements
+                if (typeof window.initCodexPopups === 'function') {
+                    window.initCodexPopups();
+                }
+            } catch (err) {
+                console.error('Error al actualizar datos de inventario:', err);
+            } finally {
+                isInventoryReloading = false;
             }
+        }
+        window.reloadInventoryData = reloadInventoryData;
 
-            row.style.transition = 'background-color 0.4s ease';
-            row.style.backgroundColor = 'rgba(25, 135, 84, 0.2)';
-            setTimeout(() => {
-                row.style.backgroundColor = '';
-            }, 1800);
-
-            refreshInventoryProducts(row);
+        // Listen for real-time item creation/updates across the inventory module
+        window.addEventListener('codex:product-saved', () => reloadInventoryData());
+        window.addEventListener('codex:movement-saved', () => reloadInventoryData());
+        window.addEventListener('codex:reservation-saved', () => reloadInventoryData());
+        window.addEventListener('codex:warehouse-saved', () => reloadInventoryData());
+        window.addEventListener('codex:item-saved', () => reloadInventoryData());
+        window.addEventListener('message', (event) => {
+            if (event.origin === window.location.origin && event.data && (event.data.type === 'codex-popup-saved' || event.data.type === 'codex-popup-close')) {
+                reloadInventoryData();
+            }
         });
     });
 </script>

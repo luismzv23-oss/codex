@@ -2255,10 +2255,14 @@ class SalesController extends BaseController
                 ->first();
 
             if (!$userAssignment) {
-                return redirect()->to('/sistemas')->with('error', 'Tu usuario no tiene acceso activo a Ventas.');
+                if ($this->roleSlug() === 'vendedor') {
+                    $accessLevel = 'vendedor';
+                } else {
+                    return redirect()->to('/sistemas')->with('error', 'Tu usuario no tiene acceso activo a Ventas.');
+                }
+            } else {
+                $accessLevel = $userAssignment['access_level'] ?? 'view';
             }
-
-            $accessLevel = $userAssignment['access_level'] ?? 'view';
         }
 
         $isVendedorAccess = $this->roleSlug() === 'vendedor' || $accessLevel === 'vendedor';
@@ -2298,41 +2302,7 @@ class SalesController extends BaseController
 
     private function resolveSalesCompanyId(): ?string
     {
-        $fromReq = trim((string) ($this->request->getGet('company_id') ?: $this->request->getPost('company_id')));
-        if ($fromReq !== '') {
-            $comp = (new CompanyModel())->find($fromReq);
-            if ($comp) {
-                session()->set('active_company_id', $fromReq);
-                return $fromReq;
-            }
-        }
-
-        $sessionCompanyId = session('active_company_id');
-        if ($sessionCompanyId !== null && $sessionCompanyId !== '') {
-            $comp = (new CompanyModel())->find($sessionCompanyId);
-            if ($comp) {
-                return $sessionCompanyId;
-            }
-        }
-
-        $userCompanyId = $this->companyId();
-        if ($userCompanyId !== null && $userCompanyId !== '') {
-            $comp = (new CompanyModel())->find($userCompanyId);
-            if ($comp) {
-                session()->set('active_company_id', $userCompanyId);
-                return $userCompanyId;
-            }
-        }
-
-        if ($this->isSuperadmin()) {
-            $first = (new CompanyModel())->orderBy('name', 'ASC')->first();
-            if ($first) {
-                session()->set('active_company_id', $first['id']);
-                return $first['id'];
-            }
-        }
-
-        return null;
+        return $this->resolveActiveCompanyId();
     }
 
 

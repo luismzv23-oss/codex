@@ -1,6 +1,8 @@
 <?= $this->extend('layouts/app') ?>
 
 <?= $this->section('content') ?>
+<?php $salesLive = false; ?>
+<?= view('sales/ui_start', get_defined_vars()) ?>
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body p-4">
         <div class="mb-3">
@@ -90,4 +92,5 @@
         </form>
     </div>
 </div>
+<?= view('sales/ui_end') ?>
 <?= $this->endSection() ?>

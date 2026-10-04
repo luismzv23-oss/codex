@@ -1,21 +1,17 @@
 <?= $this->extend('layouts/app') ?>
 
 <?= $this->section('content') ?>
-<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+<?php $salesLive = true; ?>
+<?= view('sales/ui_start', get_defined_vars()) ?>
+<?php if (!(($isPopup ?? false) || service('request')->getGet('popup') === '1')): ?>
+<header class="insight-hero sales-hero">
     <div>
-        <h1 class="h2 mb-1">Diarios</h1>
-        <p class="text-secondary mb-0">Todos los comprobantes, facturas y presupuestos del periodo.</p>
+        <div class="insight-eyebrow"><span class="insight-orbit"></span> CODEX / VENTAS</div><h1 class="h2 mb-1">Diarios</h1>
+        <p class="text-secondary mb-0">Todos los comprobantes, facturas y presupuestos del periodo.</p><div class="insight-identity"><i class="bi bi-bag-check" aria-hidden="true"></i><span>Gestión comercial · <?= esc($context['company']['name']) ?></span></div>
     </div>
-    <div class="d-flex flex-wrap gap-2">
+    <div class="sales-hero-actions"><button type="button" class="btn btn-outline-dark icon-btn" data-sales-refresh title="Actualizar resumen" aria-label="Actualizar resumen"><i class="bi bi-arrow-clockwise"></i></button>
         <?php if (! empty($companies)): ?>
-            <form method="get" action="<?= site_url('ventas/diarios') ?>" class="d-flex gap-2">
-                <select name="company_id" class="form-select">
-                    <?php foreach ($companies as $company): ?>
-                        <option value="<?= esc($company['id']) ?>" <?= $selectedCompanyId === $company['id'] ? 'selected' : '' ?>><?= esc($company['name']) ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <button class="btn btn-outline-dark icon-btn" title="Cambiar empresa" aria-label="Cambiar empresa"><i class="bi bi-arrow-repeat"></i></button>
-            </form>
+
         <?php endif; ?>
         <?php if ($context['canManage']): ?>
             <a href="<?= site_url('ventas/presupuestos/nuevo' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
@@ -30,19 +26,10 @@
         <?php endif; ?>
         <a href="<?= site_url('ventas' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" title="Volver a ventas" aria-label="Volver a ventas"><i class="bi bi-arrow-left"></i></a>
     </div>
-</div>
-
-<div class="row g-3 mb-4">
-    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="small text-secondary">Borradores</div><div class="display-6 fw-semibold"><?= esc((string) $summary['drafts']) ?></div></div></div></div>
-    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="small text-secondary">Confirmadas</div><div class="display-6 fw-semibold text-success"><?= esc((string) $summary['confirmed']) ?></div></div></div></div>
-    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="small text-secondary">Devueltas</div><div class="display-6 fw-semibold text-warning"><?= esc((string) $summary['returned']) ?></div></div></div></div>
-    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="small text-secondary">Monto total</div><div class="display-6 fw-semibold"><?= number_format((float) $summary['total_amount'], 2, ',', '.') ?></div></div></div></div>
-</div>
-
-<div class="card border-0 shadow-sm rounded-4 mb-4">
-    <div class="card-body">
-        <form method="get" action="<?= site_url('ventas/diarios') ?>" class="row g-3 align-items-end">
-            <?php if (! empty($companies)): ?><input type="hidden" name="company_id" value="<?= esc($selectedCompanyId) ?>"><?php endif; ?>
+</header>
+<?php endif; ?>
+<form method="get" action="<?= site_url('ventas/diarios') ?>" class="insight-filters sales-filters">
+            <div class="sales-company-filter"><label class="form-label">Empresa activa</label><select name="company_id" class="form-select"><?php foreach (($companies ?: [$context['company']]) as $option): ?><option value="<?= esc($option['id']) ?>" <?= $selectedCompanyId === $option['id'] ? 'selected' : '' ?>><?= esc($option['name']) ?></option><?php endforeach; ?></select></div>
             <div class="col-md-3">
                 <label class="form-label">Estado</label>
                 <select name="status" class="form-select">
@@ -69,16 +56,25 @@
                 <label class="form-label">Hasta</label>
                 <input type="date" name="date_to" class="form-control" value="<?= esc($filters['date_to'] ?? '') ?>">
             </div>
-            <div class="col-md-1"><button class="btn btn-dark w-100">Filtrar</button></div>
-            <div class="col-md-1"><a href="<?= site_url('ventas/diarios' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark w-100">Limpiar</a></div>
+            <div class="col-md-1"><button class="btn btn-dark w-100" title="Aplicar filtros" aria-label="Aplicar filtros"><i class="bi bi-arrow-repeat"></i></button></div>
+            <div class="col-md-1"><a href="<?= site_url('ventas/diarios' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark w-100" title="Limpiar filtros" aria-label="Limpiar filtros"><i class="bi bi-x-lg"></i></a></div>
         </form>
-    </div>
+<div id="sales-status" role="status" aria-live="polite" class="small text-secondary mb-2"></div>
+<div id="sales-content">
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="small text-secondary">Borradores</div><div class="sales-kpi-value fw-semibold"><?= esc((string) $summary['drafts']) ?></div></div></div></div>
+    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="small text-secondary">Confirmadas</div><div class="sales-kpi-value fw-semibold text-success"><?= esc((string) $summary['confirmed']) ?></div></div></div></div>
+    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="small text-secondary">Devueltas</div><div class="sales-kpi-value fw-semibold text-warning"><?= esc((string) $summary['returned']) ?></div></div></div></div>
+    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="small text-secondary">Monto total</div><div class="sales-kpi-value fw-semibold"><?= number_format((float) $summary['total_amount'], 2, ',', '.') ?></div></div></div></div>
 </div>
+
+
 
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body p-4">
         <div class="table-responsive">
-            <table class="table align-middle mb-0" data-codex-pagination="15">
+            <table data-sales-table class="table align-middle mb-0">
                 <thead><tr><th>Comprobante</th><th>Cliente</th><th>Punto venta</th><th>Deposito</th><th>Estado</th><th>Fiscal</th><th>Pago</th><th>Total</th><th>Fecha</th><th></th></tr></thead>
                 <tbody>
                     <?php foreach ($sales as $sale): ?>
@@ -186,4 +182,6 @@
         </div>
     </div>
 </div>
+</div>
+<?= view('sales/ui_end') ?>
 <?= $this->endSection() ?>

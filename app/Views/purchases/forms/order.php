@@ -1,5 +1,7 @@
 <?= $this->extend('layouts/app') ?>
 <?= $this->section('content') ?>
+<?php $purchaseEditing = true; ?>
+<?= view('purchases/shell', get_defined_vars()) ?>
 <?php
 $productCatalog = array_values(array_map(static function (array $product): array {
     return ['id' => $product['id'], 'sku' => $product['sku'], 'name' => $product['name'], 'cost' => (float) ($product['purchase_price'] ?? 0)];
@@ -81,4 +83,5 @@ $productCatalog = array_values(array_map(static function (array $product): array
     addRow();
 })();
 </script>
+<?= view('purchases/end') ?>
 <?= $this->endSection() ?>

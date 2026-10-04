@@ -17,6 +17,8 @@ $query = http_build_query(['company_id' => $selectedCompanyId]);
 <link rel="stylesheet" href="<?= base_url('assets/css/inventory-dashboard.css') ?>">
 <link rel="stylesheet" href="<?= base_url('assets/css/accounting-dashboard.css') ?>">
 <div class="insight-shell inventory-shell accounting-shell" data-accounting-page="<?= esc($section) ?>">
+<?php $insidePopup = ($isPopup ?? false) || service('request')->getGet('popup') === '1'; ?>
+<?php if (!$insidePopup): ?>
 <header class="insight-hero">
     <div>
         <div class="insight-eyebrow"><span class="insight-orbit"></span> CODEX / CONTABILIDAD</div>
@@ -38,6 +40,9 @@ $query = http_build_query(['company_id' => $selectedCompanyId]);
         <a class="btn btn-outline-dark icon-btn" href="<?= site_url('contabilidad/cuentas/nueva?' . $query) ?>" title="Nueva cuenta" aria-label="Nueva cuenta" data-popup="true" data-popup-title="Nueva cuenta"><i class="bi bi-folder-plus"></i></a>
     </nav>
 </header>
+<?php else: ?>
+<div class="popup-form-heading"><h2><?= esc($heading) ?></h2><p><?= esc($description) ?></p></div>
+<?php endif; ?>
 
 <?php if (!$editing): ?>
 <form method="get" action="<?= site_url('contabilidad' . $path) ?>" class="insight-filters" id="accounting-filters">

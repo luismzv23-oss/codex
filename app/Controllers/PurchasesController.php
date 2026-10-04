@@ -46,12 +46,11 @@ class PurchasesController extends BaseController
 
         $companyId = $context['company']['id'];
 
-        return view('purchases/index', [
+        return view('purchases/index', \App\Libraries\PurchasesDashboard::prepare([
             'pageTitle' => 'Compras',
             'context' => $context,
             'companies' => $this->purchaseCompanies(),
             'selectedCompanyId' => $companyId,
-            'summary' => $this->purchaseSummary($companyId),
             'suppliers' => $this->supplierRows($companyId),
             'orders' => $this->orderRows($companyId),
             'receipts' => $this->receiptRows($companyId),
@@ -59,7 +58,7 @@ class PurchasesController extends BaseController
             'invoices' => $this->invoiceRows($companyId),
             'creditNotes' => $this->creditNoteRows($companyId),
             'costHistory' => $this->supplierCostRows($companyId),
-        ]);
+        ], \App\Libraries\PurchasesDashboard::filters((array)$this->request->getGet())));
     }
 
     public function createSupplierForm()
@@ -71,6 +70,7 @@ class PurchasesController extends BaseController
 
         return view('purchases/forms/supplier', [
             'pageTitle' => 'Proveedor',
+            'context' => $context,
             'companyId' => $context['company']['id'],
             'formAction' => site_url('compras/proveedores'),
             'isPopup' => $this->isPopupRequest(),
@@ -122,6 +122,7 @@ class PurchasesController extends BaseController
 
         return view('purchases/forms/supplier', [
             'pageTitle' => 'Editar Proveedor',
+            'context' => $context,
             'companyId' => $context['company']['id'],
             'supplier' => $supplier,
             'formAction' => site_url('compras/proveedores/' . $id . '/actualizar'),
@@ -177,19 +178,19 @@ class PurchasesController extends BaseController
         
         $supplier = $supplierModel->where('company_id', $companyId)->find($id);
         if (!$supplier) {
-            return redirect()->to($this->purchaseRoute('compras', $companyId))->with('error', 'El proveedor no existe.');
+            return $this->purchaseActionResponse($context['company']['id'], 'El proveedor no existe.', false);
         }
 
         $orderCount = db_connect()->table('purchase_orders')->where('supplier_id', $id)->countAllResults();
         $receiptCount = db_connect()->table('purchase_receipts')->where('supplier_id', $id)->countAllResults();
         
         if ($orderCount > 0 || $receiptCount > 0) {
-            return redirect()->back()->with('error', 'No se puede eliminar el proveedor porque tiene operaciones comerciales asociadas.');
+            return $this->purchaseActionResponse($context['company']['id'], 'No se puede eliminar el proveedor porque tiene operaciones comerciales asociadas.', false);
         }
 
         $supplierModel->delete($id);
 
-        return redirect()->to($this->purchaseRoute('compras', $companyId))->with('message', 'Proveedor eliminado correctamente.');
+        return $this->purchaseActionResponse($context['company']['id'], 'Proveedor eliminado correctamente.', true);
     }
 
     public function createOrderForm()
@@ -201,6 +202,7 @@ class PurchasesController extends BaseController
 
         return view('purchases/forms/order', [
             'pageTitle' => 'Orden de compra',
+            'context' => $context,
             'companyId' => $context['company']['id'],
             'suppliers' => $this->supplierOptions($context['company']['id']),
             'warehouses' => $this->warehouseOptions($context['company']['id']),
@@ -266,7 +268,7 @@ class PurchasesController extends BaseController
 
         $order = $this->ownedOrder($context['company']['id'], $id);
         if (! $order || ($order['status'] ?? '') !== 'draft') {
-            return redirect()->to($this->purchaseRoute('compras', $context['company']['id']))->with('error', 'La orden no esta disponible para aprobacion.');
+            return $this->purchaseActionResponse($context['company']['id'], 'La orden no esta disponible para aprobacion.', false);
         }
 
         (new PurchaseOrderModel())->update($id, [
@@ -275,7 +277,7 @@ class PurchasesController extends BaseController
             'approved_by' => $this->currentUser()['id'],
         ]);
 
-        return redirect()->to($this->purchaseRoute('compras', $context['company']['id']))->with('message', 'Orden aprobada correctamente.');
+        return $this->purchaseActionResponse($context['company']['id'], 'Orden aprobada correctamente.', true);
     }
 
     public function createReceiptForm(string $orderId)
@@ -292,6 +294,7 @@ class PurchasesController extends BaseController
 
         return view('purchases/forms/receipt', [
             'pageTitle' => 'Recepcion de compra',
+            'context' => $context,
             'companyId' => $context['company']['id'],
             'order' => $order,
             'supplier' => $this->ownedSupplier($context['company']['id'], (string) $order['supplier_id']),
@@ -456,6 +459,7 @@ class PurchasesController extends BaseController
 
         return view('purchases/forms/return', [
             'pageTitle' => 'Devolucion a proveedor',
+            'context' => $context,
             'companyId' => $context['company']['id'],
             'receipt' => $receipt,
             'supplier' => $this->ownedSupplier($context['company']['id'], (string) $receipt['supplier_id']),
@@ -568,6 +572,7 @@ class PurchasesController extends BaseController
 
         return view('purchases/forms/payment', [
             'pageTitle' => 'Pago a proveedor',
+            'context' => $context,
             'companyId' => $context['company']['id'],
             'payable' => $payable,
             'supplier' => $this->ownedSupplier($context['company']['id'], (string) $payable['supplier_id']),
@@ -600,6 +605,7 @@ class PurchasesController extends BaseController
 
         return view('purchases/forms/invoice', [
             'pageTitle' => 'Factura proveedor',
+            'context' => $context,
             'companyId' => $context['company']['id'],
             'suppliers' => $this->supplierOptions($context['company']['id']),
             'receipts' => $this->receiptRows($context['company']['id']),
@@ -698,6 +704,7 @@ class PurchasesController extends BaseController
 
         return view('purchases/forms/credit_note', [
             'pageTitle' => 'Nota de credito proveedor',
+            'context' => $context,
             'companyId' => $context['company']['id'],
             'suppliers' => $this->supplierOptions($context['company']['id']),
             'invoices' => $this->invoiceRows($context['company']['id']),
@@ -977,6 +984,17 @@ class PurchasesController extends BaseController
         return (new InventoryProductModel())->where('company_id', $companyId)->where('active', 1)->orderBy('name', 'ASC')->findAll();
     }
 
+    private function purchaseActionResponse(string $companyId, string $message, bool $ok)
+    {
+        if ($this->request->isAJAX()) {
+            return $this->response->setStatusCode($ok ? 200 : 422)->setJSON([
+                'ok' => $ok, 'message' => $message,
+                'csrfName' => csrf_token(), 'csrfHash' => csrf_hash(),
+            ]);
+        }
+        return redirect()->to($this->purchaseRoute('compras', $companyId))->with($ok ? 'message' : 'error', $message);
+    }
+
     private function purchaseSummary(string $companyId): array
     {
         $orderModel = new PurchaseOrderModel();
@@ -1045,7 +1063,6 @@ class PurchasesController extends BaseController
             ->join('inventory_products p', 'p.id = sch.product_id')
             ->where('sch.company_id', $companyId)
             ->orderBy('sch.observed_at', 'DESC')
-            ->limit(20)
             ->get()
             ->getResultArray();
     }

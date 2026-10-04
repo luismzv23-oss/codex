@@ -1,5 +1,7 @@
 <?= $this->extend('layouts/app') ?>
 <?= $this->section('content') ?>
+<?php $salesLive = false; ?>
+<?= view('sales/ui_start', get_defined_vars()) ?>
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div><h2 class="h5 mb-0"><?= !empty($fromQuote) ? 'Pedido desde Presupuesto #' . esc($fromQuote['quote_number'] ?? '') : 'Nuevo Pedido' ?></h2><p class="text-secondary mb-0 small">Registra el pedido del cliente para gestionar entregas y facturacion.</p></div>
 </div>
@@ -105,4 +107,5 @@ if (existingItems.length > 0) {
     addOrderLine();
 }
 </script>
+<?= view('sales/ui_end') ?>
 <?= $this->endSection() ?>

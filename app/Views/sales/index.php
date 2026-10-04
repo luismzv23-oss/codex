@@ -1,24 +1,17 @@
 <?= $this->extend('layouts/app') ?>
 
 <?= $this->section('content') ?>
-<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+<?php $salesLive = true; $isVendedorAccess = ($user['role_slug'] ?? '') === 'vendedor' || ($context['access_level'] ?? '') === 'vendedor'; ?>
+<?= view('sales/ui_start', get_defined_vars()) ?>
+<?php if (!(($isPopup ?? false) || service('request')->getGet('popup') === '1')): ?>
+<header class="insight-hero sales-hero">
     <div>
-        <h1 class="h2 mb-1">Ventas</h1>
-        <p class="text-secondary mb-0">Ventas, clientes, pagos y devoluciones integradas con inventario.</p>
+        <div class="insight-eyebrow"><span class="insight-orbit"></span> CODEX / VENTAS</div><h1 class="h2 mb-1">Ventas</h1>
+        <p class="text-secondary mb-0">Ventas, clientes, pagos y devoluciones integradas con inventario.</p><div class="insight-identity"><i class="bi bi-bag-check" aria-hidden="true"></i><span>Gestión comercial · <?= esc($context['company']['name']) ?></span></div>
     </div>
-    <div class="d-flex flex-wrap gap-2">
+    <div class="sales-hero-actions"><button type="button" class="btn btn-outline-dark icon-btn" data-sales-refresh title="Actualizar resumen" aria-label="Actualizar resumen"><i class="bi bi-arrow-clockwise"></i></button>
         <?php if (!empty($companies)): ?>
-            <form method="get" action="<?= site_url('ventas') ?>" class="d-flex gap-2">
-                <select name="company_id" class="form-select">
-                    <?php foreach ($companies as $company): ?>
-                        <option value="<?= esc($company['id']) ?>" <?= $selectedCompanyId === $company['id'] ? 'selected' : '' ?>>
-                            <?= esc($company['name']) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-                <button class="btn btn-outline-dark icon-btn" title="Cambiar empresa" aria-label="Cambiar empresa"><i
-                        class="bi bi-arrow-repeat"></i></button>
-            </form>
+
         <?php endif; ?>
         <?php $isVendedorAccess = ($user['role_slug'] ?? '') === 'vendedor' || ($context['access_level'] ?? '') === 'vendedor'; ?>
         <?php if (!$isVendedorAccess): ?>
@@ -67,160 +60,10 @@
             class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Cliente"
             data-popup-subtitle="Alta rapida de cliente para ventas." title="Nuevo cliente" aria-label="Nuevo cliente"><i class="bi bi-person-plus"></i></a>
     </div>
-</div>
-
-<?php if ($isVendedorAccess): ?>
-    <div class="card border-0 shadow-sm rounded-4 text-center py-5">
-        <div class="card-body">
-            <div class="display-1 text-secondary mb-3"><i class="bi bi-shop-window"></i></div>
-            <h2 class="h4">Bienvenido al Portal de Ventas</h2>
-            <p class="text-secondary mx-auto mb-4" style="max-width: 500px;">
-                Selecciona <strong>POS</strong> para registrar ventas tradicionales con facturación y métodos de pago complejos, o selecciona <strong>Kiosco</strong> para ventas de mostrador de alta velocidad.
-            </p>
-            <div class="d-flex justify-content-center gap-3">
-                <a href="<?= site_url('ventas/pos' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-primary btn-lg px-4"><i class="bi bi-display me-2"></i> Entrar a POS</a>
-                <a href="<?= site_url('ventas/kiosco' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-dark btn-lg px-4"><i class="bi bi-shop me-2"></i> Entrar a Kiosco</a>
-            </div>
-        </div>
-    </div>
-<?php else: ?>
-
-<div class="row g-3 mb-4">
-    <div class="col-md-3">
-        <div class="card border-0 shadow-sm rounded-4">
-            <div class="card-body">
-                <div class="small text-secondary">Borradores</div>
-                <div class="display-6 fw-semibold"><?= esc((string) $summary['drafts']) ?></div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card border-0 shadow-sm rounded-4">
-            <div class="card-body">
-                <div class="small text-secondary">Confirmadas</div>
-                <div class="display-6 fw-semibold text-success"><?= esc((string) $summary['confirmed']) ?></div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card border-0 shadow-sm rounded-4">
-            <div class="card-body">
-                <div class="small text-secondary">Devueltas</div>
-                <div class="display-6 fw-semibold text-warning"><?= esc((string) $summary['returned']) ?></div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card border-0 shadow-sm rounded-4">
-            <div class="card-body">
-                <div class="small text-secondary">Monto total</div>
-                <div class="display-6 fw-semibold"><?= number_format((float) $summary['total_amount'], 2, ',', '.') ?>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-<div class="row g-3 mb-4">
-    <div class="col-md-6">
-        <div class="card border-0 shadow-sm rounded-4">
-            <div class="card-body">
-                <div class="small text-secondary">Facturacion estandar</div>
-                <div class="display-6 fw-semibold"><?= esc((string) $summary['standard']) ?></div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6">
-        <div class="card border-0 shadow-sm rounded-4">
-            <div class="card-body">
-                <div class="small text-secondary">Facturacion kiosco</div>
-                <div class="display-6 fw-semibold"><?= esc((string) $summary['kiosk']) ?></div>
-            </div>
-        </div>
-    </div>
-</div>
-<div class="row g-3 mb-4">
-    <div class="col-md-6">
-        <div class="card border-0 shadow-sm rounded-4">
-            <div class="card-body">
-                <div class="small text-secondary">Cuenta corriente pendiente</div>
-                <div class="display-6 fw-semibold text-warning">
-                    <?= esc((string) ($summary['receivable_pending'] ?? 0)) ?>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6">
-        <div class="card border-0 shadow-sm rounded-4">
-            <div class="card-body">
-                <div class="small text-secondary">Saldo por cobrar</div>
-                <div class="display-6 fw-semibold">
-                    <?= number_format((float) ($summary['receivable_balance'] ?? 0), 2, ',', '.') ?>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row g-4 mb-4">
-    <div class="col-lg-6">
-        <div class="card border-0 shadow-sm rounded-4 h-100">
-            <div class="card-body p-4">
-                <div class="d-flex justify-content-between align-items-start mb-3">
-                    <div>
-                        <h2 class="h4 mb-1">Listas de precio activas</h2>
-                        <p class="text-secondary mb-0">Precios comerciales listos para ventas y POS.</p>
-                    </div>
-                    <span class="badge text-bg-dark"><?= count($priceLists) ?></span>
-                </div>
-                <?php foreach (array_slice($priceLists, 0, 5) as $priceList): ?>
-                    <div class="border rounded-3 p-3 mb-2">
-                        <div class="d-flex justify-content-between gap-2">
-                            <div>
-                                <strong><?= esc($priceList['name']) ?></strong>
-                                <div class="small text-secondary"><?= esc($priceList['description'] ?: 'Sin descripcion') ?>
-                                </div>
-                            </div>
-                            <span
-                                class="small <?= (int) ($priceList['is_default'] ?? 0) === 1 ? 'text-success' : 'text-secondary' ?>"><?= (int) ($priceList['is_default'] ?? 0) === 1 ? 'Base' : 'Activa' ?></span>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-                <?php if ($priceLists === []): ?>
-                    <div class="text-secondary">No hay listas de precio creadas.</div><?php endif; ?>
-            </div>
-        </div>
-    </div>
-    <div class="col-lg-6">
-        <div class="card border-0 shadow-sm rounded-4 h-100">
-            <div class="card-body p-4">
-                <div class="d-flex justify-content-between align-items-start mb-3">
-                    <div>
-                        <h2 class="h4 mb-1">Promociones vigentes</h2>
-                        <p class="text-secondary mb-0">Descuentos automáticos aplicables en ventas.</p>
-                    </div>
-                    <span class="badge text-bg-dark"><?= count($promotions) ?></span>
-                </div>
-                <?php foreach (array_slice($promotions, 0, 5) as $promotion): ?>
-                    <div class="border rounded-3 p-3 mb-2">
-                        <strong><?= esc($promotion['name']) ?></strong>
-                        <div class="small text-secondary">
-                            <?= esc($promotion['promotion_type'] === 'percent' ? number_format((float) $promotion['value'], 2, ',', '.') . '% off' : 'Descuento fijo ' . number_format((float) $promotion['value'], 2, ',', '.')) ?>
-                            / <?= esc($promotion['scope'] === 'all' ? 'Todos los productos' : 'Productos seleccionados') ?>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-                <?php if ($promotions === []): ?>
-                    <div class="text-secondary">No hay promociones activas.</div><?php endif; ?>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="card border-0 shadow-sm rounded-4 mb-4">
-    <div class="card-body">
-        <form method="get" action="<?= site_url('ventas') ?>" class="row g-3 align-items-end">
-            <?php if (!empty($companies)): ?><input type="hidden" name="company_id"
-                    value="<?= esc($selectedCompanyId) ?>"><?php endif; ?>
+</header>
+<?php endif; ?>
+<form method="get" action="<?= site_url('ventas') ?>" class="insight-filters sales-filters">
+            <div class="sales-company-filter"><label class="form-label">Empresa activa</label><select name="company_id" class="form-select"><?php foreach (($companies ?: [$context['company']]) as $option): ?><option value="<?= esc($option['id']) ?>" <?= $selectedCompanyId === $option['id'] ? 'selected' : '' ?>><?= esc($option['name']) ?></option><?php endforeach; ?></select></div>
             <div class="col-md-3">
                 <label class="form-label">Estado fiscal</label>
                 <select name="status" class="form-select">
@@ -250,13 +93,87 @@
                 <label class="form-label">Hasta</label>
                 <input type="date" name="date_to" class="form-control" value="<?= esc($filters['date_to'] ?? '') ?>">
             </div>
-            <div class="col-md-1"><button class="btn btn-dark w-100">Filtrar</button></div>
+            <div class="col-md-1"><button class="btn btn-dark w-100" title="Aplicar filtros" aria-label="Aplicar filtros"><i class="bi bi-arrow-repeat"></i></button></div>
             <div class="col-md-1"><a
                     href="<?= site_url('ventas' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
-                    class="btn btn-outline-dark w-100">Limpiar</a></div>
+                    class="btn btn-outline-dark w-100" title="Limpiar filtros" aria-label="Limpiar filtros"><i class="bi bi-x-lg"></i></a></div>
         </form>
+<div id="sales-status" role="status" aria-live="polite" class="small text-secondary mb-2"></div>
+<div id="sales-content">
+
+<?php if ($isVendedorAccess): ?>
+    <div class="card border-0 shadow-sm rounded-4 text-center py-5">
+        <div class="card-body">
+            <div class="display-1 text-secondary mb-3"><i class="bi bi-shop-window"></i></div>
+            <h2 class="h4">Bienvenido al Portal de Ventas</h2>
+            <p class="text-secondary mx-auto mb-4" style="max-width: 500px;">
+                Selecciona <strong>POS</strong> para registrar ventas tradicionales con facturación y métodos de pago complejos, o selecciona <strong>Kiosco</strong> para ventas de mostrador de alta velocidad.
+            </p>
+            <div class="d-flex justify-content-center gap-3">
+                <a href="<?= site_url('ventas/pos' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-primary btn-lg px-4"><i class="bi bi-display me-2"></i> Entrar a POS</a>
+                <a href="<?= site_url('ventas/kiosco' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-dark btn-lg px-4"><i class="bi bi-shop me-2"></i> Entrar a Kiosco</a>
+            </div>
+        </div>
+    </div>
+<?php else: ?>
+
+<?= view('sales/overview', get_defined_vars()) ?>
+<div class="row g-4 mb-4">
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <h2 class="h4 mb-1">Listas de precio activas</h2>
+                        <p class="text-secondary mb-0">Precios comerciales listos para ventas y POS.</p>
+                    </div>
+                    <span class="badge text-bg-dark"><?= count($priceLists) ?></span>
+                </div>
+                <?php foreach ($priceLists as $priceList): ?>
+                    <div class="border rounded-3 p-3 mb-2" data-sales-item>
+                        <div class="d-flex justify-content-between gap-2">
+                            <div>
+                                <strong><?= esc($priceList['name']) ?></strong>
+                                <div class="small text-secondary"><?= esc($priceList['description'] ?: 'Sin descripcion') ?>
+                                </div>
+                            </div>
+                            <span
+                                class="small <?= (int) ($priceList['is_default'] ?? 0) === 1 ? 'text-success' : 'text-secondary' ?>"><?= (int) ($priceList['is_default'] ?? 0) === 1 ? 'Base' : 'Activa' ?></span>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+                <?php if ($priceLists === []): ?>
+                    <div class="text-secondary">No hay listas de precio creadas.</div><?php endif; ?>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <h2 class="h4 mb-1">Promociones vigentes</h2>
+                        <p class="text-secondary mb-0">Descuentos automáticos aplicables en ventas.</p>
+                    </div>
+                    <span class="badge text-bg-dark"><?= count($promotions) ?></span>
+                </div>
+                <?php foreach ($promotions as $promotion): ?>
+                    <div class="border rounded-3 p-3 mb-2" data-sales-item>
+                        <strong><?= esc($promotion['name']) ?></strong>
+                        <div class="small text-secondary">
+                            <?= esc($promotion['promotion_type'] === 'percent' ? number_format((float) $promotion['value'], 2, ',', '.') . '% off' : 'Descuento fijo ' . number_format((float) $promotion['value'], 2, ',', '.')) ?>
+                            / <?= esc($promotion['scope'] === 'all' ? 'Todos los productos' : 'Productos seleccionados') ?>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+                <?php if ($promotions === []): ?>
+                    <div class="text-secondary">No hay promociones activas.</div><?php endif; ?>
+            </div>
+        </div>
     </div>
 </div>
+
+
 
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body p-4">
@@ -270,7 +187,7 @@
                 class="btn btn-outline-dark btn-sm">Ver todos los comprobantes →</a>-->
         </div>
         <div class="table-responsive">
-            <table class="table align-middle mb-0" data-codex-pagination="15">
+            <table data-sales-table class="table align-middle mb-0">
                 <thead>
                     <tr>
                         <th>Comprobante</th>
@@ -362,4 +279,6 @@
     </div>
 </div>
 <?php endif; ?>
+</div>
+<?= view('sales/ui_end') ?>
 <?= $this->endSection() ?>

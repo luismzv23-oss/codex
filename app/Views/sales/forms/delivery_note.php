@@ -1,5 +1,7 @@
 <?= $this->extend('layouts/app') ?>
 <?= $this->section('content') ?>
+<?php $salesLive = false; ?>
+<?= view('sales/ui_start', get_defined_vars()) ?>
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div><h2 class="h5 mb-0"><?= !empty($fromOrder) ? 'Remito desde Pedido #' . esc($fromOrder['order_number'] ?? '') : 'Nuevo Remito' ?></h2><p class="text-secondary mb-0 small">Comprobante de entrega de mercaderia al cliente.</p></div>
 </div>
@@ -73,4 +75,5 @@ if (orderItems.length > 0) {
     addDnLine();
 }
 </script>
+<?= view('sales/ui_end') ?>
 <?= $this->endSection() ?>

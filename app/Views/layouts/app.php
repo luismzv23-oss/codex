@@ -198,6 +198,7 @@ if (auth_check() && !$isPopup) {
             color: #fff !important;
         }
     </style>
+    <link href="<?= base_url('assets/css/popup-forms.css') ?>" rel="stylesheet">
 </head>
 <body class="<?= $isPopup ? 'popup-mode' : '' ?>">
     <?php if (! $isPopup): ?>

@@ -1,34 +1,34 @@
 <?= $this->extend('layouts/app') ?>
 
 <?= $this->section('content') ?>
-<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+<?php $salesLive = true; ?>
+<?= view('sales/ui_start', get_defined_vars()) ?>
+<?php if (!(($isPopup ?? false) || service('request')->getGet('popup') === '1')): ?>
+<header class="insight-hero sales-hero">
     <div>
-        <h1 class="h2 mb-1">Cobranzas</h1>
-        <p class="text-secondary mb-0">Cuenta corriente, saldos por cobrar y recibos aplicados a ventas.</p>
+        <div class="insight-eyebrow"><span class="insight-orbit"></span> CODEX / VENTAS</div><h1 class="h2 mb-1">Cobranzas</h1>
+        <p class="text-secondary mb-0">Cuenta corriente, saldos por cobrar y recibos aplicados a ventas.</p><div class="insight-identity"><i class="bi bi-bag-check" aria-hidden="true"></i><span>Gestión comercial · <?= esc($context['company']['name']) ?></span></div>
     </div>
-    <div class="d-flex flex-wrap gap-2">
+    <div class="sales-hero-actions"><button type="button" class="btn btn-outline-dark icon-btn" data-sales-refresh title="Actualizar resumen" aria-label="Actualizar resumen"><i class="bi bi-arrow-clockwise"></i></button>
         <?php if (! empty($companies)): ?>
-            <form method="get" action="<?= site_url('ventas/cobranzas') ?>" class="d-flex gap-2">
-                <select name="company_id" class="form-select">
-                    <?php foreach ($companies as $company): ?>
-                        <option value="<?= esc($company['id']) ?>" <?= $selectedCompanyId === $company['id'] ? 'selected' : '' ?>><?= esc($company['name']) ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <button class="btn btn-outline-dark icon-btn" title="Cambiar empresa" aria-label="Cambiar empresa"><i class="bi bi-arrow-repeat"></i></button>
-            </form>
+
         <?php endif; ?>
         <?php if ($context['canManage']): ?>
             <a href="<?= site_url('ventas/cobranzas/nuevo' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-dark icon-btn" data-popup="true" data-popup-title="Nuevo recibo" data-popup-subtitle="Aplicar cobranza a comprobantes pendientes." title="Nuevo recibo" aria-label="Nuevo recibo"><i class="bi bi-cash-coin"></i></a>
         <?php endif; ?>
         <a href="<?= site_url('ventas' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" title="Volver a ventas" aria-label="Volver a ventas"><i class="bi bi-arrow-left"></i></a>
     </div>
-</div>
+</header>
+<?php endif; ?>
+<form method="get" class="insight-filters sales-filters"><div class="sales-company-filter"><label class="form-label">Empresa activa</label><select name="company_id" class="form-select"><?php foreach (($companies ?: [$context['company']]) as $option): ?><option value="<?= esc($option['id']) ?>" <?= $selectedCompanyId === $option['id'] ? 'selected' : '' ?>><?= esc($option['name']) ?></option><?php endforeach; ?></select></div><button class="btn insight-action" title="Aplicar empresa" aria-label="Aplicar empresa"><i class="bi bi-arrow-repeat"></i></button></form>
+<div id="sales-status" role="status" aria-live="polite" class="small text-secondary mb-2"></div>
+<div id="sales-content">
 
 <div class="row g-3 mb-4">
-    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="small text-secondary">Comprobantes pendientes</div><div class="display-6 fw-semibold text-warning"><?= esc((string) ($receivableSummary['pending'] ?? 0)) ?></div></div></div></div>
-    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="small text-secondary">Saldo por cobrar</div><div class="display-6 fw-semibold"><?= number_format((float) ($receivableSummary['balance'] ?? 0), 2, ',', '.') ?></div></div></div></div>
-    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="small text-secondary">Vencidos</div><div class="display-6 fw-semibold text-danger"><?= esc((string) ($receivableSummary['overdue'] ?? 0)) ?></div></div></div></div>
-    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="small text-secondary">Recibos emitidos</div><div class="display-6 fw-semibold text-success"><?= esc((string) ($receivableSummary['receipts_count'] ?? 0)) ?></div></div></div></div>
+    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="small text-secondary">Comprobantes pendientes</div><div class="sales-kpi-value fw-semibold text-warning"><?= esc((string) ($receivableSummary['pending'] ?? 0)) ?></div></div></div></div>
+    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="small text-secondary">Saldo por cobrar</div><div class="sales-kpi-value fw-semibold"><?= number_format((float) ($receivableSummary['balance'] ?? 0), 2, ',', '.') ?></div></div></div></div>
+    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="small text-secondary">Vencidos</div><div class="sales-kpi-value fw-semibold text-danger"><?= esc((string) ($receivableSummary['overdue'] ?? 0)) ?></div></div></div></div>
+    <div class="col-md-3"><div class="card border-0 shadow-sm rounded-4"><div class="card-body"><div class="small text-secondary">Recibos emitidos</div><div class="sales-kpi-value fw-semibold text-success"><?= esc((string) ($receivableSummary['receipts_count'] ?? 0)) ?></div></div></div></div>
 </div>
 
 <div class="row g-4">
@@ -56,7 +56,7 @@
                     </div>
                 </div>
                 <div class="table-responsive">
-                    <table class="table align-middle mb-0" id="receivables-table" data-codex-pagination="10">
+                    <table data-sales-table class="table align-middle mb-0" id="receivables-table">
                         <thead><tr><th>Comprobante</th><th>Cliente</th><th>Vencimiento</th><th>Total</th><th>Cobrado</th><th>Saldo</th></tr></thead>
                         <tbody>
                         <?php foreach ($receivables as $receivable): ?>
@@ -98,7 +98,7 @@
             <div class="card-body p-4">
                 <h2 class="h4 mb-3">Recibos recientes</h2>
                 <div class="table-responsive">
-                    <table class="table align-middle mb-0" data-codex-pagination="10">
+                    <table data-sales-table class="table align-middle mb-0">
                         <thead><tr><th>Recibo</th><th>Cliente</th><th>Metodo</th><th>Total</th><th>Estado</th><th></th></tr></thead>
                         <tbody>
                         <?php foreach ($receipts as $receipt): ?>
@@ -145,28 +145,15 @@
         </div>
     </div>
 </div>
-<script>
-(() => {
-    const filter = document.getElementById('receivable-customer-filter');
-    if (!filter) return;
-    filter.addEventListener('change', () => {
-        const selected = filter.value;
-        document.querySelectorAll('#receivables-table tbody tr').forEach(row => {
-            if (!selected || row.dataset.customer === selected) {
-                row.style.display = '';
-            } else {
-                row.style.display = 'none';
-            }
-        });
-    });
-})();
-</script>
+
 <?php if (! empty($pendingPayments)): ?>
 <section class="card mt-4"><div class="card-body"><h2 class="h5">Transferencias de ventas pendientes de verificación</h2>
-<div class="table-responsive"><table class="table" data-codex-pagination="5"><thead><tr><th>Venta</th><th>Importe</th><th>Referencia</th><th>Verificación</th></tr></thead><tbody>
+<div class="table-responsive"><table data-sales-table class="table"><thead><tr><th>Venta</th><th>Importe</th><th>Referencia</th><th>Verificación</th></tr></thead><tbody>
 <?php foreach ($pendingPayments as $payment): ?><tr><td><?= esc($payment['sale_number']) ?></td><td><?= esc(number_format($payment['amount'], 2, ',', '.') . ' ' . $payment['currency_code']) ?></td><td><?= esc($payment['external_reference'] ?: $payment['reference']) ?></td><td>
 <form method="post" action="<?= site_url('ventas/' . $payment['sale_id'] . '/pagos/' . $payment['id'] . '/confirmar?company_id=' . $selectedCompanyId) ?>" class="d-flex gap-2"><?= csrf_field() ?><input name="confirmation_note" class="form-control" aria-label="Evidencia de verificación" placeholder="Evidencia de verificación" required maxlength="500"><button class="btn btn-outline-success icon-btn" title="Confirmar transferencia" aria-label="Confirmar transferencia"><i class="bi bi-check2-circle"></i></button></form>
 </td></tr><?php endforeach; ?>
 </tbody></table></div></div></section>
 <?php endif; ?>
+</div>
+<?= view('sales/ui_end') ?>
 <?= $this->endSection() ?>

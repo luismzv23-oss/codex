@@ -1,23 +1,30 @@
 <?= $this->extend('layouts/app') ?>
 
 <?= $this->section('content') ?>
-<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+<?php $salesLive = true; ?>
+<?= view('sales/ui_start', get_defined_vars()) ?>
+<?php if (!(($isPopup ?? false) || service('request')->getGet('popup') === '1')): ?>
+<header class="insight-hero sales-hero">
     <div>
-        <h1 class="h2 mb-1">Configuracion de Ventas</h1>
-        <p class="text-secondary mb-0">Perfil Argentina ARCA, monedas habilitadas, modos de facturacion y servicios disponibles.</p>
+        <div class="insight-eyebrow"><span class="insight-orbit"></span> CODEX / VENTAS</div><h1 class="h2 mb-1">Configuracion de Ventas</h1>
+        <p class="text-secondary mb-0">Perfil Argentina ARCA, monedas habilitadas, modos de facturacion y servicios disponibles.</p><div class="insight-identity"><i class="bi bi-bag-check" aria-hidden="true"></i><span>Gestión comercial · <?= esc($context['company']['name']) ?></span></div>
     </div>
-    <div class="d-flex flex-wrap gap-2">
+    <div class="sales-hero-actions"><button type="button" class="btn btn-outline-dark icon-btn" data-sales-refresh title="Actualizar resumen" aria-label="Actualizar resumen"><i class="bi bi-arrow-clockwise"></i></button>
         <form method="post" action="<?= site_url('ventas/arca/diagnostico' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="d-inline">
             <?= csrf_field() ?>
-            <button class="btn btn-outline-primary">Diagnosticar certificados</button>
+            <button class="btn btn-outline-primary" title="Diagnosticar certificados" aria-label="Diagnosticar certificados"><i class="bi bi-shield-check"></i></button>
         </form>
         <form method="post" action="<?= site_url('ventas/arca/test' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="d-inline">
             <?= csrf_field() ?>
-            <button class="btn btn-outline-dark">Probar ARCA</button>
+            <button class="btn btn-outline-dark" title="Probar ARCA" aria-label="Probar ARCA"><i class="bi bi-plug"></i></button>
         </form>
-        <a href="<?= site_url('ventas/configuracion/editar' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-dark" data-popup="true" data-popup-title="Configuracion de Ventas" data-popup-subtitle="Ajustar perfil comercial y ARCA.">Editar</a>
+        <a href="<?= site_url('ventas/configuracion/editar' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-dark" data-popup="true" data-popup-title="Configuracion de Ventas" data-popup-subtitle="Ajustar perfil comercial y ARCA." title="Editar" aria-label="Editar"><i class="bi bi-pencil"></i></a>
     </div>
-</div>
+</header>
+<?php endif; ?>
+<form method="get" action="<?= site_url('ventas/configuracion') ?>" class="insight-filters sales-filters"><label>Empresa activa<select name="company_id" class="form-select"><?php foreach (($companies ?: [$context['company']]) as $option): ?><option value="<?= esc($option['id']) ?>" <?= $selectedCompanyId === $option['id'] ? 'selected' : '' ?>><?= esc($option['name']) ?></option><?php endforeach; ?></select></label><button class="btn insight-action" title="Aplicar empresa" aria-label="Aplicar empresa"><i class="bi bi-arrow-repeat"></i></button></form>
+<div id="sales-status" role="status" aria-live="polite" class="small text-secondary mb-2"></div>
+<div id="sales-content">
 
 <div class="row g-4">
     <!-- Interactive Search Toolbar with Company Filter -->
@@ -26,14 +33,7 @@
             <div class="card-body p-3 d-flex align-items-center justify-content-between gap-3">
                 <div class="d-flex align-items-center gap-3 flex-grow-1">
                     <?php if (! empty($companies)): ?>
-                        <form method="get" action="<?= site_url('ventas/configuracion') ?>" class="d-flex align-items-center gap-2 mb-0">
-                            <select name="company_id" class="form-select bg-white" style="width: auto; min-width: 200px;">
-                                <?php foreach ($companies as $company): ?>
-                                    <option value="<?= esc($company['id']) ?>" <?= $selectedCompanyId === $company['id'] ? 'selected' : '' ?>><?= esc($company['name']) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                            <button type="submit" class="btn btn-outline-dark icon-btn bg-white flex-shrink-0" title="Cambiar empresa" aria-label="Cambiar empresa"><i class="bi bi-arrow-repeat"></i></button>
-                        </form>
+
                     <?php endif; ?>
                     <div class="input-group flex-grow-1" style="max-width: 420px;">
                         <span class="input-group-text bg-white border-end-0 text-secondary"><i class="bi bi-search"></i></span>
@@ -54,7 +54,7 @@
                     <h2 class="h4 mb-1">Readiness fiscal</h2>
                     <p class="text-secondary mb-0"><?= esc($arcaReadiness['summary'] ?? 'Sin resumen fiscal.') ?></p>
                 </div>
-                <div class="display-6 fw-semibold <?= ! empty($arcaReadiness['ready']) ? 'text-success' : 'text-warning' ?>"><?= esc((string) ($arcaReadiness['progress'] ?? 0)) ?>%</div>
+                <div class="sales-kpi-value fw-semibold <?= ! empty($arcaReadiness['ready']) ? 'text-success' : 'text-warning' ?>"><?= esc((string) ($arcaReadiness['progress'] ?? 0)) ?>%</div>
             </div>
             <div class="row g-3 mt-1">
                 <?php foreach (($arcaReadiness['checks'] ?? []) as $check): ?>
@@ -229,7 +229,7 @@
         <div class="card border-0 shadow-sm rounded-4 h-100"><div class="card-body p-4">
             <h2 class="h4 mb-3">Bitacora de hardware</h2>
             <div class="table-responsive">
-                <table class="table align-middle mb-0" id="hardware-logs-table">
+                <table data-sales-table class="table align-middle mb-0" id="hardware-logs-table">
                     <thead><tr><th>Fecha</th><th>Canal</th><th>Evento</th><th>Estado</th></tr></thead>
                     <tbody>
                         <?php foreach ($hardwareLogs as $log): ?>
@@ -251,7 +251,7 @@
         <div class="card border-0 shadow-sm rounded-4"><div class="card-body p-4">
             <h2 class="h4 mb-3">Eventos ARCA recientes</h2>
             <div class="table-responsive">
-                <table class="table align-middle mb-0" id="arca-events-table">
+                <table data-sales-table class="table align-middle mb-0" id="arca-events-table">
                     <thead><tr><th>Fecha</th><th>Evento</th><th>Servicio</th><th>Comprobante</th><th>Estado</th><th>Mensaje</th></tr></thead>
                     <tbody>
                         <?php foreach ($arcaEvents as $event): ?>
@@ -273,195 +273,7 @@
     </div>
 </div>
 
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-    class PaginatedList {
-        constructor(containerId, isTable, pageSize, searchInputId) {
-            this.container = document.getElementById(containerId);
-            if (!this.container) return;
-            this.isTable = isTable;
-            this.pageSize = pageSize;
-            this.currentPage = 1;
 
-            if (this.isTable) {
-                this.tbody = this.container.tBodies[0];
-                if (!this.tbody) return;
-                this.allRows = Array.from(this.tbody.querySelectorAll('tr.data-row'));
-                this.noResultsRow = this.tbody.querySelector('tr.no-results-row');
-                this.noDataRow = this.tbody.querySelector('tr.no-data-row');
-                this.parentWrapper = this.container.closest('.table-responsive');
-            } else {
-                this.allRows = Array.from(this.container.querySelectorAll('.data-item'));
-                this.noResultsRow = this.container.querySelector('.no-results-row');
-                this.noDataRow = this.container.querySelector('.no-data-row');
-                this.parentWrapper = this.container;
-            }
-
-            // Create pagination wrapper
-            this.paginationWrapper = document.createElement('div');
-            this.paginationWrapper.className = 'codex-pagination mt-3';
-            this.parentWrapper.after(this.paginationWrapper);
-
-            // Listen for input search
-            const searchInput = document.getElementById(searchInputId);
-            if (searchInput) {
-                searchInput.addEventListener('input', () => {
-                    this.currentPage = 1;
-                    this.update();
-                });
-            }
-
-            this.update();
-        }
-
-        update() {
-            const query = document.getElementById('salesSearchInput')?.value.toLowerCase().trim() || '';
-            
-            if (this.allRows.length === 0) {
-                if (this.noDataRow) this.noDataRow.style.display = '';
-                if (this.noResultsRow) this.noResultsRow.style.display = 'none';
-                this.paginationWrapper.innerHTML = '';
-                return;
-            }
-
-            let matchedRows = [];
-
-            this.allRows.forEach(row => {
-                let matches = false;
-                if (!query) {
-                    matches = true;
-                } else {
-                    const text = row.textContent.toLowerCase();
-                    matches = text.includes(query);
-                }
-
-                if (matches) {
-                    row.style.display = this.isTable ? '' : 'block';
-                    matchedRows.push(row);
-                } else {
-                    row.style.display = 'none';
-                }
-            });
-
-            const totalCount = matchedRows.length;
-            if (totalCount === 0) {
-                if (this.noResultsRow) this.noResultsRow.style.display = this.isTable ? '' : 'block';
-                if (this.noDataRow) this.noDataRow.style.display = 'none';
-                this.paginationWrapper.innerHTML = '';
-            } else {
-                if (this.noResultsRow) this.noResultsRow.style.display = 'none';
-                if (this.noDataRow) this.noDataRow.style.display = 'none';
-
-                const pageCount = Math.ceil(totalCount / this.pageSize);
-                if (this.currentPage > pageCount) {
-                    this.currentPage = Math.max(1, pageCount);
-                }
-
-                const startIndex = (this.currentPage - 1) * this.pageSize;
-                const endIndex = startIndex + this.pageSize;
-
-                matchedRows.forEach((row, index) => {
-                    if (index >= startIndex && index < endIndex) {
-                        row.style.display = this.isTable ? '' : 'block';
-                    } else {
-                        row.style.display = 'none';
-                    }
-                });
-
-                this.renderPagination(totalCount, pageCount);
-            }
-        }
-
-        renderPagination(totalCount, pageCount) {
-            this.paginationWrapper.innerHTML = '';
-            if (pageCount <= 1) {
-                const summary = document.createElement('div');
-                summary.className = 'codex-pagination__summary';
-                summary.textContent = `Mostrando 1-${totalCount} de ${totalCount} registros`;
-                this.paginationWrapper.appendChild(summary);
-                return;
-            }
-
-            const summary = document.createElement('div');
-            summary.className = 'codex-pagination__summary';
-            const startIndex = (this.currentPage - 1) * this.pageSize;
-            const endIndex = Math.min(startIndex + this.pageSize, totalCount);
-            summary.textContent = `Mostrando ${startIndex + 1}-${endIndex} de ${totalCount} registros`;
-
-            const controls = document.createElement('div');
-            controls.className = 'codex-pagination__controls';
-
-            const prev = document.createElement('button');
-            prev.type = 'button';
-            prev.className = 'codex-pagination__btn';
-            prev.innerHTML = '<i class="bi bi-chevron-left"></i>';
-            prev.disabled = this.currentPage === 1;
-            prev.addEventListener('click', () => {
-                if (this.currentPage > 1) {
-                    this.currentPage--;
-                    this.update();
-                }
-            });
-
-            const pages = document.createElement('div');
-            pages.className = 'codex-pagination__pages';
-
-            const startPage = Math.max(1, this.currentPage - 2);
-            const endPage = Math.min(pageCount, this.currentPage + 2);
-
-            for (let p = startPage; p <= endPage; p++) {
-                const btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = `codex-pagination__btn${p === this.currentPage ? ' is-active' : ''}`;
-                btn.textContent = String(p);
-                btn.addEventListener('click', () => {
-                    this.currentPage = p;
-                    this.update();
-                });
-                pages.appendChild(btn);
-            }
-
-            const next = document.createElement('button');
-            next.type = 'button';
-            next.className = 'codex-pagination__btn';
-            next.innerHTML = '<i class="bi bi-chevron-right"></i>';
-            next.disabled = this.currentPage === pageCount;
-            next.addEventListener('click', () => {
-                if (this.currentPage < pageCount) {
-                    this.currentPage++;
-                    this.update();
-                }
-            });
-
-            controls.appendChild(prev);
-            controls.appendChild(pages);
-            controls.appendChild(next);
-
-            this.paginationWrapper.appendChild(summary);
-            this.paginationWrapper.appendChild(controls);
-        }
-    }
-
-    // Initialize Paginated Lists & Tables
-    new PaginatedList('document-types-list', false, 5, 'salesSearchInput');
-    new PaginatedList('points-of-sale-list', false, 5, 'salesSearchInput');
-    new PaginatedList('devices-list', false, 5, 'salesSearchInput');
-    new PaginatedList('hardware-logs-table', true, 5, 'salesSearchInput');
-    new PaginatedList('arca-events-table', true, 5, 'salesSearchInput');
-
-    // Clear search handler
-    const clearBtn = document.getElementById('clearSalesSearchBtn');
-    const searchInput = document.getElementById('salesSearchInput');
-    if (clearBtn && searchInput) {
-        searchInput.addEventListener('input', () => {
-            clearBtn.style.display = searchInput.value ? 'block' : 'none';
-        });
-        clearBtn.addEventListener('click', () => {
-            searchInput.value = '';
-            clearBtn.style.display = 'none';
-            searchInput.dispatchEvent(new Event('input'));
-        });
-    }
-});
-</script>
+</div>
+<?= view('sales/ui_end') ?>
 <?= $this->endSection() ?>

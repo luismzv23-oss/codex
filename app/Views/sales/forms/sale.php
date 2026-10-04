@@ -6,8 +6,11 @@ $selectedCompanyId = $selectedCompanyId ?? '';
 <?= $this->extend('layouts/app') ?>
 
 <?= $this->section('content') ?>
+<?php $salesLive = false; ?>
+<?= view('sales/ui_start', get_defined_vars()) ?>
 <script src="<?= base_url('assets/js/sale-receipt-window.js') ?>"></script>
-<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+<?php if (!(($isPopup ?? false) || service('request')->getGet('popup') === '1')): ?>
+<header class="insight-hero sales-hero">
     <div>
         <h1 class="h2 mb-1"><?= empty($sale) ? 'Venta nueva' : 'Editar venta' ?></h1>
         <p class="text-secondary mb-0">Crea el borrador, selecciona productos con stock.</p>
@@ -32,7 +35,8 @@ $selectedCompanyId = $selectedCompanyId ?? '';
         <?php endif; ?>
         <a href="<?= site_url('ventas/clientes/nuevo' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Cliente" data-popup-subtitle="Alta rapida de cliente para ventas." title="Nuevo cliente" aria-label="Nuevo cliente"><i class="bi bi-person-plus"></i></a>
     </div>
-</div>
+</header>
+<?php endif; ?>
 <?php
 $sale = $sale ?? null;
 $saleItems = $saleItems ?? [];
@@ -885,4 +889,5 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
     updateArcaCheckbox();
 })();
 </script>
+<?= view('sales/ui_end') ?>
 <?= $this->endSection() ?>

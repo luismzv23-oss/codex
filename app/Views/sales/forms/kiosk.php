@@ -1,5 +1,7 @@
 <?= $this->extend('layouts/app') ?>
 <?= $this->section('content') ?>
+<?php $salesLive = false; ?>
+<?= view('sales/ui_start', get_defined_vars()) ?>
 <?php
 $consumerFinalId = '';
 foreach (($customers ?? []) as $c) {
@@ -23,7 +25,8 @@ $productCatalog = array_values(array_map(static function (array $product): array
 ?>
 <div id="codex-kiosk-toast" class="codex-kiosk-toast"><i class="bi bi-check-circle-fill"></i><span></span></div>
 
-<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-2">
+<?php if (!(($isPopup ?? false) || service('request')->getGet('popup') === '1')): ?>
+<header class="insight-hero sales-hero">
     <div class="d-flex align-items-center gap-3">
         <h1 class="h2 mb-0">Facturacion kiosco</h1>
         <?php if (!empty($cashSession)): ?>
@@ -50,7 +53,8 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 class="bi bi-arrow-left"></i></a>
 
     </div>
-</div>
+</header>
+<?php endif; ?>
 <p class="text-secondary mb-4">Pantalla continua de emision rapida · Escanea codigo de barras o busca por nombre
     · <kbd>F2</kbd> Cobrar · <kbd>F4</kbd> Cancelar · <kbd>F5</kbd> Imprimir</p>
 
@@ -1103,4 +1107,5 @@ $productCatalog = array_values(array_map(static function (array $product): array
         focusProductSearch();
     })();
 </script>
+<?= view('sales/ui_end') ?>
 <?= $this->endSection() ?>

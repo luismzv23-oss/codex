@@ -1,5 +1,7 @@
 <?= $this->extend('layouts/app') ?>
 <?= $this->section('content') ?>
+<?php $salesLive = false; ?>
+<?= view('sales/ui_start', get_defined_vars()) ?>
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div><h2 class="h5 mb-0">Nuevo Presupuesto</h2><p class="text-secondary mb-0 small">Crea un presupuesto y luego convertilo en pedido o factura.</p></div>
 </div>
@@ -123,4 +125,5 @@ function calcQuote() {
 }
 addQuoteLine();
 </script>
+<?= view('sales/ui_end') ?>
 <?= $this->endSection() ?>

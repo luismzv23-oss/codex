@@ -225,6 +225,8 @@ class CashController extends BaseApiController
             return $this->fail('Debes seleccionar una sesion y un medio.', 422);
         }
 
+        $ownedSession = $this->cashService()->ownedSession($context['company']['id'], $sessionId);
+        if (!$ownedSession || $ownedSession['status'] !== 'open') return $this->fail('Debes seleccionar una sesion abierta propia.', 403);
         $id = $this->cashService()->createReconciliation([
             'company_id' => $context['company']['id'],
             'cash_session_id' => $sessionId,
@@ -284,7 +286,7 @@ class CashController extends BaseApiController
 
     private function cashService(): CashService
     {
-        return new CashService();
+        return new CashService(($this->apiUser()['role_slug'] ?? '') === 'vendedor' ? (string) ($this->apiUser()['id'] ?? '') : null);
     }
 
     public function endorseCheck(string $id)

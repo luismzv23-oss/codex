@@ -367,7 +367,7 @@ class SalesController extends BaseApiController
         if (isset($context['error'])) { return $this->fail($context['error'], $context['status']); }
         try {
             $payload = $this->payload();
-            $applied = (new \App\Libraries\SalesCollectionService())->confirm($context['company']['id'], $id, $this->apiUser()['id'], trim((string) ($payload['confirmation_note'] ?? '')));
+            $applied = (new \App\Libraries\SalesCollectionService(null, new CashService(($this->apiUser()['role_slug'] ?? '') === 'vendedor' ? (string) ($this->apiUser()['id'] ?? '') : null)))->confirm($context['company']['id'], $id, $this->apiUser()['id'], trim((string) ($payload['confirmation_note'] ?? '')));
             if ($applied) { $receipt = (new SalesReceiptModel())->find($id); \App\Libraries\EventBus::emit('sale.payment_received', ['company_id' => $context['company']['id'], 'payment' => ['amount' => $receipt['total_amount']], 'receipt_id' => $id]); }
             return $this->success(['receipt_id' => $id, 'ok' => true]);
         } catch (\Throwable $e) { return $this->fail($e->getMessage(), 422); }
@@ -379,7 +379,7 @@ class SalesController extends BaseApiController
         if (isset($context['error'])) { return $this->fail($context['error'], $context['status']); }
         try {
             $payload = $this->payload();
-            (new \App\Libraries\SalesCollectionService())->reverse($context['company']['id'], $id, $this->apiUser()['id'], trim((string) ($payload['reason'] ?? '')));
+            (new \App\Libraries\SalesCollectionService(null, new CashService(($this->apiUser()['role_slug'] ?? '') === 'vendedor' ? (string) ($this->apiUser()['id'] ?? '') : null)))->reverse($context['company']['id'], $id, $this->apiUser()['id'], trim((string) ($payload['reason'] ?? '')));
             return $this->success(['receipt_id' => $id, 'ok' => true]);
         } catch (\Throwable $e) { return $this->fail($e->getMessage(), 422); }
     }
@@ -390,7 +390,7 @@ class SalesController extends BaseApiController
         if (isset($context['error'])) { return $this->fail($context['error'], $context['status']); }
         try {
             $payload = $this->payload();
-            (new \App\Libraries\SalesCollectionService())->confirmSalePayment($context['company']['id'], $saleId, $paymentId, $this->apiUser()['id'], trim((string) ($payload['confirmation_note'] ?? '')));
+            (new \App\Libraries\SalesCollectionService(null, new CashService(($this->apiUser()['role_slug'] ?? '') === 'vendedor' ? (string) ($this->apiUser()['id'] ?? '') : null)))->confirmSalePayment($context['company']['id'], $saleId, $paymentId, $this->apiUser()['id'], trim((string) ($payload['confirmation_note'] ?? '')));
             return $this->success(['payment_id' => $paymentId, 'status' => 'confirmed']);
         } catch (\Throwable $e) { return $this->fail($e->getMessage(), 422); }
     }
@@ -403,7 +403,7 @@ class SalesController extends BaseApiController
         try {
             $payload = $this->payload();
 
-            $receipt = (new \App\Libraries\SalesCollectionService())->create($companyId, $this->apiUser()['id'], $payload,
+            $receipt = (new \App\Libraries\SalesCollectionService(null, new CashService(($this->apiUser()['role_slug'] ?? '') === 'vendedor' ? (string) ($this->apiUser()['id'] ?? '') : null)))->create($companyId, $this->apiUser()['id'], $payload,
                 fn() => $this->nextSequenceNumber($companyId, 'RECIBO', 'REC'));
             if ($receipt['status'] === 'applied') { \App\Libraries\EventBus::emit('sale.payment_received', ['company_id' => $companyId, 'payment' => ['amount' => $receipt['total_amount']], 'receipt_id' => $receipt['id']]); }
             return $this->success($receipt, 201);
@@ -1960,7 +1960,7 @@ class SalesController extends BaseApiController
 
     private function resolveCashSession(string $companyId, string $channel): ?array
     {
-        $service = new CashService();
+        $service = new CashService(($this->apiUser()['role_slug'] ?? '') === 'vendedor' ? (string) ($this->apiUser()['id'] ?? '') : null);
         $service->ensureDefaults($companyId, $this->apiUser()['branch_id'] ?? null);
 
         $session = $service->activeSessionForChannel($companyId, $channel);
@@ -1984,7 +1984,7 @@ class SalesController extends BaseApiController
             return;
         }
 
-        $service = new CashService();
+        $service = new CashService(($this->apiUser()['role_slug'] ?? '') === 'vendedor' ? (string) ($this->apiUser()['id'] ?? '') : null);
         foreach ($this->salePayments($saleId) as $payment) {
             if (! \App\Libraries\PaymentIntegrityService::settled($payment)) { continue; }
             $service->registerMovement([

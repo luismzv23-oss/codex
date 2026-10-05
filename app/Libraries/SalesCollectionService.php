@@ -127,7 +127,7 @@ class SalesCollectionService
             $query->where('id', $active['id']);
         }
         $candidate = $query->get()->getRowArray();
-        if (! $candidate) { throw new RuntimeException('Abre una sesión de la caja original para registrar el reverso.'); }
+        if (! $candidate || !$this->cash->ownedSession($companyId, $candidate['id'])) { throw new RuntimeException('Abre una sesión de la caja original para registrar el reverso.'); }
         $session = $this->lock('cash_sessions', $candidate['id'], $companyId);
         if ($session['status'] !== 'open') { throw new RuntimeException('La sesión ya no está abierta.'); }
         return $session;

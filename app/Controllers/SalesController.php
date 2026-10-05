@@ -170,7 +170,7 @@ class SalesController extends BaseController
             'companyId' => $companyId,
             'isPopup' => false,
             'cashSession' => $cashSession,
-            'activeSessions' => (new CashService())->activeSessions($companyId),
+            'activeSessions' => (new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null))->activeSessions($companyId),
             'selectedRegisterId' => session()->get('active_cash_register_id') ?? '',
         ]);
 
@@ -396,7 +396,7 @@ class SalesController extends BaseController
         if ($context instanceof RedirectResponse) { return $context; }
         try {
             $payload = (array) $this->request->getPost();
-            $applied = (new \App\Libraries\SalesCollectionService())->confirm($context['company']['id'], $id, $this->currentUser()['id'], trim((string) ($payload['confirmation_note'] ?? '')));
+            $applied = (new \App\Libraries\SalesCollectionService(null, new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null)))->confirm($context['company']['id'], $id, $this->currentUser()['id'], trim((string) ($payload['confirmation_note'] ?? '')));
             if ($applied) { $receipt = (new SalesReceiptModel())->find($id); \App\Libraries\EventBus::emit('sale.payment_received', ['company_id' => $context['company']['id'], 'payment' => ['amount' => $receipt['total_amount']], 'receipt_id' => $id]); }
             return $this->popupOrRedirect($this->salesRoute('ventas/cobranzas', $context['company']['id']), 'Operación registrada correctamente.');
         } catch (\Throwable $e) { return redirect()->back()->withInput()->with('error', $e->getMessage()); }
@@ -408,7 +408,7 @@ class SalesController extends BaseController
         if ($context instanceof RedirectResponse) { return $context; }
         try {
             $payload = (array) $this->request->getPost();
-            (new \App\Libraries\SalesCollectionService())->confirmSalePayment($context['company']['id'], $saleId, $paymentId, $this->currentUser()['id'], trim((string) ($payload['confirmation_note'] ?? '')));
+            (new \App\Libraries\SalesCollectionService(null, new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null)))->confirmSalePayment($context['company']['id'], $saleId, $paymentId, $this->currentUser()['id'], trim((string) ($payload['confirmation_note'] ?? '')));
             return redirect()->to($this->salesRoute('ventas/cobranzas', $context['company']['id']))->with('message', 'Transferencia verificada.');
         } catch (\Throwable $e) { return redirect()->back()->withInput()->with('error', $e->getMessage()); }
     }
@@ -424,7 +424,7 @@ class SalesController extends BaseController
             foreach ((array) ($payload['items_receivable_id'] ?? []) as $i => $id) {
                 $payload['items'][] = ['receivable_id' => $id, 'applied_amount' => $payload['items_applied_amount'][$i] ?? 0];
             }
-            $receipt = (new \App\Libraries\SalesCollectionService())->create($companyId, $this->currentUser()['id'], $payload,
+            $receipt = (new \App\Libraries\SalesCollectionService(null, new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null)))->create($companyId, $this->currentUser()['id'], $payload,
                 fn() => $this->nextSequenceNumber($companyId, 'RECIBO', 'REC'));
             if ($receipt['status'] === 'applied') { \App\Libraries\EventBus::emit('sale.payment_received', ['company_id' => $companyId, 'payment' => ['amount' => $receipt['total_amount']], 'receipt_id' => $receipt['id']]); }
             return $this->popupOrRedirect($this->salesRoute('ventas/cobranzas', $companyId), $receipt['status'] === 'pending' ? 'Recibo pendiente: verifica la transferencia para aplicar sus importes.' : 'Cobro aplicado correctamente.');
@@ -473,7 +473,7 @@ class SalesController extends BaseController
         if ($context instanceof RedirectResponse) { return $context; }
         try {
             $payload = (array) $this->request->getPost();
-            (new \App\Libraries\SalesCollectionService())->reverse($context['company']['id'], $id, $this->currentUser()['id'], trim((string) ($payload['reason'] ?? '')));
+            (new \App\Libraries\SalesCollectionService(null, new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null)))->reverse($context['company']['id'], $id, $this->currentUser()['id'], trim((string) ($payload['reason'] ?? '')));
             return $this->popupOrRedirect($this->salesRoute('ventas/cobranzas', $context['company']['id']), 'Operación registrada correctamente.');
         } catch (\Throwable $e) { return redirect()->back()->withInput()->with('error', $e->getMessage()); }
     }
@@ -1596,7 +1596,7 @@ class SalesController extends BaseController
             'sourceSale' => $sourceSale,
             'fromOrder' => $fromOrder,
             'fromOrderItems' => $fromOrderItems,
-            'activeSessions' => (new CashService())->activeSessions($companyId),
+            'activeSessions' => (new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null))->activeSessions($companyId),
             'selectedRegisterId' => session()->get('active_cash_register_id') ?? '',
         ]);
 
@@ -1696,7 +1696,7 @@ class SalesController extends BaseController
             'companyId' => $context['company']['id'],
             'isPopup' => $this->isPopupRequest(),
             'sourceSale' => !empty($sale['source_sale_id']) ? $this->ownedSale($context['company']['id'], (string) $sale['source_sale_id']) : null,
-            'activeSessions' => (new CashService())->activeSessions($context['company']['id']),
+            'activeSessions' => (new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null))->activeSessions($context['company']['id']),
             'selectedRegisterId' => session()->get('active_cash_register_id') ?? '',
         ]);
 
@@ -3404,10 +3404,10 @@ class SalesController extends BaseController
 
         $cashSession = null;
         if ($cashRegisterId !== '') {
-            $cashSession = (new CashService())->activeSessions($companyId, $cashRegisterId)[0] ?? null;
+            $cashSession = (new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null))->activeSessions($companyId, $cashRegisterId)[0] ?? null;
         }
         if (!$cashSession) {
-            $cashSession = (new CashService())->activeSessionForChannel($companyId, $channel);
+            $cashSession = (new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null))->activeSessionForChannel($companyId, $channel);
         }
 
         return [
@@ -4112,7 +4112,7 @@ class SalesController extends BaseController
 
     private function resolveCashSession(string $companyId, string $channel): ?array
     {
-        $service = new CashService();
+        $service = new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null);
         $service->ensureDefaults($companyId, $this->currentUser()['branch_id'] ?? null);
 
         $session = $service->activeSessionForChannel($companyId, $channel);
@@ -4136,7 +4136,7 @@ class SalesController extends BaseController
             return;
         }
 
-        $service = new CashService();
+        $service = new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null);
         foreach ($this->salePayments($saleId) as $payment) {
             if (! \App\Libraries\PaymentIntegrityService::settled($payment)) { continue; }
             $service->registerMovement([
@@ -4255,11 +4255,12 @@ class SalesController extends BaseController
 
             $session = null;
             if (!empty($sale['cash_session_id'])) {
-                $session = $sessionModel->where('status', 'open')->find($sale['cash_session_id']);
+                $session = (new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null))->ownedSession($companyId, $sale['cash_session_id']);
+                if (($session['status'] ?? '') !== 'open') $session = null;
             }
 
             if (!$session) {
-                $service = new CashService();
+                $service = new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null);
                 $regId = $sale['cash_register_id'] ?: session()->get('active_cash_register_id');
                 if ($regId) {
                     $session = $service->activeSessions($companyId, $regId)[0] ?? null;

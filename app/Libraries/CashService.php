@@ -14,6 +14,21 @@ use App\Models\CashSessionModel;
 
 class CashService
 {
+    private ?string $ownerId = null;
+
+    public function __construct(?string $ownerId = null)
+    {
+        $this->ownerId = $ownerId;
+    }
+
+    private function scopeSessions($query, string $column)
+    {
+        if ($this->ownerId !== null) {
+            $query->whereIn($column, db_connect()->table('cash_sessions')->select('id')->where('opened_by', $this->ownerId));
+        }
+        return $query;
+    }
+
     public function ensureDefaults(string $companyId, ?string $branchId = null): void
     {
         $registerModel = new CashRegisterModel();
@@ -57,7 +72,13 @@ class CashService
 
     public function registerRows(string $companyId): array
     {
-        return (new CashRegisterModel())->where('company_id', $companyId)->orderBy('register_type', 'ASC')->orderBy('name', 'ASC')->findAll();
+        $rows = (new CashRegisterModel())->where('company_id', $companyId)->orderBy('register_type', 'ASC')->orderBy('name', 'ASC')->findAll();
+        if ($this->ownerId === null) return $rows;
+        $own = array_column($this->activeSessions($companyId), 'cash_register_id');
+        $occupied = array_column((new CashSessionModel())->where('company_id', $companyId)->where('status', 'open')->findAll(), 'cash_register_id');
+        return array_values(array_filter($rows, static fn($row) => $own
+            ? in_array($row['id'], $own, true)
+            : (int) $row['active'] === 1 && !in_array($row['id'], $occupied, true)));
     }
 
 
@@ -73,6 +94,7 @@ class CashService
             $query->where('cs.cash_register_id', $cashRegisterId);
         }
 
+        $this->scopeSessions($query, 'cs.id');
         return $query->orderBy('cs.opened_at', 'DESC')
             ->get()
             ->getResultArray();
@@ -84,7 +106,7 @@ class CashService
             ->select('cs.*, cr.name AS register_name, cr.code AS register_code, cr.register_type')
             ->join('cash_registers cr', 'cr.id = cs.cash_register_id')
             ->where('cs.company_id', $companyId)
-            ->where('cs.id = (SELECT cs2.id FROM cash_sessions cs2 WHERE cs2.cash_register_id = cs.cash_register_id ORDER BY cs2.opened_at DESC LIMIT 1)', null, false);
+            ->where('cs.id = (SELECT cs2.id FROM ' . db_connect()->prefixTable('cash_sessions') . ' cs2 WHERE cs2.cash_register_id = cs.cash_register_id ORDER BY cs2.opened_at DESC LIMIT 1)', null, false);
 
         if ($cashRegisterId !== null && $cashRegisterId !== '' && $cashRegisterId !== []) {
             if (is_array($cashRegisterId)) {
@@ -94,6 +116,7 @@ class CashService
             }
         }
 
+        $this->scopeSessions($query, 'cs.id');
         return $query->orderBy('cs.opened_at', 'DESC')
             ->limit($limit)
             ->get()
@@ -118,6 +141,7 @@ class CashService
             }
         }
 
+        $this->scopeSessions($query, 'cm.cash_session_id');
         return $query->orderBy('cm.occurred_at', 'DESC')
             ->limit($limit)
             ->get()
@@ -126,6 +150,18 @@ class CashService
 
     public function summary(string $companyId, ?string $cashRegisterId = null): array
     {
+        if ($this->ownerId !== null) {
+            $registerIds = array_column($this->activeSessions($companyId, $cashRegisterId), 'cash_register_id');
+            $data = (new CashDashboard())->load($companyId, $registerIds, date('Y-m-d'), date('Y-m-d'), $this->ownerId);
+            $pending = db_connect()->table('cash_reconciliations')->where('company_id', $companyId)->where('status', 'pending');
+            $this->scopeSessions($pending, 'cash_session_id');
+            return [
+                'registers'=>count($registerIds), 'sessions_open'=>$data['open'],
+                'today_income'=>$data['income'], 'today_expense'=>$data['expense'], 'today_balance'=>$data['net'],
+                'checks_portfolio'=>(new CashCheckModel())->where('company_id', $companyId)->where('created_by', $this->ownerId)->whereIn('status', ['portfolio', 'received'])->countAllResults(),
+                'reconciliations_pending'=>$pending->countAllResults(),
+            ];
+        }
         $registerModel = new CashRegisterModel();
         $sessionModel = new CashSessionModel();
         $movementModel = new CashMovementModel();
@@ -180,6 +216,7 @@ class CashService
             }
         }
 
+        $this->scopeSessions($query, 'cash_session_id');
         return $query->groupBy('payment_method')
             ->orderBy('payment_method', 'ASC')
             ->get()
@@ -198,12 +235,13 @@ class CashService
 
     public function checkRows(string $companyId, int $limit = 20): array
     {
-        return db_connect()->table('cash_checks cc')
+        $query = db_connect()->table('cash_checks cc')
             ->select('cc.*, s.name AS supplier_name, c.name AS customer_name')
             ->join('suppliers s', 's.id = cc.supplier_id', 'left')
             ->join('customers c', 'c.id = cc.customer_id', 'left')
-            ->where('cc.company_id', $companyId)
-            ->orderBy('cc.created_at', 'DESC')
+            ->where('cc.company_id', $companyId);
+        if ($this->ownerId !== null) $query->where('cc.created_by', $this->ownerId);
+        return $query->orderBy('cc.created_at', 'DESC')
             ->limit($limit)
             ->get()
             ->getResultArray();
@@ -211,12 +249,13 @@ class CashService
 
     public function reconciliationRows(string $companyId, int $limit = 20): array
     {
-        return db_connect()->table('cash_reconciliations cr')
+        $query = db_connect()->table('cash_reconciliations cr')
             ->select('cr.*, cs.opened_at, reg.name AS register_name')
             ->join('cash_sessions cs', 'cs.id = cr.cash_session_id')
             ->join('cash_registers reg', 'reg.id = cs.cash_register_id')
-            ->where('cr.company_id', $companyId)
-            ->orderBy('cr.created_at', 'DESC')
+            ->where('cr.company_id', $companyId);
+        $this->scopeSessions($query, 'cs.id');
+        return $query->orderBy('cr.created_at', 'DESC')
             ->limit($limit)
             ->get()
             ->getResultArray();
@@ -242,6 +281,8 @@ class CashService
 
     public function createReconciliation(array $data): ?string
     {
+        $session = $this->ownedSession((string) $data['company_id'], (string) $data['cash_session_id']);
+        if (!$session || $session['status'] !== 'open') throw new \RuntimeException('Debes seleccionar una sesion abierta propia.');
         $expected = round((float) ($data['expected_amount'] ?? 0), 2);
         $actual = round((float) ($data['actual_amount'] ?? 0), 2);
         return (new CashReconciliationModel())->insert([
@@ -269,21 +310,15 @@ class CashService
             ->where('cs.status', 'open')
             ->where('cr.active', 1);
 
-        if ($activeRegisterId !== null && $activeRegisterId !== '') {
-            $regSessionQuery = clone $query;
-            $regSession = $regSessionQuery->where('cs.cash_register_id', $activeRegisterId)
-                ->orderBy('cs.opened_at', 'DESC')
-                ->get()
-                ->getRowArray();
-            if ($regSession) {
-                return $regSession;
-            }
-        }
+        $this->scopeSessions($query, 'cs.id');
 
         $rows = $query->orderBy('cs.opened_at', 'DESC')
             ->get()
             ->getResultArray();
 
+        foreach ($rows as $row) {
+            if ($activeRegisterId && $row['cash_register_id'] === $activeRegisterId) return $row;
+        }
         foreach ($rows as $row) {
             if (($row['register_type'] ?? '') === $channel) {
                 return $row;
@@ -302,6 +337,7 @@ class CashService
     public function openSession(string $companyId, string $registerId, string $userId, float $openingAmount, ?string $notes = null): ?string
     {
         $sessionModel = new CashSessionModel();
+        if ($this->ownerId !== null && ($userId !== $this->ownerId || $this->activeSessions($companyId) !== [])) return null;
         if ($sessionModel->where('company_id', $companyId)->where('cash_register_id', $registerId)->where('status', 'open')->first()) {
             return null;
         }
@@ -419,6 +455,7 @@ class CashService
     public function ownedSession(string $companyId, string $sessionId, ?string $userId = null): ?array
     {
         $query = clone (new CashSessionModel())->where('company_id', $companyId)->where('id', $sessionId);
+        if ($this->ownerId !== null) $query->where('opened_by', $this->ownerId);
         if ($userId !== null) {
             $query->where('opened_by', $userId);
         }
@@ -433,6 +470,7 @@ class CashService
      */
     public function autoOpenKioskSession(string $companyId, string $userId, ?string $branchId = null): ?array
     {
+        if ($this->ownerId !== null) return $this->activeSessionForChannel($companyId, 'kiosk');
         $registerModel = new CashRegisterModel();
 
         // 1. Find or create the CAJA-KIOSCO register
@@ -513,12 +551,13 @@ class CashService
     {
         $checkModel = new CashCheckModel();
         $check = $checkModel->where('company_id', $companyId)->find($checkId);
+        if ($this->ownerId !== null && ($check['created_by'] ?? null) !== $this->ownerId) return false;
         if (!$check || !in_array($check['status'], ['portfolio', 'received'], true)) {
             return false;
         }
 
-        $session = (new CashSessionModel())->where('company_id', $companyId)->where('status', 'open')->find($sessionId);
-        if (!$session) {
+        $session = $this->ownedSession($companyId, $sessionId);
+        if (!$session || $session['status'] !== 'open') {
             return false;
         }
 
@@ -554,12 +593,13 @@ class CashService
     {
         $checkModel = new CashCheckModel();
         $check = $checkModel->where('company_id', $companyId)->find($checkId);
+        if ($this->ownerId !== null && ($check['created_by'] ?? null) !== $this->ownerId) return false;
         if (!$check || !in_array($check['status'], ['portfolio', 'received'], true)) {
             return false;
         }
 
-        $session = (new CashSessionModel())->where('company_id', $companyId)->where('status', 'open')->find($sessionId);
-        if (!$session) {
+        $session = $this->ownedSession($companyId, $sessionId);
+        if (!$session || $session['status'] !== 'open') {
             return false;
         }
 
@@ -594,12 +634,13 @@ class CashService
     {
         $checkModel = new CashCheckModel();
         $check = $checkModel->where('company_id', $companyId)->find($checkId);
+        if ($this->ownerId !== null && ($check['created_by'] ?? null) !== $this->ownerId) return false;
         if (!$check || !in_array($check['status'], ['deposited', 'endorsed'], true)) {
             return false;
         }
 
-        $session = (new CashSessionModel())->where('company_id', $companyId)->where('status', 'open')->find($sessionId);
-        if (!$session) {
+        $session = $this->ownedSession($companyId, $sessionId);
+        if (!$session || $session['status'] !== 'open') {
             return false;
         }
 

@@ -17,11 +17,15 @@ final class CashDashboard
         return [$from, $to];
     }
 
-    public function load(string $company, array $registerIds, string $from, string $to): array
+    public function load(string $company, array $registerIds, string $from, string $to, ?string $ownerId = null): array
     {
         $db = db_connect();
-        $scope = static function ($query) use ($company, $registerIds) {
+        $scope = static function ($query, bool $sessions = false) use ($company, $registerIds, $ownerId, $db) {
             $query->where('company_id', $company);
+            if ($ownerId !== null) {
+                if ($sessions) $query->where('opened_by', $ownerId);
+                else $query->whereIn('cash_session_id', $db->table('cash_sessions')->select('id')->where('company_id', $company)->where('opened_by', $ownerId));
+            }
             return $registerIds ? $query->whereIn('cash_register_id', $registerIds) : $query->where('1 = 0', null, false);
         };
         $movements = $scope($db->table('cash_movements'))
@@ -38,7 +42,7 @@ final class CashDashboard
         }
         arsort($data['methods']);
         $data['net'] = round($data['income'] - $data['expense'], 2);
-        $data['open'] = $scope($db->table('cash_sessions'))->where('status', 'open')->countAllResults();
+        $data['open'] = $scope($db->table('cash_sessions'), true)->where('status', 'open')->countAllResults();
         return $data;
     }
 }

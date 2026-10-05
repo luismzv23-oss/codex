@@ -26,6 +26,10 @@
         </div>
     </header>
 
+    <?php if ((auth_user()['role_slug'] ?? '') === 'vendedor' && empty($hasAnyOpenSessionByMe)): ?>
+        <div class="alert alert-info">No tienes una caja abierta. Selecciona una caja disponible y pulsa <strong>Abrir caja</strong> para comenzar a operar.</div>
+    <?php endif; ?>
+
     <form id="cash-dashboard-filters" method="get" action="<?= site_url('caja') ?>" class="insight-filters">
         <?php if (! empty($companies)): ?>
             <label>

@@ -1,4 +1,7 @@
 .sales-shell{min-width:0}
+.sales-shell .sales-portal-actions .btn{color:#fff;font-weight:600}
+.sales-shell .sales-portal-actions .btn:hover,.sales-shell .sales-portal-actions .btn:focus-visible,.sales-shell .sales-portal-actions .btn:active{color:#fff}
+.sales-shell .sales-portal-actions .btn i{color:inherit}
 .sales-hero-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-left:auto;flex-shrink:0}
 .sales-shell .sales-hero-actions [aria-current=page]{background:#ffffff20;border-color:#c1c9ed;color:#fff}
 .sales-hero-actions .icon-btn{flex-shrink:0}

@@ -12,6 +12,7 @@
     <?= view('sales/banner_actions', get_defined_vars()) ?>
 </header>
 <?php endif; ?>
+<?php if (!$isVendedorAccess): ?>
 <form method="get" action="<?= site_url('ventas') ?>" class="insight-filters sales-filters">
             <div class="sales-company-filter"><label class="form-label">Empresa activa</label><select name="company_id" class="form-select"><?php foreach (($companies ?: [$context['company']]) as $option): ?><option value="<?= esc($option['id']) ?>" <?= $selectedCompanyId === $option['id'] ? 'selected' : '' ?>><?= esc($option['name']) ?></option><?php endforeach; ?></select></div>
             <div class="col-md-3">
@@ -48,6 +49,7 @@
                     href="<?= site_url('ventas' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
                     class="btn btn-outline-dark w-100" title="Limpiar filtros" aria-label="Limpiar filtros"><i class="bi bi-x-lg"></i></a></div>
         </form>
+<?php endif; ?>
 <div id="sales-status" role="status" aria-live="polite" class="small text-secondary mb-2"></div>
 <div id="sales-content">
 
@@ -59,7 +61,7 @@
             <p class="text-secondary mx-auto mb-4" style="max-width: 500px;">
                 Selecciona <strong>POS</strong> para registrar ventas tradicionales con facturación y métodos de pago complejos, o selecciona <strong>Kiosco</strong> para ventas de mostrador de alta velocidad.
             </p>
-            <div class="d-flex justify-content-center gap-3">
+            <div class="sales-portal-actions d-flex justify-content-center gap-3 flex-wrap">
                 <a href="<?= site_url('ventas/pos' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-primary btn-lg px-4"><i class="bi bi-display me-2"></i> Entrar a POS</a>
                 <a href="<?= site_url('ventas/kiosco' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-dark btn-lg px-4"><i class="bi bi-shop me-2"></i> Entrar a Kiosco</a>
             </div>

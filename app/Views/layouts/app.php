@@ -51,7 +51,7 @@ if (auth_check() && !$isPopup) {
                     ? '?company_id=' . $reqCompanyId
                     : '';
                 $entryHref = site_url($baseHref . $companyQuery);
-                
+
                 $switcherSystems[] = [
                     'name' => $row['name'],
                     'slug' => $row['slug'],
@@ -59,6 +59,16 @@ if (auth_check() && !$isPopup) {
                     'icon' => $row['icon'] ?: 'bi-grid',
                 ];
             }
+        }
+
+        $hasOpenCashSession = false;
+        $cashCompanyId = auth_user()['company_id'] ?? '';
+        if ($userId && $cashCompanyId) {
+            $hasOpenCashSession = $db->table('cash_sessions')
+                ->where('company_id', $cashCompanyId)
+                ->where('opened_by', $userId)
+                ->where('status', 'open')
+                ->countAllResults() > 0;
         }
     }
 }
@@ -255,7 +265,11 @@ if (auth_check() && !$isPopup) {
                             <div class="fw-semibold"><?= esc(auth_user()['name'] ?? '') ?></div>
                             <div class="text-secondary"><?= esc(auth_user()['role_name'] ?? '') ?></div>
                         </div>
-                        <a href="<?= site_url('logout') ?>" class="btn btn-outline-dark btn-sm">Salir</a>
+                        <?php if (!empty($hasOpenCashSession)): ?>
+                            <button type="button" class="btn btn-outline-dark btn-sm" data-bs-toggle="modal" data-bs-target="#openCashModal">Salir</button>
+                        <?php else: ?>
+                            <a href="<?= site_url('logout') ?>" class="btn btn-outline-dark btn-sm">Salir</a>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -577,6 +591,32 @@ if (auth_check() && !$isPopup) {
             })();
         </script>
         <script src="<?= base_url('assets/js/codex-assist-widget.js') ?>" defer></script>
+    <?php endif; ?>
+
+    <?php if (!$isPopup && !empty($hasOpenCashSession)): ?>
+    <div class="modal fade" id="openCashModal" tabindex="-1" aria-labelledby="openCashModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4 border-0 shadow-lg">
+                <div class="modal-header border-0 pb-0">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-exclamation-triangle-fill text-warning fs-4"></i>
+                        <h5 class="modal-title fw-bold" id="openCashModalLabel">Caja abierta</h5>
+                    </div>
+                </div>
+                <div class="modal-body">
+                    <p>Tenés una sesión de caja abierta. Se recomienda cerrarla antes de salir del sistema.</p>
+                    <p class="text-secondary small mb-0">Si salís sin cerrar, el turno quedará abierto hasta que un operador lo cierre manualmente.</p>
+                </div>
+                <div class="modal-footer border-0 pt-0 gap-2">
+                    <a href="<?= site_url('caja') ?>" class="btn btn-dark">
+                        <i class="bi bi-box-arrow-down me-1"></i>Ir a cerrar caja
+                    </a>
+                    <a href="<?= site_url('logout') ?>" class="btn btn-outline-danger">Salir de todas formas</a>
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                </div>
+            </div>
+        </div>
+    </div>
     <?php endif; ?>
 </body>
 </html>

@@ -87,9 +87,18 @@ class CashController extends BaseController
             $filterRegisterId = array_column($registers, 'id');
         }
 
-        $sessions = $service->recentSessions($companyId, 20, $filterRegisterId);
+        $vendorFilter = trim((string) $this->request->getGet('vendor_id'));
+        $sessions = $service->recentSessions($companyId, 100, $filterRegisterId, $vendorFilter ?: null);
         $movements = $service->recentMovements($companyId, 20, $filterRegisterId);
         $paymentMethods = $service->paymentMethodBreakdown($companyId, $filterRegisterId);
+
+        $sessionVendors = db_connect()->table('cash_sessions cs')
+            ->select('u.id, u.name')
+            ->join('users u', 'u.id = cs.opened_by')
+            ->where('cs.company_id', $companyId)
+            ->groupBy('u.id, u.name')
+            ->orderBy('u.name', 'ASC')
+            ->get()->getResultArray();
 
         return view('cash/index', [
             'pageTitle' => 'Caja y Tesoreria',
@@ -107,6 +116,8 @@ class CashController extends BaseController
             'gateways' => $service->gatewayRows($companyId),
             'checks' => $service->checkRows($companyId),
             'reconciliations' => $service->reconciliationRows($companyId),
+            'sessionVendors' => $sessionVendors,
+            'selectedVendorId' => $vendorFilter,
         ]);
     }
 
@@ -114,7 +125,7 @@ class CashController extends BaseController
 
     public function openSessionForm()
     {
-        $context = $this->cashContext('manage');
+        $context = $this->cashContext('view');
         if ($context instanceof RedirectResponse) {
             return $context;
         }
@@ -143,7 +154,7 @@ class CashController extends BaseController
 
     public function storeOpenSession()
     {
-        $context = $this->cashContext('manage');
+        $context = $this->cashContext('view');
         if ($context instanceof RedirectResponse) {
             return $context;
         }
@@ -185,7 +196,7 @@ class CashController extends BaseController
 
     public function closeSessionForm(string $id)
     {
-        $context = $this->cashContext('manage');
+        $context = $this->cashContext('view');
         if ($context instanceof RedirectResponse) {
             return $context;
         }
@@ -218,7 +229,7 @@ class CashController extends BaseController
 
     public function storeCloseSession(string $id)
     {
-        $context = $this->cashContext('manage');
+        $context = $this->cashContext('view');
         if ($context instanceof RedirectResponse) {
             return $context;
         }
@@ -778,6 +789,63 @@ class CashController extends BaseController
         ];
 
         return $this->renderPdf('cash/pdf/session', $data, 'reporte_caja_' . $session['id'] . '.pdf');
+    }
+
+    public function sessionDetail(string $sessionId)
+    {
+        $context = $this->cashContext('view');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+
+        $sessionModel = new CashSessionModel();
+        $session = $sessionModel->where('company_id', $context['company']['id'])->find($sessionId);
+        if (!$session) {
+            return redirect()->to($this->cashRoute('caja', $context['company']['id']))->with('error', 'La sesión de caja no existe.');
+        }
+
+        $register = (new CashRegisterModel())->find($session['cash_register_id']);
+        $company = (new CompanyModel())->find($session['company_id']);
+
+        $userModel = new UserModel();
+        $openedBy = $userModel->find($session['opened_by']);
+        $closedBy = $session['closed_by'] ? $userModel->find($session['closed_by']) : null;
+
+        $sales = db_connect()->table('sales s')
+            ->select('s.*, c.name AS customer_name, dt.name AS document_name')
+            ->join('customers c', 'c.id = s.customer_id', 'left')
+            ->join('sales_document_types dt', 'dt.id = s.document_type_id', 'left')
+            ->where('s.cash_session_id', $sessionId)
+            ->whereIn('s.status', ['confirmed', 'returned_partial', 'returned_total'])
+            ->orderBy('s.created_at', 'ASC')
+            ->get()->getResultArray();
+
+        $movements = db_connect()->table('cash_movements cm')
+            ->select('cm.*, g.name AS gateway_name, sp.sale_id')
+            ->join('cash_payment_gateways g', 'g.id = cm.gateway_id', 'left')
+            ->join('sale_payments sp', 'sp.id = cm.reference_id AND cm.reference_type = \'sale_payment\'', 'left')
+            ->where('cm.cash_session_id', $sessionId)
+            ->orderBy('cm.occurred_at', 'ASC')
+            ->get()->getResultArray();
+
+        $paymentMethods = db_connect()->table('cash_movements')
+            ->select('payment_method, SUM(amount) AS total')
+            ->where('cash_session_id', $sessionId)
+            ->groupBy('payment_method')
+            ->get()->getResultArray();
+
+        return view('cash/session_detail', [
+            'pageTitle' => 'Detalle de sesión de caja',
+            'session' => $session,
+            'register' => $register,
+            'company' => $company,
+            'openedBy' => $openedBy,
+            'closedBy' => $closedBy,
+            'sales' => $sales,
+            'movements' => $movements,
+            'paymentMethods' => $paymentMethods,
+            'selectedCompanyId' => $context['company']['id'],
+        ]);
     }
 
     private function renderPdf(string $view, array $data, string $filename)

@@ -64,8 +64,9 @@ class CashService
     public function activeSessions(string $companyId, ?string $cashRegisterId = null): array
     {
         $query = db_connect()->table('cash_sessions cs')
-            ->select('cs.*, cr.name AS register_name, cr.code AS register_code, cr.register_type')
+            ->select('cs.*, cr.name AS register_name, cr.code AS register_code, cr.register_type, u.name AS opened_by_name')
             ->join('cash_registers cr', 'cr.id = cs.cash_register_id')
+            ->join('users u', 'u.id = cs.opened_by', 'left')
             ->where('cs.company_id', $companyId)
             ->where('cs.status', 'open');
 
@@ -78,13 +79,17 @@ class CashService
             ->getResultArray();
     }
 
-    public function recentSessions(string $companyId, int $limit = 20, $cashRegisterId = null): array
+    public function recentSessions(string $companyId, int $limit = 100, $cashRegisterId = null, ?string $userId = null): array
     {
         $query = db_connect()->table('cash_sessions cs')
-            ->select('cs.*, cr.name AS register_name, cr.code AS register_code, cr.register_type')
+            ->select('cs.*, cr.name AS register_name, cr.code AS register_code, cr.register_type, u.name AS opened_by_name')
             ->join('cash_registers cr', 'cr.id = cs.cash_register_id')
-            ->where('cs.company_id', $companyId)
-            ->where('cs.id = (SELECT cs2.id FROM cash_sessions cs2 WHERE cs2.cash_register_id = cs.cash_register_id ORDER BY cs2.opened_at DESC LIMIT 1)', null, false);
+            ->join('users u', 'u.id = cs.opened_by', 'left')
+            ->where('cs.company_id', $companyId);
+
+        if ($userId !== null) {
+            $query->where('cs.opened_by', $userId);
+        }
 
         if ($cashRegisterId !== null && $cashRegisterId !== '' && $cashRegisterId !== []) {
             if (is_array($cashRegisterId)) {
@@ -104,10 +109,11 @@ class CashService
     public function recentMovements(string $companyId, int $limit = 20, $cashRegisterId = null): array
     {
         $query = db_connect()->table('cash_movements cm')
-            ->select('cm.*, cr.name AS register_name, g.name AS gateway_name, ch.check_number')
+            ->select('cm.*, cr.name AS register_name, g.name AS gateway_name, ch.check_number, sp.sale_id')
             ->join('cash_registers cr', 'cr.id = cm.cash_register_id')
             ->join('cash_payment_gateways g', 'g.id = cm.gateway_id', 'left')
             ->join('cash_checks ch', 'ch.id = cm.cash_check_id', 'left')
+            ->join('sale_payments sp', 'sp.id = cm.reference_id AND cm.reference_type = \'sale_payment\'', 'left')
             ->where('cm.company_id', $companyId);
 
         if ($cashRegisterId !== null && $cashRegisterId !== '' && $cashRegisterId !== []) {

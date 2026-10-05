@@ -9,7 +9,9 @@
         <div class="insight-eyebrow"><span class="insight-orbit"></span> CODEX / VENTAS</div><h1 class="h2 mb-1">Cobranzas</h1>
         <p class="text-secondary mb-0">Cuenta corriente, saldos por cobrar y recibos aplicados a ventas.</p><div class="insight-identity"><i class="bi bi-bag-check" aria-hidden="true"></i><span>Gestión comercial · <?= esc($context['company']['name']) ?></span></div>
     </div>
-    <div class="sales-hero-actions"><button type="button" class="btn btn-outline-dark icon-btn" data-sales-refresh title="Actualizar resumen" aria-label="Actualizar resumen"><i class="bi bi-arrow-clockwise"></i></button>
+    <?= view('sales/banner_actions', get_defined_vars()) ?>
+</header>
+<div class="sales-page-tools d-flex justify-content-end flex-wrap gap-2 mb-3">
         <?php if (! empty($companies)): ?>
 
         <?php endif; ?>
@@ -18,7 +20,6 @@
         <?php endif; ?>
         <a href="<?= site_url('ventas' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" title="Volver a ventas" aria-label="Volver a ventas"><i class="bi bi-arrow-left"></i></a>
     </div>
-</header>
 <?php endif; ?>
 <form method="get" class="insight-filters sales-filters"><div class="sales-company-filter"><label class="form-label">Empresa activa</label><select name="company_id" class="form-select"><?php foreach (($companies ?: [$context['company']]) as $option): ?><option value="<?= esc($option['id']) ?>" <?= $selectedCompanyId === $option['id'] ? 'selected' : '' ?>><?= esc($option['name']) ?></option><?php endforeach; ?></select></div><button class="btn insight-action" title="Aplicar empresa" aria-label="Aplicar empresa"><i class="bi bi-arrow-repeat"></i></button></form>
 <div id="sales-status" role="status" aria-live="polite" class="small text-secondary mb-2"></div>

@@ -9,12 +9,9 @@
         <div class="insight-eyebrow"><span class="insight-orbit"></span> CODEX / VENTAS</div><h1 class="h2 mb-1">Reportes de ventas</h1>
         <p class="text-secondary mb-0">Indicadores comerciales, top productos, clientes y trazabilidad con inventario.</p><div class="insight-identity"><i class="bi bi-bag-check" aria-hidden="true"></i><span>Gestión comercial · <?= esc($context['company']['name']) ?></span></div>
     </div>
-    <div class="sales-hero-actions"><button type="button" class="btn btn-outline-dark icon-btn" data-sales-refresh title="Actualizar resumen" aria-label="Actualizar resumen"><i class="bi bi-arrow-clockwise"></i></button>
-        <a href="<?= site_url('ventas/reportes/csv' . (! empty($companies) ? '?company_id=' . $selectedCompanyId . '&date_from=' . ($filters['date_from'] ?? '') . '&date_to=' . ($filters['date_to'] ?? '') : '')) ?>" class="btn btn-outline-success icon-btn" title="Exportar CSV" aria-label="Exportar CSV"><i class="bi bi-filetype-csv"></i></a>
-        <a href="<?= site_url('ventas/reportes/pdf' . (! empty($companies) ? '?company_id=' . $selectedCompanyId . '&date_from=' . ($filters['date_from'] ?? '') . '&date_to=' . ($filters['date_to'] ?? '') : '')) ?>" class="btn btn-outline-danger icon-btn" target="_blank" title="Exportar PDF" aria-label="Exportar PDF"><i class="bi bi-file-earmark-pdf"></i></a>
-        <a href="<?= site_url('ventas' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" title="Volver a ventas" aria-label="Volver a ventas"><i class="bi bi-arrow-left"></i></a>
-    </div>
+    <?= view('sales/banner_actions', array_merge(get_defined_vars(), ['salesReportExports' => true])) ?>
 </header>
+
 <?php endif; ?>
 <form method="get" action="<?= site_url('ventas/reportes') ?>" class="insight-filters sales-filters">
             <div class="sales-company-filter"><label class="form-label">Empresa activa</label><select name="company_id" class="form-select"><?php foreach (($companies ?: [$context['company']]) as $option): ?><option value="<?= esc($option['id']) ?>" <?= $selectedCompanyId === $option['id'] ? 'selected' : '' ?>><?= esc($option['name']) ?></option><?php endforeach; ?></select></div>

@@ -42,17 +42,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
             </span>
         <?php endif; ?>
     </div>
-    <div class="d-flex align-items-center gap-2">
-        <a href="<?= site_url('ventas/pos' . (!empty($companyId) ? '?company_id=' . $companyId : '')) ?>"
-            class="btn btn-outline-dark icon-btn" title="Venta POS" aria-label="Venta POS"><i
-                class="bi bi-display"></i></a>
-        <a href="<?= site_url('ventas/kiosco' . (!empty($companyId) ? '?company_id=' . $companyId : '')) ?>"
-            class="btn btn-dark icon-btn" title="Venta kiosco" aria-label="Venta kiosco"><i class="bi bi-shop"></i></a>
-        <a href="<?= site_url('ventas' . (!empty($companyId) ? '?company_id=' . $companyId : '')) ?>"
-            class="btn btn-outline-dark icon-btn" title="Volver a Ventas" aria-label="Volver a Ventas"><i
-                class="bi bi-arrow-left"></i></a>
-
-    </div>
+    <?= view('sales/banner_actions', get_defined_vars()) ?>
 </header>
 <?php endif; ?>
 <p class="text-secondary mb-4">Pantalla continua de emision rapida · Escanea codigo de barras o busca por nombre

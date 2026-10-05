@@ -983,6 +983,7 @@ class SalesController extends BaseController
         }
 
         return view('sales/forms/kiosk', [
+            'context' => $context,
             'pageTitle' => 'Ticket Kiosco',
             'paymentDiscounts' => (new SalesDiscountPolicyModel())->where('company_id', $companyId)->where('policy_type', 'payment_method_discount')->where('active', 1)->orderBy('discount_rate', 'DESC')->findAll(),
             'paymentMethods' => (new \App\Models\CompanyPaymentMethodModel())->where('company_id', $companyId)->where('active', 1)->orderBy('name', 'ASC')->findAll(),

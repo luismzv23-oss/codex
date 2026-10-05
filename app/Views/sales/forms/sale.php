@@ -15,8 +15,9 @@ $selectedCompanyId = $selectedCompanyId ?? '';
         <h1 class="h2 mb-1"><?= empty($sale) ? 'Venta nueva' : 'Editar venta' ?></h1>
         <p class="text-secondary mb-0">Crea el borrador, selecciona productos con stock.</p>
     </div>
-    <div class="d-flex flex-wrap gap-2">
-        <?php if (! empty($companies)): ?>
+    <?= view('sales/banner_actions', get_defined_vars()) ?>
+</header>
+<div class="sales-page-tools mb-3"><?php if (! empty($companies)): ?>
             <form method="get" action="<?= site_url('ventas') ?>" class="d-flex gap-2">
                 <select name="company_id" class="form-select">
                     <?php foreach ($companies as $company): ?>
@@ -25,17 +26,7 @@ $selectedCompanyId = $selectedCompanyId ?? '';
                 </select>
                 <button class="btn btn-outline-dark icon-btn" title="Cambiar empresa" aria-label="Cambiar empresa"><i class="bi bi-arrow-repeat"></i></button>
             </form>
-        <?php endif; ?>
-        <a href="<?= site_url('ventas/reportes' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" title="Reportes" aria-label="Reportes"><i class="bi bi-graph-up-arrow"></i></a>
-        <?php if ($context['canManage']): ?>
-            <a href="<?= site_url('ventas/pos' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-dark icon-btn" title="POS" aria-label="POS"><i class="bi bi-display"></i></a>
-            <a href="<?= site_url('ventas/kiosco' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" title="Kiosco" aria-label="Kiosco"><i class="bi bi-shop"></i></a>
-            <a href="<?= site_url('ventas/listas-precio/nueva' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Lista de precios" data-popup-subtitle="Configurar precios comerciales por producto." title="Lista de precios" aria-label="Lista de precios"><i class="bi bi-tags"></i></a>
-            <a href="<?= site_url('ventas/promociones/nueva' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Promocion" data-popup-subtitle="Crear promociones comerciales activas." title="Promociones" aria-label="Promociones"><i class="bi bi-percent"></i></a>
-        <?php endif; ?>
-        <a href="<?= site_url('ventas/clientes/nuevo' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Cliente" data-popup-subtitle="Alta rapida de cliente para ventas." title="Nuevo cliente" aria-label="Nuevo cliente"><i class="bi bi-person-plus"></i></a>
-    </div>
-</header>
+        <?php endif; ?></div>
 <?php endif; ?>
 <?php
 $sale = $sale ?? null;

@@ -51,3 +51,5 @@
 .sales-shell .d-flex{min-width:0}.sales-shell td .d-flex{flex-wrap:wrap}.sales-shell [data-sales-item]{overflow-wrap:anywhere}
 .sales-shell[data-sales-live="0"] .table-responsive{overflow:visible}.sales-shell[data-sales-live="0"] td{min-width:0!important}.sales-shell[data-sales-live="0"] th{min-width:0!important}
 @media(max-width:575px){.sales-shell .sales-list-heading{gap:12px}.sales-list-controls{gap:6px;flex-basis:52%}.sales-list-controls .sales-search{font-size:10px}.sales-list-description p{font-size:11px}.sales-list-heading h2{font-size:18px}.sales-filters>[class*=col-]{flex-basis:100%}}
+
+@media(min-width:1001px){.sales-shell .sales-hero-actions{flex-wrap:nowrap}.sales-hero-actions .icon-btn{flex-shrink:0}}

@@ -9,23 +9,7 @@
         <div class="insight-eyebrow"><span class="insight-orbit"></span> CODEX / VENTAS</div><h1 class="h2 mb-1">Diarios</h1>
         <p class="text-secondary mb-0">Todos los comprobantes, facturas y presupuestos del periodo.</p><div class="insight-identity"><i class="bi bi-bag-check" aria-hidden="true"></i><span>Gestión comercial · <?= esc($context['company']['name']) ?></span></div>
     </div>
-    <div class="sales-hero-actions"><button type="button" class="btn btn-outline-dark icon-btn" data-sales-refresh title="Actualizar resumen" aria-label="Actualizar resumen"><i class="bi bi-arrow-clockwise"></i></button>
-        <?php if (! empty($companies)): ?>
-
-        <?php endif; ?>
-        <?php if ($context['canManage']): ?>
-            <a href="<?= site_url('ventas/presupuestos/nuevo' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
-                class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Presupuesto"
-                data-popup-subtitle="Crear nuevo presupuesto comercial." title="Nuevo Presupuesto" aria-label="Nuevo Presupuesto"><i class="bi bi-file-earmark-text"></i></a>
-            <a href="<?= site_url('ventas/pedidos/nuevo' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
-                class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Pedido"
-                data-popup-subtitle="Crear nueva orden de pedido." title="Nuevo Pedido" aria-label="Nuevo Pedido"><i class="bi bi-cart-check"></i></a>
-            <a href="<?= site_url('ventas/remitos/nuevo' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
-                class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Remito"
-                data-popup-subtitle="Crear nuevo remito de entrega." title="Nuevo Remito" aria-label="Nuevo Remito"><i class="bi bi-truck"></i></a>
-        <?php endif; ?>
-        <a href="<?= site_url('ventas' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" title="Volver a ventas" aria-label="Volver a ventas"><i class="bi bi-arrow-left"></i></a>
-    </div>
+    <?= view('sales/banner_actions', get_defined_vars()) ?>
 </header>
 <?php endif; ?>
 <form method="get" action="<?= site_url('ventas/diarios') ?>" class="insight-filters sales-filters">

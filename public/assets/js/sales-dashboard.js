@@ -71,6 +71,11 @@
     }
     initialize();
     if (!live) {
+        let changed = false;
+        shell.addEventListener('input', event => {if (event.target.closest('form')) changed = true;});
+        shell.querySelector('[data-sales-refresh]')?.addEventListener('click', () => {
+            if (!changed || window.confirm('Hay datos sin guardar. ¿Deseas actualizar esta pantalla y descartarlos?')) window.location.reload();
+        });
         shell.querySelectorAll('tbody').forEach(body=>new MutationObserver(()=>labels(body.closest('table'))).observe(body,{childList:true}));
         return;
     }

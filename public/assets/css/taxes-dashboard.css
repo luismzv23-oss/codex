@@ -1,0 +1,38 @@
+.taxes-shell{min-width:0}
+.taxes-hero-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-left:auto;flex-shrink:0}
+.taxes-shell .taxes-hero-actions [aria-current=page]{background:#ffffff20;border-color:#c1c9ed;color:#fff}
+.taxes-hero-actions .icon-btn{flex-shrink:0}
+@media(max-width:575px){.taxes-hero-actions{gap:4px;flex-shrink:1;flex-wrap:wrap}.taxes-hero-actions .icon-btn{width:34px;height:34px;padding:6px}}
+.taxes-shell .card{border:1px solid var(--line)!important;border-radius:20px!important;box-shadow:none!important;min-width:0}
+.taxes-shell .card-header{background:#f6f7fc!important;color:var(--ink)!important;padding:20px 24px;border-bottom:1px solid var(--line)}
+.taxes-shell table{width:100%;table-layout:fixed;white-space:normal}
+.taxes-shell th,.taxes-shell td{padding:14px 12px;overflow-wrap:anywhere;white-space:normal;border-color:var(--line);font-size:13px}
+.taxes-shell th{background:#f7f9fc;color:var(--muted);font-size:11px;font-weight:700}
+.taxes-shell .badge{white-space:normal;line-height:1.5}
+.taxes-shell td code{color:#5d528b}
+.taxes-shell tfoot td{--bs-table-bg:#f2f3fa;--bs-table-color:var(--ink);color:var(--ink);font-weight:700}
+.taxes-shell .table-responsive{overflow:visible}
+.taxes-shell input,.taxes-shell select{max-width:100%;min-width:0}
+.taxes-shell .form-control,.taxes-shell .form-select{border-color:var(--line);border-radius:9px}
+.taxes-pager{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:16px 20px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+.taxes-pager div{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.taxes-search{display:grid;gap:6px;font-size:12px;color:var(--muted);padding:16px 20px;max-width:480px}
+.taxes-shell [hidden]{display:none!important}
+.taxes-shell .insight-hero>div{min-width:0}
+.taxes-shell .insight-hero h1{overflow-wrap:anywhere}
+@media(max-width:1100px){
+ .taxes-shell table,.taxes-shell tbody,.taxes-shell tfoot{display:block;width:100%}
+ .taxes-shell thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+ .taxes-shell tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border-bottom:1px solid var(--line);padding:10px}
+ .taxes-shell td{display:block;border:0;text-align:left!important;min-width:0}
+ .taxes-shell td:before{content:attr(data-label);display:block;color:var(--muted);font-size:10px;font-weight:700;margin-bottom:5px}
+ .taxes-shell td[colspan]{grid-column:1/-1}
+ .taxes-shell .insight-hero{flex-wrap:wrap}
+}
+@media(max-width:575px){.taxes-shell tr{grid-template-columns:1fr}.taxes-shell .insight-filters label{min-width:100%}}
+
+.taxes-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-left:auto}.taxes-shell .insight-hero{flex-wrap:wrap}
+.taxes-shell .card{scroll-margin-top:24px}.taxes-shell .taxes-list-heading{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:nowrap}
+.taxes-list-heading h2{font-size:20px;margin:0;min-width:0;flex:1}.taxes-list-controls{width:280px;max-width:45%;margin-left:auto;min-width:0}
+.taxes-list-controls .taxes-search{padding:0;margin:0}.taxes-shell .card-header{background:#fff!important}.taxes-shell td code{overflow-wrap:anywhere}
+@media(max-width:575px){.taxes-list-heading h2{font-size:17px}.taxes-shell .taxes-list-heading{gap:12px;padding:16px}.taxes-list-controls{max-width:48%}}

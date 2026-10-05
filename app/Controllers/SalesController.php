@@ -170,7 +170,7 @@ class SalesController extends BaseController
             'companyId' => $companyId,
             'isPopup' => false,
             'cashSession' => $cashSession,
-            'activeSessions' => (new CashService())->activeSessions($companyId),
+            'activeSessions' => (new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null))->activeSessions($companyId),
             'selectedRegisterId' => session()->get('active_cash_register_id') ?? '',
         ]);
 
@@ -245,7 +245,7 @@ class SalesController extends BaseController
                 $saleFresh = $this->ownedSale($companyId, $saleId);
                 $arcaResult = $this->authorizeSaleInArca($companyId, $saleFresh);
             } else {
-                $this->processArcaAfterConfirmation($companyId, $saleId);
+                $arcaResult = $this->processArcaAfterConfirmation($companyId, $saleId);
             }
             $this->recordHardwareEvent($companyId, 'pos', 'printer', 'sale_confirmed', 'ok', 'sale', $saleId, [
                 'sale_number' => $saleNumber,
@@ -256,6 +256,7 @@ class SalesController extends BaseController
                 return $this->response->setJSON([
                     'status' => 'ok',
                     'message' => 'Venta POS confirmada correctamente.',
+                    'receipt_url' => $this->salesRoute('ventas/' . $saleId . '/pdf', $companyId),
                     'sale_number' => $saleNumber,
                     'sale_id' => $saleId,
                     'arca_cae' => $arcaResult['cae'] ?? null,
@@ -395,7 +396,7 @@ class SalesController extends BaseController
         if ($context instanceof RedirectResponse) { return $context; }
         try {
             $payload = (array) $this->request->getPost();
-            $applied = (new \App\Libraries\SalesCollectionService())->confirm($context['company']['id'], $id, $this->currentUser()['id'], trim((string) ($payload['confirmation_note'] ?? '')));
+            $applied = (new \App\Libraries\SalesCollectionService(null, new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null)))->confirm($context['company']['id'], $id, $this->currentUser()['id'], trim((string) ($payload['confirmation_note'] ?? '')));
             if ($applied) { $receipt = (new SalesReceiptModel())->find($id); \App\Libraries\EventBus::emit('sale.payment_received', ['company_id' => $context['company']['id'], 'payment' => ['amount' => $receipt['total_amount']], 'receipt_id' => $id]); }
             return $this->popupOrRedirect($this->salesRoute('ventas/cobranzas', $context['company']['id']), 'Operación registrada correctamente.');
         } catch (\Throwable $e) { return redirect()->back()->withInput()->with('error', $e->getMessage()); }
@@ -407,7 +408,7 @@ class SalesController extends BaseController
         if ($context instanceof RedirectResponse) { return $context; }
         try {
             $payload = (array) $this->request->getPost();
-            (new \App\Libraries\SalesCollectionService())->confirmSalePayment($context['company']['id'], $saleId, $paymentId, $this->currentUser()['id'], trim((string) ($payload['confirmation_note'] ?? '')));
+            (new \App\Libraries\SalesCollectionService(null, new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null)))->confirmSalePayment($context['company']['id'], $saleId, $paymentId, $this->currentUser()['id'], trim((string) ($payload['confirmation_note'] ?? '')));
             return redirect()->to($this->salesRoute('ventas/cobranzas', $context['company']['id']))->with('message', 'Transferencia verificada.');
         } catch (\Throwable $e) { return redirect()->back()->withInput()->with('error', $e->getMessage()); }
     }
@@ -423,7 +424,7 @@ class SalesController extends BaseController
             foreach ((array) ($payload['items_receivable_id'] ?? []) as $i => $id) {
                 $payload['items'][] = ['receivable_id' => $id, 'applied_amount' => $payload['items_applied_amount'][$i] ?? 0];
             }
-            $receipt = (new \App\Libraries\SalesCollectionService())->create($companyId, $this->currentUser()['id'], $payload,
+            $receipt = (new \App\Libraries\SalesCollectionService(null, new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null)))->create($companyId, $this->currentUser()['id'], $payload,
                 fn() => $this->nextSequenceNumber($companyId, 'RECIBO', 'REC'));
             if ($receipt['status'] === 'applied') { \App\Libraries\EventBus::emit('sale.payment_received', ['company_id' => $companyId, 'payment' => ['amount' => $receipt['total_amount']], 'receipt_id' => $receipt['id']]); }
             return $this->popupOrRedirect($this->salesRoute('ventas/cobranzas', $companyId), $receipt['status'] === 'pending' ? 'Recibo pendiente: verifica la transferencia para aplicar sus importes.' : 'Cobro aplicado correctamente.');
@@ -472,7 +473,7 @@ class SalesController extends BaseController
         if ($context instanceof RedirectResponse) { return $context; }
         try {
             $payload = (array) $this->request->getPost();
-            (new \App\Libraries\SalesCollectionService())->reverse($context['company']['id'], $id, $this->currentUser()['id'], trim((string) ($payload['reason'] ?? '')));
+            (new \App\Libraries\SalesCollectionService(null, new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null)))->reverse($context['company']['id'], $id, $this->currentUser()['id'], trim((string) ($payload['reason'] ?? '')));
             return $this->popupOrRedirect($this->salesRoute('ventas/cobranzas', $context['company']['id']), 'Operación registrada correctamente.');
         } catch (\Throwable $e) { return redirect()->back()->withInput()->with('error', $e->getMessage()); }
     }
@@ -961,6 +962,7 @@ class SalesController extends BaseController
             'show_user' => 1,
         ];
 
+        $defaults += \App\Libraries\KioskTicketDesign::defaults();
         $ticketSettings = [];
         foreach ($defaults as $subKey => $defaultVal) {
             $kioskKey = 'ticket_kiosk_' . $subKey;
@@ -981,6 +983,7 @@ class SalesController extends BaseController
         }
 
         return view('sales/forms/kiosk', [
+            'context' => $context,
             'pageTitle' => 'Ticket Kiosco',
             'paymentDiscounts' => (new SalesDiscountPolicyModel())->where('company_id', $companyId)->where('policy_type', 'payment_method_discount')->where('active', 1)->orderBy('discount_rate', 'DESC')->findAll(),
             'paymentMethods' => (new \App\Models\CompanyPaymentMethodModel())->where('company_id', $companyId)->where('active', 1)->orderBy('name', 'ASC')->findAll(),
@@ -1094,7 +1097,7 @@ class SalesController extends BaseController
                 $saleFresh  = $this->ownedSale($companyId, $saleId);
                 $arcaResult = $this->authorizeSaleInArca($companyId, $saleFresh);
             } else {
-                $this->processArcaAfterConfirmation($companyId, $saleId);
+                $arcaResult = $this->processArcaAfterConfirmation($companyId, $saleId);
             }
             $this->recordHardwareEvent($companyId, 'kiosk', 'printer', 'sale_confirmed', 'ok', 'sale', $saleId, [
                 'sale_number' => $documentReference,
@@ -1105,6 +1108,8 @@ class SalesController extends BaseController
                 return $this->response->setJSON([
                     'status' => 'ok',
                     'message' => 'Factura kiosco registrada correctamente.',
+                    'receipt_url' => $this->salesRoute('ventas/' . $saleId . '/ticket', $companyId),
+                    'ticket_fiscal' => \App\Libraries\KioskTicketFiscal::fromResult($arcaResult),
                     'sale_number' => $documentReference,
                     'sale_id' => $saleId,
                     'arca_cae'     => $arcaResult['cae'] ?? null,
@@ -1591,7 +1596,7 @@ class SalesController extends BaseController
             'sourceSale' => $sourceSale,
             'fromOrder' => $fromOrder,
             'fromOrderItems' => $fromOrderItems,
-            'activeSessions' => (new CashService())->activeSessions($companyId),
+            'activeSessions' => (new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null))->activeSessions($companyId),
             'selectedRegisterId' => session()->get('active_cash_register_id') ?? '',
         ]);
 
@@ -1691,7 +1696,7 @@ class SalesController extends BaseController
             'companyId' => $context['company']['id'],
             'isPopup' => $this->isPopupRequest(),
             'sourceSale' => !empty($sale['source_sale_id']) ? $this->ownedSale($context['company']['id'], (string) $sale['source_sale_id']) : null,
-            'activeSessions' => (new CashService())->activeSessions($context['company']['id']),
+            'activeSessions' => (new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null))->activeSessions($context['company']['id']),
             'selectedRegisterId' => session()->get('active_cash_register_id') ?? '',
         ]);
 
@@ -2067,6 +2072,63 @@ class SalesController extends BaseController
         return $this->popupOrRedirect($this->salesRoute('ventas', $context['company']['id']), 'Devolucion registrada correctamente.');
     }
 
+    public function ticket(string $id)
+    {
+        $context = $this->salesContext('view');
+        if ($context instanceof RedirectResponse) { return $context; }
+        $companyId = $context['company']['id'];
+        $sale = $this->ownedSale($companyId, $id);
+        if (!$sale) { return $this->response->setStatusCode(404)->setBody('Venta no disponible.'); }
+        $settings = [];
+        foreach (db_connect()->table('company_settings')->where('company_id', $companyId)->like('key', 'ticket_', 'after')->get()->getResultArray() as $row) {
+            $settings[$row['key']] = $row['value'];
+        }
+        $ticketSettings = [];
+        foreach ($settings as $key=>$value) {
+            if (!str_starts_with($key, 'ticket_pos_') && !str_starts_with($key, 'ticket_kiosk_')) { $ticketSettings[$key] = $value; }
+        }
+        foreach ($settings as $key=>$value) {
+            if (str_starts_with($key, 'ticket_kiosk_')) { $ticketSettings['ticket_' . substr($key, 13)] = $value; }
+        }
+        $event = !empty($sale['arca_request_id']) ? (new SalesArcaEventModel())->where('company_id', $companyId)->where('sale_id', $id)->find($sale['arca_request_id']) : null;
+        $fiscal = \App\Libraries\KioskTicketFiscal::fromResult([
+            'status'=>$sale['arca_status'] ?? '', 'cae'=>$sale['cae'] ?? null, 'cae_due_date'=>$sale['cae_due_date'] ?? null,
+            'authorized_at'=>$sale['arca_authorized_at'] ?? null, 'environment'=>$event['environment'] ?? '',
+            'request_payload'=>json_decode($event['request_payload'] ?? '{}', true) ?: [],
+        ]);
+        $taxes = [];
+        $items = $this->saleItems($id);
+        $paymentLines = $this->salePayments($id);
+        [$sale, $items] = \App\Libraries\PaymentFiscalPolicy::forReceipt($sale, $items, $paymentLines, $fiscal);
+        foreach ($items as &$item) {
+            $item['name'] = $item['product_name'];
+            $rate = number_format((float)($item['tax_rate'] ?? 0), 2, ',', '.');
+            $taxes[$rate] = ($taxes[$rate] ?? 0) + (float)($item['tax_total'] ?? 0);
+        }
+        unset($item);
+        $payments = [];
+        foreach ($paymentLines as $line) {
+            if (($line['status'] ?? '') === 'reversed') { continue; }
+            $payments[] = ['code'=>$line['payment_method_code'] ?: $line['payment_method'],
+                'type'=>$line['payment_method'], 'status'=>$line['status'], 'total'=>(float)$line['amount'],
+                'rate'=>(float)($line['surcharge_rate'] ?? 0), 'surcharge'=>(float)($line['surcharge_amount'] ?? 0),
+                'show_on_receipt'=>(int)($line['show_on_receipt'] ?? 1)];
+        }
+        $doc = !empty($sale['document_type_id']) ? (new SalesDocumentTypeModel())->where('company_id', $companyId)->find($sale['document_type_id']) : null;
+        $creator = !empty($sale['created_by']) ? (new \App\Models\UserModel())->find($sale['created_by']) : null;
+        $data = array_merge([
+            'companyName'=>$context['company']['legal_name'] ?: $context['company']['name'], 'taxId'=>$context['company']['tax_id'] ?? '',
+            'document'=>$doc['name'] ?? $sale['document_code'], 'reference'=>$fiscal['documentNumber'] ?? $sale['sale_number'],
+            'date'=>$sale['confirmed_at'] ?? $sale['issue_date'], 'currency'=>$sale['currency_code'],
+            'customer'=>$sale['customer_name_snapshot'] ?? '', 'user'=>$creator['name'] ?? '',
+            'items'=>$items, 'payments'=>$payments, 'subtotal'=>(float)$sale['subtotal'],
+            'discount'=>(float)($sale['global_discount_total'] ?? 0), 'total'=>(float)$sale['total'],
+            'taxes'=>array_map(static fn($rate,$amount)=>['label'=>'IVA '.$rate.' %','amount'=>$amount],array_keys($taxes),array_values($taxes)),
+            'draft'=>($sale['status'] ?? '') === 'draft',
+        ], $fiscal);
+        return $this->response->setHeader('Cache-Control','no-store')->setBody(view('sales/ticket', ['ticketSettings'=>$ticketSettings,'ticketData'=>$data]));
+    }
+
     public function pdf(string $id)
     {
         $context = $this->salesContext('view');
@@ -2097,7 +2159,7 @@ class SalesController extends BaseController
             'company_address' => '',
             'company_phone' => '',
             'footer_notes' => '',
-            'paper_width' => '80mm',
+            'paper_width' => 'A4',
             'font_size' => 'medium',
             'font_family' => 'DejaVu Sans',
             'bold_top_left' => 1,
@@ -2113,6 +2175,7 @@ class SalesController extends BaseController
             'show_user' => 1,
         ];
 
+        $defaults += \App\Libraries\PosTicketDesign::defaults();
         $ticketSettings = [];
         foreach ($defaults as $subKey => $defaultVal) {
             $posKey = 'ticket_pos_' . $subKey;
@@ -2130,12 +2193,25 @@ class SalesController extends BaseController
         $creator = (new \App\Models\UserModel())->find($sale['created_by'] ?? '');
         $creatorName = $creator ? $creator['name'] : '-';
 
-        return $this->renderPdf('sales/pdf/sale', [
+        $event = !empty($sale['arca_request_id']) ? (new SalesArcaEventModel())->where('company_id', $context['company']['id'])->where('sale_id', $id)->find($sale['arca_request_id']) : null;
+        $fiscal = \App\Libraries\KioskTicketFiscal::fromResult([
+            'status'=>$sale['arca_status'] ?? '', 'cae'=>$sale['cae'] ?? null, 'cae_due_date'=>$sale['cae_due_date'] ?? null,
+            'authorized_at'=>$sale['arca_authorized_at'] ?? null, 'environment'=>$event['environment'] ?? '',
+            'request_payload'=>json_decode($event['request_payload'] ?? '{}', true) ?: [],
+        ]);
+        $paymentLines = $this->salePayments($id);
+        [$sale, $items] = \App\Libraries\PaymentFiscalPolicy::forReceipt($sale, $this->saleItems($id), $paymentLines, $fiscal);
+        return $this->renderPdf('sales/pdf/pos', [
+            'fiscal'=>$fiscal,
+            'qrDataUri'=>\App\Libraries\PosTicketDesign::qrDataUri($fiscal['qrUrl'] ?? null),
+            'documentType'=>!empty($sale['document_type_id']) ? (new SalesDocumentTypeModel())->where('company_id', $context['company']['id'])->find($sale['document_type_id']) : [],
+            'conditionName'=>!empty($sale['sales_condition_id']) ? ($db->table('sales_conditions')->where('company_id', $context['company']['id'])->where('id', $sale['sales_condition_id'])->get()->getRowArray()['name'] ?? '-') : 'Contado',
+
             'company' => $context['company'],
             'sale' => $sale,
             'customer' => $sale['customer_id'] ? (new CustomerModel())->find($sale['customer_id']) : null,
-            'items' => $this->saleItems($id),
-            'payments' => $this->salePayments($id),
+            'items' => $items,
+            'payments' => $paymentLines,
             'returns' => $this->saleReturns($id),
             'generatedAt' => date('d/m/Y H:i'),
             'ticketSettings' => $ticketSettings,
@@ -2180,10 +2256,14 @@ class SalesController extends BaseController
                 ->first();
 
             if (!$userAssignment) {
-                return redirect()->to('/sistemas')->with('error', 'Tu usuario no tiene acceso activo a Ventas.');
+                if ($this->roleSlug() === 'vendedor') {
+                    $accessLevel = 'vendedor';
+                } else {
+                    return redirect()->to('/sistemas')->with('error', 'Tu usuario no tiene acceso activo a Ventas.');
+                }
+            } else {
+                $accessLevel = $userAssignment['access_level'] ?? 'view';
             }
-
-            $accessLevel = $userAssignment['access_level'] ?? 'view';
         }
 
         $isVendedorAccess = $this->roleSlug() === 'vendedor' || $accessLevel === 'vendedor';
@@ -2193,7 +2273,7 @@ class SalesController extends BaseController
             $allowedForVendedor = [
                 'index', 'pos', 'storePos', 'kiosk', 'storeKiosk', 'posCatalog', 'productSearch',
                 'arcaDiagnostics', 'diagnoseArca', 'testArcaConnection',
-                'createCustomerForm', 'storeCustomer', 'pdf', 'convert', 'confirm', 'cancel',
+                'createCustomerForm', 'storeCustomer', 'pdf', 'ticket', 'convert', 'confirm', 'cancel',
                 'authorizeArca', 'consultArca', 'createReturnForm', 'storeReturn'
             ];
 
@@ -2223,41 +2303,7 @@ class SalesController extends BaseController
 
     private function resolveSalesCompanyId(): ?string
     {
-        $fromReq = trim((string) ($this->request->getGet('company_id') ?: $this->request->getPost('company_id')));
-        if ($fromReq !== '') {
-            $comp = (new CompanyModel())->find($fromReq);
-            if ($comp) {
-                session()->set('active_company_id', $fromReq);
-                return $fromReq;
-            }
-        }
-
-        $sessionCompanyId = session('active_company_id');
-        if ($sessionCompanyId !== null && $sessionCompanyId !== '') {
-            $comp = (new CompanyModel())->find($sessionCompanyId);
-            if ($comp) {
-                return $sessionCompanyId;
-            }
-        }
-
-        $userCompanyId = $this->companyId();
-        if ($userCompanyId !== null && $userCompanyId !== '') {
-            $comp = (new CompanyModel())->find($userCompanyId);
-            if ($comp) {
-                session()->set('active_company_id', $userCompanyId);
-                return $userCompanyId;
-            }
-        }
-
-        if ($this->isSuperadmin()) {
-            $first = (new CompanyModel())->orderBy('name', 'ASC')->first();
-            if ($first) {
-                session()->set('active_company_id', $first['id']);
-                return $first['id'];
-            }
-        }
-
-        return null;
+        return $this->resolveActiveCompanyId();
     }
 
 
@@ -3358,10 +3404,10 @@ class SalesController extends BaseController
 
         $cashSession = null;
         if ($cashRegisterId !== '') {
-            $cashSession = (new CashService())->activeSessions($companyId, $cashRegisterId)[0] ?? null;
+            $cashSession = (new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null))->activeSessions($companyId, $cashRegisterId)[0] ?? null;
         }
         if (!$cashSession) {
-            $cashSession = (new CashService())->activeSessionForChannel($companyId, $channel);
+            $cashSession = (new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null))->activeSessionForChannel($companyId, $channel);
         }
 
         return [
@@ -3842,7 +3888,11 @@ class SalesController extends BaseController
 
     private function salePayments(string $saleId): array
     {
-        return (new SalePaymentModel())->where('sale_id', $saleId)->findAll();
+        return (new SalePaymentModel())
+            ->select('sale_payments.*, COALESCE(cpm.show_on_receipt, 1) AS show_on_receipt')
+            ->join('sales s', 's.id = sale_payments.sale_id')
+            ->join('company_payment_methods cpm', 'cpm.id = sale_payments.payment_method_id AND cpm.company_id = s.company_id', 'left')
+            ->where('sale_payments.sale_id', $saleId)->findAll();
     }
 
     private function saleReturns(string $saleId): array
@@ -4062,7 +4112,7 @@ class SalesController extends BaseController
 
     private function resolveCashSession(string $companyId, string $channel): ?array
     {
-        $service = new CashService();
+        $service = new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null);
         $service->ensureDefaults($companyId, $this->currentUser()['branch_id'] ?? null);
 
         $session = $service->activeSessionForChannel($companyId, $channel);
@@ -4086,7 +4136,7 @@ class SalesController extends BaseController
             return;
         }
 
-        $service = new CashService();
+        $service = new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null);
         foreach ($this->salePayments($saleId) as $payment) {
             if (! \App\Libraries\PaymentIntegrityService::settled($payment)) { continue; }
             $service->registerMovement([
@@ -4205,11 +4255,12 @@ class SalesController extends BaseController
 
             $session = null;
             if (!empty($sale['cash_session_id'])) {
-                $session = $sessionModel->where('status', 'open')->find($sale['cash_session_id']);
+                $session = (new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null))->ownedSession($companyId, $sale['cash_session_id']);
+                if (($session['status'] ?? '') !== 'open') $session = null;
             }
 
             if (!$session) {
-                $service = new CashService();
+                $service = new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null);
                 $regId = $sale['cash_register_id'] ?: session()->get('active_cash_register_id');
                 if ($regId) {
                     $session = $service->activeSessions($companyId, $regId)[0] ?? null;
@@ -4249,7 +4300,8 @@ class SalesController extends BaseController
             $this->syncReceivableForSale($saleId);
             $this->syncCashMovementsForSale($companyId, $saleId);
             $this->syncSaleCommission($companyId, $saleId);
-            (new AccountingService())->syncSale($companyId, $saleId, $this->currentUser()['id']);
+            $accounting = (new AccountingService())->syncSale($companyId, $saleId, $this->currentUser()['id']);
+            if (!$accounting['ok']) { throw new \RuntimeException($accounting['error'] ?? 'No se pudo contabilizar la venta.'); }
 
             // Link to converted order
             $order = $db->table('sales_orders')->where('company_id', $companyId)->where('converted_to_sale_id', $saleId)->get()->getRowArray();
@@ -4527,19 +4579,19 @@ class SalesController extends BaseController
             ->getResultArray();
     }
 
-    private function processArcaAfterConfirmation(string $companyId, string $saleId): void
+    private function processArcaAfterConfirmation(string $companyId, string $saleId): array
     {
         $settings = $this->salesSettings($companyId);
         if ((int) ($settings['arca_auto_authorize'] ?? 0) !== 1) {
-            return;
+            return [];
         }
 
         $sale = $this->ownedSale($companyId, $saleId);
         if (!$sale) {
-            return;
+            return [];
         }
 
-        $this->authorizeSaleInArca($companyId, $sale);
+        return $this->authorizeSaleInArca($companyId, $sale);
     }
 
     private function authorizeSaleInArca(string $companyId, array $sale): array
@@ -4709,7 +4761,7 @@ class SalesController extends BaseController
 
         $dompdf = new Dompdf($options);
         $dompdf->loadHtml(view($view, $data));
-        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->setPaper(($data['ticketSettings']['ticket_paper_width'] ?? 'A4') === 'letter' ? 'letter' : 'A4', 'portrait');
         $dompdf->render();
 
         return $this->response

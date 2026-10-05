@@ -1,0 +1,22 @@
+{
+  "status": "ok",
+  "message": "Factura kiosco registrada correctamente.",
+  "receipt_url": "http://localhost:8080/ventas/54afb42c-201e-4fa0-ad45-198dd5b60131/ticket",
+  "ticket_fiscal": {
+    "cae": "86400944643938",
+    "qrUrl": "https://www.arca.gob.ar/fe/qr/?p=eyJ2ZXIiOjEsImZlY2hhIjoiMjAyNi0xMC0wMyIsImN1aXQiOjI3MTkxMDY4NTk0LCJwdG9WdGEiOjEsInRpcG9DbXAiOjYsIm5yb0NtcCI6NTQsImltcG9ydGUiOjg4NS43NiwibW9uZWRhIjoiUEVTIiwiY3R6IjoxLCJ0aXBvQ29kQXV0IjoiRSIsImNvZEF1dCI6ODY0MDA5NDQ2NDM5MzgsInRpcG9Eb2NSZWMiOjk5LCJucm9Eb2NSZWMiOjB9",
+    "caeDueDate": "2026-10-13",
+    "processedAt": "2026-10-03 09:56:27",
+    "testEnvironment": true,
+    "containedVat": 153.73,
+    "nationalTaxes": 0,
+    "fiscalTotal": 885.76,
+    "documentNumber": "00001-00000054",
+    "documentTypeCode": "006"
+  },
+  "sale_number": "FCB-00000005",
+  "sale_id": "54afb42c-201e-4fa0-ad45-198dd5b60131",
+  "arca_cae": "86400944643938",
+  "arca_status": "authorized",
+  "arca_message": "Comprobante autorizado. CAE: 86400944643938"
+}

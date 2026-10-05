@@ -248,31 +248,38 @@ abstract class BaseController extends Controller
 
     protected function resolveActiveCompanyId(): ?string
     {
-        $companyId = trim((string) ($this->request->getGet('company_id') ?: $this->request->getPost('company_id')));
-        if ($companyId !== '') {
-            session()->set('active_company_id', $companyId);
-            return $companyId;
-        }
-
-        $sessionCompanyId = session('active_company_id');
-        if ($sessionCompanyId !== null && $sessionCompanyId !== '') {
-            return $sessionCompanyId;
-        }
-
-        if ($this->isSuperadmin()) {
-            $company = db_connect()->table('companies')->where('active', 1)->orderBy('name', 'ASC')->get()->getRowArray();
-            if ($company) {
-                session()->set('active_company_id', $company['id']);
-                return $company['id'];
+        if (! $this->isSuperadmin()) {
+            $userCompanyId = $this->companyId();
+            if ($userCompanyId) {
+                session()->set('active_company_id', $userCompanyId);
+                return $userCompanyId;
             }
             return null;
         }
 
-        $userCompanyId = $this->companyId();
-        if ($userCompanyId) {
-            session()->set('active_company_id', $userCompanyId);
+        $companyId = trim((string) ($this->request->getGet('company_id') ?: $this->request->getPost('company_id')));
+        if ($companyId !== '') {
+            $comp = db_connect()->table('companies')->where('id', $companyId)->where('active', 1)->get()->getRowArray();
+            if ($comp) {
+                session()->set('active_company_id', $companyId);
+                return $companyId;
+            }
         }
-        return $userCompanyId;
+
+        $sessionCompanyId = session('active_company_id');
+        if ($sessionCompanyId !== null && $sessionCompanyId !== '') {
+            $comp = db_connect()->table('companies')->where('id', $sessionCompanyId)->where('active', 1)->get()->getRowArray();
+            if ($comp) {
+                return $sessionCompanyId;
+            }
+        }
+
+        $company = db_connect()->table('companies')->where('active', 1)->orderBy('name', 'ASC')->get()->getRowArray();
+        if ($company) {
+            session()->set('active_company_id', $company['id']);
+            return $company['id'];
+        }
+        return null;
     }
 
     protected function activeCompanies(): array

@@ -42,11 +42,28 @@ class AccountingController extends BaseController
             ->where('company_id', $companyId)->where('active', 1)
             ->orderBy('code')->get()->getResultArray();
         $tree = $this->accounting->chartOfAccounts($companyId);
+        $from = $this->request->getGet('from') ?: date('Y-m-01');
+        $to = $this->request->getGet('to') ?: date('Y-m-d');
+        $overview = $this->accounting->incomeStatement($companyId, $from, $to);
+        $activity = db_connect()->table('journal_entries')
+            ->select('status, COUNT(*) AS quantity, SUM(total_debit - total_credit) AS difference')
+            ->where('company_id', $companyId)->where('entry_date >=', $from)->where('entry_date <=', $to)
+            ->groupBy('status')->get()->getResultArray();
+        $overview += ['draft' => 0, 'posted' => 0, 'difference' => 0];
+        foreach ($activity as $row) {
+            if (in_array($row['status'], ['draft', 'posted'], true)) {
+                $overview[$row['status']] = (int)$row['quantity'];
+            }
+            if ($row['status'] === 'posted') $overview['difference'] = round((float)$row['difference'], 2);
+        }
+
 
         return view('accounting/index', $this->accountingViewData($ctx, [
             'pageTitle'   => 'Contabilidad',
             'accounts'    => $accounts,
             'tree'        => $tree,
+            'overview' => $overview,
+            'filters' => ['from' => $from, 'to' => $to],
         ]));
     }
 

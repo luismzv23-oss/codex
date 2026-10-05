@@ -134,6 +134,7 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     $routes->get('ventas/(:segment)/devolucion', 'SalesController::createReturnForm/$1', ['filter' => 'permission:systems.view']);
     $routes->post('ventas/(:segment)/devolucion', 'SalesController::storeReturn/$1', ['filter' => 'permission:systems.view']);
     $routes->get('ventas/(:segment)/pdf', 'SalesController::pdf/$1', ['filter' => 'permission:systems.view']);
+    $routes->get('ventas/(:segment)/ticket', 'SalesController::ticket/$1', ['filter' => 'permission:systems.view']);
     $routes->get('ventas/test-concurrencia/sequence', 'SalesController::testSequenceConcurrency');
     $routes->get('ventas/test-concurrencia/stock', 'SalesController::testStockConcurrency');
     $routes->get('compras', 'PurchasesController::index', ['filter' => 'permission:systems.view']);

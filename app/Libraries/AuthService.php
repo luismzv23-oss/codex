@@ -63,6 +63,12 @@ class AuthService
             'must_change_password' => (int) $user['must_change_password'],
             'permissions' => $this->permissionsForRole($user['role_id']),
         ]);
+
+        if (!empty($user['company_id'])) {
+            session()->set('active_company_id', $user['company_id']);
+        } else {
+            session()->remove('active_company_id');
+        }
     }
 
     public function user(): ?array
@@ -112,7 +118,7 @@ class AuthService
 
     public function logout(): void
     {
-        session()->remove('auth_user');
+        session()->remove(['auth_user', 'active_company_id']);
         session()->regenerate(true);
     }
 

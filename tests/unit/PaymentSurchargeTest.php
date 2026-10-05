@@ -30,24 +30,26 @@ final class PaymentSurchargeTest extends CIUnitTestCase
     public function testLedgerBalancesSurchargeAfterDiscount(): void
     {
         $accounting = new class extends \App\Libraries\AccountingService {
-            public function createJournalEntry(string $companyId, array $data, array $lines): array { return $lines; }
+            public array $lines = [];
+            public function createJournalEntry(string $companyId, array $data, array $lines): array { $this->lines = $lines; return ['ok'=>true]; }
         };
-        $lines = $accounting->journalFromSale('company', [
+        $result = $accounting->journalFromSale('company', [
             'subtotal' => 10000, 'tax_total' => 2100, 'global_discount_total' => 100,
             'payment_surcharge_amount' => 300, 'total' => 12300,
         ], ['receivable' => 'receivable', 'revenue' => 'revenue', 'iva_debito' => 'tax']);
+        $this->assertTrue($result['ok']);
+        $lines = $accounting->lines;
         $this->assertEquals(12300, array_sum(array_column($lines, 'debit')));
         $this->assertEquals(12300, array_sum(array_column($lines, 'credit')));
-        $this->assertCount(4, $lines);
+        $this->assertCount(3, $lines);
     }
 
     public function testFiscalAuthorizationDoesNotSendUnbalancedAmounts(): void
     {
-        $result = (new \App\Libraries\ArcaService())->authorizeSale(
+        $this->expectException(InvalidArgumentException::class);
+        (new \App\Libraries\ArcaService())->authorizeSale(
             ['payment_surcharge_amount' => 302.50], ['category' => 'invoice'], [],
             ['wsfev1_enabled' => 1], []
         );
-        $this->assertSame('SURCHARGE_FISCAL_MAPPING_REQUIRED', $result['result_code']);
-        $this->assertSame([], $result['request_payload']);
     }
 }

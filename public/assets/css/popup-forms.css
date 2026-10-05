@@ -1,0 +1,23 @@
+/* Shared presentation for the application's iframe forms. */
+.popup-card .popup-head{align-items:center;gap:16px;background:#f8f9fd;border-bottom:1px solid #e5e9f2;padding:18px 24px;color:#23304c}
+.popup-head #codex-popup-title{font-size:17px;font-weight:800}
+.popup-head #codex-popup-subtitle{font-size:12px;line-height:1.6}
+.popup-head #codex-popup-close{flex-shrink:0;border-color:#dce2ef;border-radius:10px;color:#65718a;background:#fff}
+body.popup-mode{background:#f6f8fc;color:#23304c}
+body.popup-mode .popup-shell{width:100%;max-width:1180px;padding:24px;margin:0 auto}
+body.popup-mode .popup-shell .insight-hero{display:none}
+body.popup-mode .popup-shell .card,body.popup-mode .popup-shell .insight-panel{border:1px solid #e5e9f2!important;border-radius:18px!important;box-shadow:0 5px 18px #25345006!important;background:#fff}
+body.popup-mode .popup-shell .card-body{padding:24px!important}
+body.popup-mode .popup-shell .form-label{font-size:12px;font-weight:700;color:#63718a;margin-bottom:8px}
+body.popup-mode .popup-shell .form-control,body.popup-mode .popup-shell .form-select{border:1px solid #dfe5f0;border-radius:10px;min-height:42px;font-size:13px;color:#23304c;background-color:#fcfdff;max-width:100%}
+body.popup-mode .popup-shell .form-control:focus,body.popup-mode .popup-shell .form-select:focus{border-color:#8b83c4;box-shadow:0 0 0 3px #8275cf18;background-color:#fff}
+body.popup-mode .popup-shell input[readonly]{background:#f2f4f8;color:#65718a}
+body.popup-mode .popup-shell .form-text{font-size:12px;line-height:1.6}
+body.popup-mode .popup-shell h2{font-size:20px;font-weight:800;color:#23304c;letter-spacing:-.4px}
+body.popup-mode .popup-shell .popup-form-heading{margin-bottom:20px}
+body.popup-mode .popup-shell .popup-form-heading p{font-size:13px;color:#738097;margin:0}
+body.popup-mode .popup-shell .btn{border-radius:10px}
+body.popup-mode .popup-shell .btn-dark{background:#293354;border-color:#293354}
+body.popup-mode .popup-shell .btn-dark:hover{background:#42456e;border-color:#42456e}
+body.popup-mode .popup-shell .row{--bs-gutter-y:1.25rem}
+@media(max-width:575px){body.popup-mode .popup-shell{padding:12px}body.popup-mode .popup-shell .card-body{padding:16px!important}.popup-card .popup-head{padding:14px 16px}}

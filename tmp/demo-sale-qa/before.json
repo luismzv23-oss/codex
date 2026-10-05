@@ -1,0 +1,45 @@
+{
+    "company": {
+        "id": "df935c20-4fa4-4cf3-b5be-441d124aa934",
+        "name": "Empresa Demo"
+    },
+    "settings": {
+        "arca_enabled": "1",
+        "arca_environment": "homologacion",
+        "arca_auto_authorize": "0"
+    },
+    "user": {
+        "id": "e470fa3f-c326-4b57-9b5b-e741ee20acfa",
+        "username": "vendedor",
+        "slug": "vendedor"
+    },
+    "stock": [
+        {
+            "id": "5a5e3108-a095-4ca3-8b28-d9f7455cd439",
+            "company_id": "df935c20-4fa4-4cf3-b5be-441d124aa934",
+            "product_id": "71e1b36f-7739-4b41-99e4-ee85e939e1e7",
+            "warehouse_id": "eecd9579-ec1d-4c10-8306-92e17c91abcc",
+            "location_id": null,
+            "quantity": "159.00",
+            "reserved_quantity": "0.00",
+            "min_stock": "10.00",
+            "location_label": null,
+            "created_at": "2026-09-15 14:33:46",
+            "updated_at": "2026-10-01 16:06:09",
+            "location_key": ""
+        }
+    ],
+    "cash": {
+        "amount": "921171.36"
+    },
+    "currencies": [
+        {
+            "id": "9f548022-9839-471c-844a-f3d8d5817441",
+            "code": "ARS"
+        },
+        {
+            "id": "d64f7e5f-e2c8-4708-96aa-0eb6ade792c0",
+            "code": "USD"
+        }
+    ]
+}

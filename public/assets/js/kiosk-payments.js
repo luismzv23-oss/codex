@@ -9,7 +9,7 @@ window.createKioskPayments = function (container, methods, getBase, onChange) {
         const surcharge = Math.round(base * rate / 10000);
         const total = base + surcharge;
         const received = total;
-        return {id:method?.id || '', code:method?.code || '', type:method?.type === 'wallet' ? 'qr' : method?.type,
+        return {id:method?.id || '', code:method?.code || '', show_on_receipt:Number(method?.show_on_receipt ?? 1), type:method?.type === 'wallet' ? 'qr' : method?.type,
             rate:rate/100, base:base/100, surcharge:surcharge/100, total:total/100,
             received:received/100, change:Math.max(0,received-total)/100};
     });
@@ -74,4 +74,19 @@ window.createKioskPayments = function (container, methods, getBase, onChange) {
             });
         }
     };
+};
+// Display a tax-inclusive total without changing the base amounts submitted by the form.
+window.distributePaymentTotal = (items, targetTotal) => {
+    const cents = value => Math.round((Number(value) + Number.EPSILON) * 100);
+    const weights = items.map(item => cents(item.gross));
+    const weight = weights.reduce((sum, value) => sum + value, 0);
+    let accumulated = 0, allocated = 0;
+    return items.map((item, index) => {
+        accumulated += weights[index];
+        const target = weight > 0 ? Math.round(cents(targetTotal) * accumulated / weight) : 0;
+        const gross = (target - allocated) / 100;
+        allocated = target;
+        const net = cents(gross / (1 + Number(item.rate || 0) / 100)) / 100;
+        return {...item, gross, net, tax: cents(gross - net) / 100};
+    });
 };

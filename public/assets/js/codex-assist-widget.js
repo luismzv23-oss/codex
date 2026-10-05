@@ -18,7 +18,7 @@
     const fab = document.createElement('button');
     fab.className = 'codex-assist-fab';
     fab.setAttribute('aria-label', 'Abrir asistente Codex');
-    fab.title = 'Codex Assist';
+    fab.title = 'Codex Assistente';
     fab.innerHTML = '<i class="bi bi-stars"></i>';
 
     const panel = document.createElement('div');
@@ -26,7 +26,7 @@
     panel.innerHTML = `
         <div class="codex-assist-header">
             <div>
-                <h3>Codex Assist <small>Asistente inteligente del ERP</small></h3>
+                <h3>Codex Assistente <small>Asistente inteligente del ERP</small></h3>
             </div>
             <button type="button" class="btn btn-sm p-0 border-0" id="codex-assist-close" aria-label="Cerrar">
                 <i class="bi bi-x-lg"></i>
@@ -34,7 +34,7 @@
         </div>
         <div class="codex-assist-messages" id="codex-assist-msgs">
             <div class="codex-assist-msg is-bot">
-                ¡Hola! Soy <strong>Codex Assist</strong>. Puedo ayudarte con facturación, stock, cobranzas, impuestos y más. ¿En qué te puedo ayudar?
+                ¡Hola! Soy <strong>Codex Assistente</strong>. Puedo ayudarte con facturación, stock, cobranzas, impuestos y más. ¿En qué te puedo ayudar?
             </div>
         </div>
         <div class="codex-assist-quick" id="codex-assist-quick">

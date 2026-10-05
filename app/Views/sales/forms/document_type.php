@@ -1,5 +1,7 @@
 <?= $this->extend('layouts/app') ?>
 <?= $this->section('content') ?>
+<?php $salesLive = false; ?>
+<?= view('sales/ui_start', get_defined_vars()) ?>
 <?php
 $isEdit  = ! empty($documentType['id']);
 $docData = $documentType ?? [];
@@ -121,4 +123,5 @@ $docData = $documentType ?? [];
         </form>
     </div>
 </div>
+<?= view('sales/ui_end') ?>
 <?= $this->endSection() ?>

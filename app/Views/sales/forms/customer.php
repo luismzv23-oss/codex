@@ -1,5 +1,7 @@
 <?= $this->extend('layouts/app') ?>
 <?= $this->section('content') ?>
+<?php $salesLive = false; ?>
+<?= view('sales/ui_start', get_defined_vars()) ?>
 <?php
 $customer = $customer ?? null;
 $customers = $customers ?? [];
@@ -459,4 +461,5 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 </script>
+<?= view('sales/ui_end') ?>
 <?= $this->endSection() ?>

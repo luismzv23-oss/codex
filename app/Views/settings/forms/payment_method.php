@@ -45,6 +45,17 @@ $extra = is_array($submitted) ? ($submitted['extra_required_fields'] ?? '') : im
                         <span class="input-group-text">%</span>
                     </div>
                 </div>
+                <div class="col-12">
+                    <input type="hidden" name="show_on_receipt" value="0">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="payment-show-on-receipt" name="show_on_receipt" value="1" <?= (int)($values['show_on_receipt'] ?? $method['show_on_receipt'] ?? 1) === 1 ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="payment-show-on-receipt">Mostrar desglose en factura o ticket (POS y Kiosco)</label>
+                    </div>
+                    <div class="form-text">
+                        <p>Activado: muestra este medio de pago y su importe e incluye su recargo en el total informado a ARCA.
+                        Desactivado: oculta este medio y excluye su recargo de ARCA. </p>
+                    </div>
+                </div>
                 <?php foreach (['currency_ids' => ['Monedas habilitadas', $currencies], 'branch_ids' => ['Sucursales habilitadas', $branches], 'point_of_sale_ids' => ['Puntos de venta habilitados', $points]] as $field => [$label, $options]): ?>
                     <fieldset class="col-12">
                         <legend class="form-label"><?= esc($label) ?></legend>

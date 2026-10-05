@@ -1,6 +1,8 @@
 <?= $this->extend('layouts/app') ?>
 
 <?= $this->section('content') ?>
+<?php $salesLive = false; ?>
+<?= view('sales/ui_start', get_defined_vars()) ?>
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body p-4">
         <div class="d-flex justify-content-between align-items-start gap-3 mb-4">
@@ -127,4 +129,5 @@
         </div>
     </div>
 </div>
+<?= view('sales/ui_end') ?>
 <?= $this->endSection() ?>

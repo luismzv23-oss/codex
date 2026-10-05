@@ -1,5 +1,7 @@
 <?= $this->extend('layouts/app') ?>
 <?= $this->section('content') ?>
+<?php $salesLive = false; ?>
+<?= view('sales/ui_start', get_defined_vars()) ?>
 <div class="card border-0 shadow-sm rounded-4"><div class="card-body p-4">
     <div class="mb-3"><h2 class="h5 mb-1">Configuracion de Ventas</h2><p class="text-secondary mb-0">Ajusta ARCA, monedas y modos de facturacion para la empresa.</p></div>
     <form method="post" action="<?= esc($formAction) . ($isPopup ? '?popup=1' : '') ?>" class="row g-3">
@@ -45,4 +47,5 @@
         <div class="col-12 d-flex gap-2 pt-2"><button class="btn btn-dark icon-btn"><i class="bi bi-check-lg"></i></button><button type="button" class="btn btn-outline-dark icon-btn" onclick="window.parent.postMessage({ type: 'codex-popup-close' }, window.location.origin)"><i class="bi bi-x-lg"></i></button></div>
     </form>
 </div></div>
+<?= view('sales/ui_end') ?>
 <?= $this->endSection() ?>

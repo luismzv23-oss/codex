@@ -1,27 +1,22 @@
 <?= $this->extend('layouts/app') ?>
 
 <?= $this->section('content') ?>
-<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+<link rel="stylesheet" href="<?= base_url('assets/css/dashboard-insights.css') ?>">
+<link rel="stylesheet" href="<?= base_url('assets/css/inventory-dashboard.css') ?>">
+<div class="insight-shell inventory-shell">
+
+<header class="insight-hero">
     <div>
-        <h1 class="h2 mb-1">Inventario</h1>
-        <p class="text-secondary mb-0">Control operativo de stock, movimientos, depositos, alertas y trazabilidad.</p>
+        <div class="insight-eyebrow"><span class="insight-orbit"></span>CODEX / INVENTARIO</div><h1>Inventario</h1>
+        <p>Disponibilidad, reposición y actividad de tus depósitos.</p>
+        <div class="insight-identity">
+            <i class="bi bi-box-seam" aria-hidden="true"></i>
+            <span>Gestión de inventario · <?= esc($context['company']['name']) ?></span>
+        </div>
     </div>
-    <div class="d-flex flex-wrap gap-2">
-        <?php if (!empty($companies)): ?>
-            <form method="get" action="<?= site_url('inventario') ?>" class="d-flex gap-2">
-                <select name="company_id" class="form-select">
-                    <?php foreach ($companies as $company): ?>
-                        <option value="<?= esc($company['id']) ?>" <?= $selectedCompanyId === $company['id'] ? 'selected' : '' ?>>
-                            <?= esc($company['name']) ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <button class="btn btn-outline-dark icon-btn" title="Cambiar empresa" aria-label="Cambiar empresa"><i
-                        class="bi bi-arrow-repeat"></i></button>
-            </form>
-        <?php endif; ?>
+    <div class="d-flex flex-wrap gap-2 align-items-center"><button type="button" id="inventory-refresh" class="btn btn-outline-dark icon-btn" title="Actualizar resumen" aria-label="Actualizar resumen"><i class="bi bi-arrow-clockwise"></i></button>
         <a href="<?= site_url('inventario/kardex' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
-            class="btn btn-outline-dark icon-btn" title="Kardex" aria-label="Kardex"><i
-                class="bi bi-journal-list"></i></a>
+            class="btn btn-outline-dark icon-btn" title="Kardex" aria-label="Kardex"><i class="bi bi-journal-text" aria-hidden="true"></i></a>
         <?php if ($context['canManage']): ?>
             <a href="<?= site_url('inventario/reservas/nueva' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
                 class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Reserva de stock"
@@ -33,71 +28,39 @@
                 aria-label="Nuevo movimiento"><i class="bi bi-arrow-left-right"></i></a>
         <?php endif; ?>
     </div>
-</div>
+</header>
 
-<div class="card border-0 shadow-sm rounded-4 mb-4">
-    <div class="card-body p-4">
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
-            <div>
-                <h2 class="h4 mb-1"><?= esc($context['company']['name']) ?></h2>
-                <p class="text-secondary mb-0">Sistema asignado con acceso
-                    <?= $context['canManage'] ? 'de gestion' : 'de consulta' ?>.</p>
-            </div>
-            <div class="small text-secondary">Alertas por email:
-                <?= (int) ($settings['email_notifications'] ?? 0) === 1 ? 'activas' : 'inactivas' ?></div>
-        </div>
-        <div class="row g-3">
-            <div class="col-md-3">
-                <div class="border rounded-4 p-3 h-100">
-                    <div class="text-secondary small">Productos activos</div>
-                    <div class="display-6 fw-semibold"><?= esc((string) $summary['products']) ?></div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="border rounded-4 p-3 h-100">
-                    <div class="text-secondary small">Depositos</div>
-                    <div class="display-6 fw-semibold"><?= esc((string) $summary['warehouses']) ?></div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="border rounded-4 p-3 h-100">
-                    <div class="text-secondary small">Stock consolidado</div>
-                    <div class="display-6 fw-semibold"><?= number_format((int) $summary['total_stock'], 0, ',', '.') ?>
-                    </div>
-                    <div class="small text-secondary mt-2">Reservado:
-                        <?= number_format((int) ($summary['reserved_stock'] ?? 0), 0, ',', '.') ?></div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="border rounded-4 p-3 h-100">
-                    <div class="text-secondary small">Items criticos</div>
-                    <div class="display-6 fw-semibold text-danger"><?= esc((string) $summary['critical_products']) ?>
-                    </div>
-                    <div class="small text-secondary mt-2">Reservas activas:
-                        <?= esc((string) ($summary['active_reservations'] ?? 0)) ?></div>
-                </div>
-            </div>
-        </div>
-        <div class="row g-3 mt-1">
-            <div class="col-md-6">
-                <div class="border rounded-4 p-3 h-100">
-                    <div class="text-secondary small">Ventas del dia</div>
-                    <div class="display-6 fw-semibold"><?= esc((string) ($summary['sales_today'] ?? 0)) ?></div>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="border rounded-4 p-3 h-100">
-                    <div class="text-secondary small">Tickets kiosco del dia</div>
-                    <div class="display-6 fw-semibold"><?= esc((string) ($summary['sales_kiosk_today'] ?? 0)) ?></div>
-                </div>
-            </div>
-        </div>
+<?php $df = $dashboard['filters']; ?>
+<form id="inventory-dashboard-filters" class="insight-filters" action="<?= site_url('inventario') ?>" method="get">
+    <label>
+        Empresa activa
+        <select name="company_id" class="form-select">
+            <?php foreach (($companies ?: [$context['company']]) as $company): ?>
+                <option value="<?= esc($company['id']) ?>" <?= $selectedCompanyId === $company['id'] ? 'selected' : '' ?>><?= esc($company['name']) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </label>
+    <label>
+        Filtrar por depósito
+        <select class="form-select" name="warehouse">
+            <option value="">Todos los depósitos (Consolidado)</option>
+            <?php foreach ($dashboard['warehouses'] as $w): ?>
+                <option value="<?= esc($w['id']) ?>" <?= $df['warehouse'] === $w['id'] ? 'selected' : '' ?>><?= esc($w['name']) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </label>
+    <label>Resumen desde<input class="form-control" type="date" name="from" value="<?= esc($df['from']) ?>" required></label>
+    <label>Resumen hasta<input class="form-control" type="date" name="to" value="<?= esc($df['to']) ?>" required></label>
+    <div class="insight-filter-actions">
+        <button class="btn insight-action" title="Aplicar filtros y actualizar" aria-label="Aplicar filtros y actualizar"><i class="bi bi-arrow-repeat"></i></button>
     </div>
-</div>
-
+</form>
+<span id="inventory-refresh-status" class="visually-hidden" role="status" aria-live="polite"></span>
+<?= view('inventory/dashboard', ['dashboard'=>$dashboard,'context'=>$context,'selectedCompanyId'=>$selectedCompanyId]) ?>
+<div class="insight-section-label"><span>DETALLE OPERATIVO / TODA LA EMPRESA</span><span>Consulta productos, depósitos, movimientos y reservas</span></div>
 <div class="row g-4">
     <div class="col-xl-4">
-        <div class="card border-0 shadow-sm rounded-4 h-100">
+        <div class="card border-0 shadow-sm rounded-4 h-100" id="inventory-alerts-card">
             <div class="card-body p-4">
                 <h2 class="h4 mb-3">Alertas inteligentes</h2>
                 <div class="mb-3">
@@ -106,7 +69,7 @@
                         <?php foreach ($alerts['critical'] as $row): ?>
                             <div class="border rounded-3 p-2 mb-2 alert-search-trigger border-danger-subtle"
                                 style="border-left: 4px solid #dc3545 !important;"
-                                data-search-term="<?= esc($row['sku'] ?? $row['name']) ?>">
+                                data-search-term="<?= esc(!empty($row['sku']) ? $row['sku'] : $row['name']) ?>">
                                 <strong><?= esc($row['name']) ?></strong>
                                 <div class="small text-secondary">Stock:
                                     <?= number_format((int) $row['total_stock'], 0, ',', '.') ?> / Minimo:
@@ -123,7 +86,7 @@
                         <?php foreach ($alerts['unusual'] as $row): ?>
                             <div class="border rounded-3 p-2 mb-2 alert-search-trigger border-info-subtle"
                                 style="border-left: 4px solid #0dcaf0 !important;"
-                                data-search-term="<?= esc($row['product_name']) ?>">
+                                data-search-term="<?= esc(!empty($row['sku']) ? $row['sku'] : $row['product_name']) ?>">
                                 <strong><?= esc($row['product_name']) ?></strong>
                                 <div class="small text-secondary"><?= esc(ucfirst($row['movement_type'])) ?> por
                                     <?= number_format((int) $row['quantity'], 0, ',', '.') ?></div>
@@ -139,7 +102,7 @@
                         <?php foreach (array_slice($alerts['out_of_stock'], 0, 4) as $row): ?>
                             <div class="border rounded-3 p-2 mb-2 alert-search-trigger border-dark-subtle"
                                 style="border-left: 4px solid #212529 !important;"
-                                data-search-term="<?= esc($row['sku'] ?? $row['name']) ?>">
+                                data-search-term="<?= esc(!empty($row['sku']) ? $row['sku'] : $row['name']) ?>">
                                 <strong><?= esc($row['name']) ?></strong>
                                 <div class="small text-secondary">Disponible:
                                     <?= number_format((int) ($row['available_stock'] ?? 0), 0, ',', '.') ?></div>
@@ -155,7 +118,7 @@
                         <?php foreach ($alerts['no_rotation'] as $row): ?>
                             <div class="border rounded-3 p-2 mb-2 alert-search-trigger border-secondary-subtle"
                                 style="border-left: 4px solid #6c757d !important;"
-                                data-search-term="<?= esc($row['sku'] ?? $row['name']) ?>">
+                                data-search-term="<?= esc(!empty($row['sku']) ? $row['sku'] : $row['name']) ?>">
                                 <strong><?= esc($row['name']) ?></strong>
                                 <div class="small text-secondary">
                                     <?= esc($row['last_movement'] ? date('d/m/Y', strtotime($row['last_movement'])) : 'Sin movimientos') ?>
@@ -172,7 +135,7 @@
                         <?php foreach (array_slice($alerts['overstock'], 0, 4) as $row): ?>
                             <div class="border rounded-3 p-2 mb-2 alert-search-trigger border-warning-subtle"
                                 style="border-left: 4px solid #ffc107 !important;"
-                                data-search-term="<?= esc($row['sku'] ?? $row['name']) ?>">
+                                data-search-term="<?= esc(!empty($row['sku']) ? $row['sku'] : $row['name']) ?>">
                                 <strong><?= esc($row['name']) ?></strong>
                                 <div class="small text-secondary">Actual:
                                     <?= number_format((int) $row['total_stock'], 0, ',', '.') ?> / Maximo:
@@ -189,7 +152,7 @@
                         <?php foreach ($alerts['reservations'] as $row): ?>
                             <div class="border rounded-3 p-2 mb-2 alert-search-trigger border-success-subtle"
                                 style="border-left: 4px solid #20c997 !important;"
-                                data-search-term="<?= esc($row['sku'] ?? $row['product_name']) ?>">
+                                data-search-term="<?= esc(!empty($row['sku']) ? $row['sku'] : $row['product_name']) ?>">
                                 <strong><?= esc($row['product_name']) ?></strong>
                                 <div class="small text-secondary"><?= number_format((int) $row['quantity'], 0, ',', '.') ?> en
                                     <?= esc($row['warehouse_name']) ?></div>
@@ -204,7 +167,7 @@
     </div>
 
     <div class="col-xl-8">
-        <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card border-0 shadow-sm rounded-4 mb-4" id="inventory-products-card">
             <div class="card-body p-4">
                 <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
                     <div>
@@ -283,7 +246,7 @@
                                         <?= number_format((int) ($product['max_stock'] ?? 0), 0, ',', '.') ?></td>
                                     <td>
                                         <?php if ((int) ($product['active'] ?? 1) === 0): ?>
-                                            <span class="badge bg-secondary-subtle text-secondary border px-2 py-1">Inactivo</span>
+                                             <span class="badge bg-secondary-subtle text-secondary border px-2 py-1">Inactivo</span>
                                         <?php else: ?>
                                             <span class="<?= $product['is_critical'] ? 'text-danger fw-semibold' : (($product['is_overstock'] ?? false) ? 'text-warning fw-semibold' : 'text-success fw-semibold') ?>">
                                                 <?= $product['is_critical'] ? 'Critico' : (($product['is_overstock'] ?? false) ? 'Sobre stock' : 'Saludable') ?>
@@ -328,43 +291,45 @@
 
         <div class="row g-4">
             <div class="col-lg-6">
-                <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card border-0 shadow-sm rounded-4 h-100" id="inventory-reservations-card">
                     <div class="card-body p-4">
                         <h2 class="h4 mb-3">Reservas activas</h2>
-                        <?php foreach ($activeReservations as $row): ?>
-                            <div class="border rounded-3 p-3 mb-2">
-                                <div class="d-flex justify-content-between gap-3">
-                                    <div>
-                                        <strong><?= esc($row['product_name']) ?></strong>
-                                        <div class="small text-secondary"><?= esc($row['warehouse_name']) ?> /
-                                            <?= esc($row['reference'] ?: 'Sin referencia') ?></div>
-                                        <div class="small text-secondary">Reservado por <?= esc($row['reserved_by_name']) ?>
-                                            el <?= esc(date('d/m/Y H:i', strtotime($row['reserved_at']))) ?></div>
-                                    </div>
-                                    <div class="text-end">
-                                        <div class="fw-semibold"><?= number_format((int) $row['quantity'], 0, ',', '.') ?>
+                        <div id="inventory-reservations-list">
+                            <?php foreach ($activeReservations as $row): ?>
+                                <div class="border rounded-3 p-3 mb-2 reservation-item">
+                                    <div class="d-flex justify-content-between gap-3">
+                                        <div>
+                                            <strong><?= esc($row['product_name']) ?></strong>
+                                            <div class="small text-secondary"><?= esc($row['warehouse_name']) ?> /
+                                                <?= esc($row['reference'] ?: 'Sin referencia') ?></div>
+                                            <div class="small text-secondary">Reservado por <?= esc($row['reserved_by_name']) ?>
+                                                el <?= esc(date('d/m/Y H:i', strtotime($row['reserved_at']))) ?></div>
                                         </div>
-                                        <?php if ($context['canManage']): ?>
-                                            <form method="post"
-                                                action="<?= site_url('inventario/reservas/' . $row['id'] . '/liberar' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
-                                                class="mt-2">
-                                                <?= csrf_field() ?>
-                                                <button class="btn btn-sm btn-outline-success icon-btn" title="Liberar reserva"
-                                                    aria-label="Liberar reserva"><i class="bi bi-unlock"></i></button>
-                                            </form>
-                                        <?php endif; ?>
+                                        <div class="text-end">
+                                            <div class="fw-semibold"><?= number_format((int) $row['quantity'], 0, ',', '.') ?>
+                                            </div>
+                                            <?php if ($context['canManage']): ?>
+                                                <form method="post"
+                                                    action="<?= site_url('inventario/reservas/' . $row['id'] . '/liberar' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
+                                                    class="mt-2 release-reservation-form">
+                                                    <?= csrf_field() ?>
+                                                    <button class="btn btn-sm btn-outline-success icon-btn" title="Liberar reserva"
+                                                        aria-label="Liberar reserva"><i class="bi bi-unlock"></i></button>
+                                                </form>
+                                            <?php endif; ?>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        <?php endforeach; ?>
-                        <?php if ($activeReservations === []): ?>
-                            <div class="text-secondary">No hay reservas activas.</div><?php endif; ?>
+                            <?php endforeach; ?>
+                            <?php if ($activeReservations === []): ?>
+                                <div class="text-secondary">No hay reservas activas.</div><?php endif; ?>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <div class="col-lg-6">
-                <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card border-0 shadow-sm rounded-4 h-100" id="inventory-warehouses-card">
                     <div class="card-body p-4">
                         <div class="d-flex justify-content-between align-items-start mb-3">
                             <div>
@@ -378,28 +343,32 @@
                                     title="Nuevo deposito" aria-label="Nuevo deposito"><i class="bi bi-plus-lg"></i></a>
                             <?php endif; ?>
                         </div>
-                        <?php foreach ($warehouses as $warehouse): ?>
-                            <div class="border rounded-3 p-3 mb-2">
-                                <div class="d-flex justify-content-between gap-2">
-                                    <div>
-                                        <strong><?= esc($warehouse['name']) ?></strong>
-                                        <div class="small text-secondary"><?= esc($warehouse['code']) ?> /
-                                            <?= esc($warehouse['type']) ?></div>
+                        <div id="inventory-warehouses-list">
+                            <?php foreach ($warehouses as $warehouse): ?>
+                                <div class="border rounded-3 p-3 mb-2 warehouse-item">
+                                    <div class="d-flex justify-content-between gap-2">
+                                        <div>
+                                            <strong><?= esc($warehouse['name']) ?></strong>
+                                            <div class="small text-secondary"><?= esc($warehouse['code']) ?> /
+                                                <?= esc($warehouse['type']) ?></div>
+                                        </div>
+                                        <span
+                                            class="small <?= (int) $warehouse['active'] === 1 ? 'text-success' : 'text-danger' ?>"><?= (int) $warehouse['active'] === 1 ? 'Activo' : 'Inactivo' ?></span>
                                     </div>
-                                    <span
-                                        class="small <?= (int) $warehouse['active'] === 1 ? 'text-success' : 'text-danger' ?>"><?= (int) $warehouse['active'] === 1 ? 'Activo' : 'Inactivo' ?></span>
+                                    <div class="small text-secondary mt-2">Stock:
+                                        <?= number_format((int) $warehouse['total_stock'], 0, ',', '.') ?> / Productos:
+                                        <?= esc((string) $warehouse['product_count']) ?></div>
                                 </div>
-                                <div class="small text-secondary mt-2">Stock:
-                                    <?= number_format((int) $warehouse['total_stock'], 0, ',', '.') ?> / Productos:
-                                    <?= esc((string) $warehouse['product_count']) ?></div>
-                            </div>
-                        <?php endforeach; ?>
+                            <?php endforeach; ?>
+                            <?php if ($warehouses === []): ?>
+                                <div class="text-secondary">No hay depósitos registrados.</div><?php endif; ?>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <div class="col-12">
-                <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card border-0 shadow-sm rounded-4 h-100" id="inventory-movements-card">
                     <div class="card-body p-4">
                         <h2 class="h4 mb-3">Ultimos movimientos</h2>
                         <div id="recent-movements-list">
@@ -461,6 +430,63 @@
     .filter-pill:hover {
         transform: translateY(-2px);
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    /* CODEX Pagination */
+    .codex-pagination {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+        padding-top: 14px;
+        border-top: 1px solid var(--bs-border-color, #e9ecef);
+        margin-top: 14px;
+    }
+    .codex-pagination__summary {
+        font-size: 11px;
+        color: var(--bs-secondary, #6c757d);
+        font-weight: 500;
+    }
+    .codex-pagination__controls {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .codex-pagination__pages {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+    }
+    .codex-pagination__btn {
+        min-width: 28px;
+        height: 28px;
+        padding: 0 6px;
+        border-radius: 7px;
+        border: 1px solid var(--bs-border-color, #dee2e6);
+        background: #fff;
+        color: var(--bs-body-color, #212529);
+        font-size: 11px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    .codex-pagination__btn:hover:not(:disabled) {
+        background: #f8f9fa;
+        border-color: #ced4da;
+        color: #212529;
+    }
+    .codex-pagination__btn.is-active {
+        background: #212529;
+        border-color: #212529;
+        color: #fff;
+    }
+    .codex-pagination__btn:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
     }
 </style>
 
@@ -535,12 +561,12 @@
         let allRows = Array.from(tableBody.querySelectorAll('.product-row'));
         const noResultsRow = document.getElementById('no-results-row');
         const noProductsRow = document.getElementById('no-products-row');
-        const pageSize = 8;
+        const pageSize = 5;
         let currentPage = 1;
         let currentFilter = 'all';
         let searchQuery = '';
 
-        // Create pagination container
+        // Create pagination container for products
         const tableResponsive = table.closest('.table-responsive');
         const paginationWrapper = document.createElement('div');
         paginationWrapper.className = 'codex-pagination mt-4';
@@ -602,7 +628,6 @@
                 const matchesStatus = currentFilter === 'all' || status === currentFilter;
 
                 if (matchesSearch && matchesStatus) {
-                    row.style.display = ''; // Temporarily show
                     matchedRows.push(row);
                     matchedCount++;
                 } else {
@@ -646,10 +671,9 @@
         function renderPagination(totalCount, pageCount) {
             paginationWrapper.innerHTML = '';
             if (pageCount <= 1) {
-                // Just display summary if only 1 page
                 const summary = document.createElement('div');
                 summary.className = 'codex-pagination__summary';
-                summary.textContent = `Mostrando 1-${totalCount} de ${totalCount} registros`;
+                summary.textContent = `Mostrando ${totalCount} registro${totalCount === 1 ? '' : 's'}`;
                 paginationWrapper.appendChild(summary);
                 return;
             }
@@ -663,18 +687,37 @@
             const controls = document.createElement('div');
             controls.className = 'codex-pagination__controls';
 
-            // Prev button
+            // First button (<<)
+            if (pageCount > 4) {
+                const first = document.createElement('button');
+                first.type = 'button';
+                first.className = 'codex-pagination__btn';
+                first.innerHTML = '<i class="bi bi-chevron-double-left"></i>';
+                first.disabled = currentPage === 1;
+                first.title = 'Primera página';
+                first.addEventListener('click', () => {
+                    if (currentPage > 1) {
+                        currentPage = 1;
+                        updateFilters();
+                    }
+                });
+                controls.appendChild(first);
+            }
+
+            // Prev button (<)
             const prev = document.createElement('button');
             prev.type = 'button';
             prev.className = 'codex-pagination__btn';
             prev.innerHTML = '<i class="bi bi-chevron-left"></i>';
             prev.disabled = currentPage === 1;
+            prev.title = 'Página anterior';
             prev.addEventListener('click', () => {
                 if (currentPage > 1) {
                     currentPage--;
                     updateFilters();
                 }
             });
+            controls.appendChild(prev);
 
             // Page numbers
             const pages = document.createElement('div');
@@ -688,29 +731,46 @@
                 btn.type = 'button';
                 btn.className = `codex-pagination__btn${p === currentPage ? ' is-active' : ''}`;
                 btn.textContent = String(p);
+                btn.title = `Página ${p}`;
                 btn.addEventListener('click', () => {
                     currentPage = p;
                     updateFilters();
                 });
                 pages.appendChild(btn);
             }
+            controls.appendChild(pages);
 
-            // Next button
+            // Next button (>)
             const next = document.createElement('button');
             next.type = 'button';
             next.className = 'codex-pagination__btn';
             next.innerHTML = '<i class="bi bi-chevron-right"></i>';
             next.disabled = currentPage === pageCount;
+            next.title = 'Página siguiente';
             next.addEventListener('click', () => {
                 if (currentPage < pageCount) {
                     currentPage++;
                     updateFilters();
                 }
             });
-
-            controls.appendChild(prev);
-            controls.appendChild(pages);
             controls.appendChild(next);
+
+            // Last button (>>)
+            if (pageCount > 4) {
+                const last = document.createElement('button');
+                last.type = 'button';
+                last.className = 'codex-pagination__btn';
+                last.innerHTML = '<i class="bi bi-chevron-double-right"></i>';
+                last.disabled = currentPage === pageCount;
+                last.title = 'Última página';
+                last.addEventListener('click', () => {
+                    if (currentPage < pageCount) {
+                        currentPage = pageCount;
+                        updateFilters();
+                    }
+                });
+                controls.appendChild(last);
+            }
 
             paginationWrapper.appendChild(summary);
             paginationWrapper.appendChild(controls);
@@ -773,172 +833,320 @@
         });
 
         // Connect smart alerts
-        document.querySelectorAll('.alert-search-trigger').forEach(trigger => {
-            trigger.addEventListener('click', () => {
-                const searchTerm = trigger.dataset.searchTerm || '';
-                searchInput.value = searchTerm;
+        function connectAlertTriggers() {
+            document.querySelectorAll('.alert-search-trigger').forEach(trigger => {
+                trigger.onclick = () => {
+                    const searchTerm = trigger.dataset.searchTerm || '';
+                    searchInput.value = searchTerm;
 
-                // Highlight search input briefly
-                searchInput.focus();
-                searchInput.classList.add('is-valid');
-                setTimeout(() => {
-                    searchInput.classList.remove('is-valid');
-                }, 1000);
+                    // Highlight search input briefly
+                    searchInput.focus();
+                    searchInput.classList.add('is-valid');
+                    setTimeout(() => {
+                        searchInput.classList.remove('is-valid');
+                    }, 1000);
 
-                // Reset status filter to "all"
-                const allPill = document.querySelector('.filter-pill[data-filter="all"]');
-                if (allPill) {
-                    allPill.click(); // Trigger click which updates page, filter state & sets active classes
-                } else {
-                    currentFilter = 'all';
-                    currentPage = 1;
-                    updateFilters();
-                }
+                    // Reset status filter to "all"
+                    const allPill = document.querySelector('.filter-pill[data-filter="all"]');
+                    if (allPill) {
+                        allPill.click();
+                    } else {
+                        currentFilter = 'all';
+                        currentPage = 1;
+                        updateFilters();
+                    }
+                };
             });
-        });
+        }
+        connectAlertTriggers();
 
-        // Initial render
+        // Initial render for products table
         updateFilters();
 
-        // Listen for real-time product updates/creations
-        window.addEventListener('codex:product-saved', (event) => {
-            const data = event.detail;
-            if (!data || !data.item) return;
-            const item = data.item;
+        // Generic Client-side Card List Pagination (5 items per page)
+        function setupListPagination(containerId, itemSelector, pageSize = 5) {
+            const container = document.getElementById(containerId);
+            if (!container) return null;
 
-            let row = tableBody.querySelector(`tr.product-row[data-product-id="${item.id}"]`);
-            const isCritical = Boolean(item.is_critical);
-            const isOverstock = Boolean(item.is_overstock);
-            const statusType = isCritical ? 'critical' : (isOverstock ? 'overstock' : 'healthy');
-            const catBrand = ((item.category || '') + ' ' + (item.brand || '')).trim();
-
-            if (row) {
-                row.dataset.sku = item.sku || '';
-                row.dataset.name = item.name || '';
-                row.dataset.categoryBrand = catBrand;
-                row.dataset.status = statusType;
-                row.dataset.active = String(item.active ?? 1);
-                row.innerHTML = buildInventoryProductRowHtml(item);
-            } else {
-                row = document.createElement('tr');
-                row.className = 'product-row';
-                row.dataset.productId = item.id;
-                row.dataset.sku = item.sku || '';
-                row.dataset.name = item.name || '';
-                row.dataset.categoryBrand = catBrand;
-                row.dataset.status = statusType;
-                row.dataset.active = String(item.active ?? 1);
-                row.innerHTML = buildInventoryProductRowHtml(item);
-
-                if (noResultsRow) {
-                    tableBody.insertBefore(row, noResultsRow);
-                } else {
-                    tableBody.appendChild(row);
-                }
+            let paginationWrapper = container.parentNode.querySelector(`.codex-pagination[data-for="${containerId}"]`);
+            if (!paginationWrapper) {
+                paginationWrapper = document.createElement('div');
+                paginationWrapper.className = 'codex-pagination mt-3';
+                paginationWrapper.dataset.for = containerId;
+                container.after(paginationWrapper);
             }
 
-            row.style.transition = 'background-color 0.4s ease';
-            row.style.backgroundColor = 'rgba(25, 135, 84, 0.2)';
-            setTimeout(() => {
-                row.style.backgroundColor = '';
-            }, 1800);
+            let currentPage = 1;
 
-            refreshInventoryProducts(row);
-        });
+            function render() {
+                const items = Array.from(container.querySelectorAll(itemSelector));
+                const totalItems = items.length;
 
-        // Paginacion de Ultimos movimientos
-        const movementsList = document.getElementById('recent-movements-list');
-        if (movementsList) {
-            const movementItems = Array.from(movementsList.querySelectorAll('.recent-movement-item'));
-            const movementsPageSize = 5;
-            let movementsCurrentPage = 1;
-
-            if (movementItems.length > movementsPageSize) {
-                // Create pagination container
-                const movementsPaginationWrapper = document.createElement('div');
-                movementsPaginationWrapper.className = 'codex-pagination mt-4';
-                movementsList.after(movementsPaginationWrapper);
-
-                function renderMovements() {
-                    const totalMovements = movementItems.length;
-                    const movementsPageCount = Math.ceil(totalMovements / movementsPageSize);
-                    
-                    const startIndex = (movementsCurrentPage - 1) * movementsPageSize;
-                    const endIndex = startIndex + movementsPageSize;
-
-                    movementItems.forEach((item, index) => {
-                        if (index >= startIndex && index < endIndex) {
-                            item.style.display = '';
-                        } else {
-                            item.style.display = 'none';
-                        }
-                    });
-
-                    movementsPaginationWrapper.innerHTML = '';
-                    
-                    const summary = document.createElement('div');
-                    summary.className = 'codex-pagination__summary';
-                    summary.textContent = `Mostrando ${startIndex + 1}-${Math.min(endIndex, totalMovements)} de ${totalMovements} registros`;
-
-                    const controls = document.createElement('div');
-                    controls.className = 'codex-pagination__controls';
-
-                    // Prev button
-                    const prev = document.createElement('button');
-                    prev.type = 'button';
-                    prev.className = 'codex-pagination__btn';
-                    prev.innerHTML = '<i class="bi bi-chevron-left"></i>';
-                    prev.disabled = movementsCurrentPage === 1;
-                    prev.addEventListener('click', () => {
-                        if (movementsCurrentPage > 1) {
-                            movementsCurrentPage--;
-                            renderMovements();
-                        }
-                    });
-
-                    // Page numbers
-                    const pages = document.createElement('div');
-                    pages.className = 'codex-pagination__pages';
-
-                    const startPage = Math.max(1, movementsCurrentPage - 2);
-                    const endPage = Math.min(movementsPageCount, movementsCurrentPage + 2);
-
-                    for (let p = startPage; p <= endPage; p++) {
-                        const btn = document.createElement('button');
-                        btn.type = 'button';
-                        btn.className = `codex-pagination__btn${p === movementsCurrentPage ? ' is-active' : ''}`;
-                        btn.textContent = String(p);
-                        btn.addEventListener('click', () => {
-                            movementsCurrentPage = p;
-                            renderMovements();
-                        });
-                        pages.appendChild(btn);
-                    }
-
-                    // Next button
-                    const next = document.createElement('button');
-                    next.type = 'button';
-                    next.className = 'codex-pagination__btn';
-                    next.innerHTML = '<i class="bi bi-chevron-right"></i>';
-                    next.disabled = movementsCurrentPage === movementsPageCount;
-                    next.addEventListener('click', () => {
-                        if (movementsCurrentPage < movementsPageCount) {
-                            movementsCurrentPage++;
-                            renderMovements();
-                        }
-                    });
-
-                    controls.appendChild(prev);
-                    controls.appendChild(pages);
-                    controls.appendChild(next);
-
-                    movementsPaginationWrapper.appendChild(summary);
-                    movementsPaginationWrapper.appendChild(controls);
+                if (totalItems <= pageSize) {
+                    items.forEach(item => { item.style.display = ''; });
+                    paginationWrapper.innerHTML = '';
+                    return;
                 }
 
-                renderMovements();
+                const pageCount = Math.ceil(totalItems / pageSize);
+                if (currentPage > pageCount) currentPage = pageCount;
+                if (currentPage < 1) currentPage = 1;
+
+                const startIndex = (currentPage - 1) * pageSize;
+                const endIndex = startIndex + pageSize;
+
+                items.forEach((item, index) => {
+                    if (index >= startIndex && index < endIndex) {
+                        item.style.display = '';
+                    } else {
+                        item.style.display = 'none';
+                    }
+                });
+
+                paginationWrapper.innerHTML = '';
+
+                const summary = document.createElement('div');
+                summary.className = 'codex-pagination__summary';
+                summary.textContent = `Mostrando ${startIndex + 1}-${Math.min(endIndex, totalItems)} de ${totalItems} registros`;
+
+                const controls = document.createElement('div');
+                controls.className = 'codex-pagination__controls';
+
+                // First (<<)
+                if (pageCount > 4) {
+                    const first = document.createElement('button');
+                    first.type = 'button';
+                    first.className = 'codex-pagination__btn';
+                    first.innerHTML = '<i class="bi bi-chevron-double-left"></i>';
+                    first.disabled = currentPage === 1;
+                    first.title = 'Primera página';
+                    first.addEventListener('click', () => {
+                        if (currentPage > 1) {
+                            currentPage = 1;
+                            render();
+                        }
+                    });
+                    controls.appendChild(first);
+                }
+
+                // Prev (<)
+                const prev = document.createElement('button');
+                prev.type = 'button';
+                prev.className = 'codex-pagination__btn';
+                prev.innerHTML = '<i class="bi bi-chevron-left"></i>';
+                prev.disabled = currentPage === 1;
+                prev.title = 'Página anterior';
+                prev.addEventListener('click', () => {
+                    if (currentPage > 1) {
+                        currentPage--;
+                        render();
+                    }
+                });
+                controls.appendChild(prev);
+
+                // Page numbers
+                const pages = document.createElement('div');
+                pages.className = 'codex-pagination__pages';
+
+                const startPage = Math.max(1, currentPage - 2);
+                const endPage = Math.min(pageCount, currentPage + 2);
+
+                for (let p = startPage; p <= endPage; p++) {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = `codex-pagination__btn${p === currentPage ? ' is-active' : ''}`;
+                    btn.textContent = String(p);
+                    btn.title = `Página ${p}`;
+                    btn.addEventListener('click', () => {
+                        currentPage = p;
+                        render();
+                    });
+                    pages.appendChild(btn);
+                }
+                controls.appendChild(pages);
+
+                // Next (>)
+                const next = document.createElement('button');
+                next.type = 'button';
+                next.className = 'codex-pagination__btn';
+                next.innerHTML = '<i class="bi bi-chevron-right"></i>';
+                next.disabled = currentPage === pageCount;
+                next.title = 'Página siguiente';
+                next.addEventListener('click', () => {
+                    if (currentPage < pageCount) {
+                        currentPage++;
+                        render();
+                    }
+                });
+                controls.appendChild(next);
+
+                // Last (>>)
+                if (pageCount > 4) {
+                    const last = document.createElement('button');
+                    last.type = 'button';
+                    last.className = 'codex-pagination__btn';
+                    last.innerHTML = '<i class="bi bi-chevron-double-right"></i>';
+                    last.disabled = currentPage === pageCount;
+                    last.title = 'Última página';
+                    last.addEventListener('click', () => {
+                        if (currentPage < pageCount) {
+                            currentPage = pageCount;
+                            render();
+                        }
+                    });
+                    controls.appendChild(last);
+                }
+
+                paginationWrapper.appendChild(summary);
+                paginationWrapper.appendChild(controls);
+            }
+
+            render();
+
+            return {
+                refresh: () => {
+                    currentPage = 1;
+                    render();
+                },
+                render
+            };
+        }
+
+        // Initialize 5-items pagination on all card lists
+        const reservationsPaginator = setupListPagination('inventory-reservations-list', '.reservation-item', 5);
+        const warehousesPaginator = setupListPagination('inventory-warehouses-list', '.warehouse-item', 5);
+        const movementsPaginator = setupListPagination('recent-movements-list', '.recent-movement-item', 5);
+
+        // Bind liberation form handlers for instant AJAX execution without full reload
+        function bindReservationReleaseForms() {
+            document.querySelectorAll('.release-reservation-form').forEach(form => {
+                form.onsubmit = async (e) => {
+                    e.preventDefault();
+                    const submitBtn = form.querySelector('button[type="submit"], button');
+                    if (submitBtn) submitBtn.disabled = true;
+                    try {
+                        const response = await fetch(form.action, {
+                            method: 'POST',
+                            body: new FormData(form),
+                            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                        });
+                        if (window.showCodexToast) {
+                            window.showCodexToast('Reserva liberada correctamente.', 'success');
+                        }
+                        await reloadInventoryData();
+                    } catch (err) {
+                        console.error('Error al liberar reserva:', err);
+                        form.submit();
+                    }
+                };
+            });
+        }
+        bindReservationReleaseForms();
+
+        // Seamless AJAX refresh of the entire Inventory Dashboard
+        document.getElementById('inventory-refresh')?.addEventListener('click', () => reloadInventoryData());
+        setInterval(() => {
+            if (!document.hidden && !document.querySelector('.modal.show')) reloadInventoryData();
+        }, 60000);
+        let isInventoryReloading = false;
+        async function reloadInventoryData() {
+            if (isInventoryReloading) return;
+            isInventoryReloading = true;
+            const refreshButton = document.getElementById('inventory-refresh');
+            const refreshStatus = document.getElementById('inventory-refresh-status');
+            if (refreshButton) refreshButton.disabled = true;
+            if (refreshStatus) refreshStatus.textContent = 'Actualizando...';
+
+            try {
+                const response = await fetch(window.location.href, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    cache: 'no-store'
+                });
+                if (!response.ok) throw new Error('Error al recargar dashboard');
+
+                const html = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+
+                if (!doc.getElementById('inventory-summary-card')) throw new Error('Respuesta sin datos de inventario');
+                // 1. Update KPI Summary Cards
+                const newSummary = doc.getElementById('inventory-summary-card');
+                const curSummary = document.getElementById('inventory-summary-card');
+                if (newSummary && curSummary) {
+                    curSummary.innerHTML = newSummary.innerHTML;
+                }
+
+                // 2. Update Smart Alerts Card
+                const newAlerts = doc.getElementById('inventory-alerts-card');
+                const curAlerts = document.getElementById('inventory-alerts-card');
+                if (newAlerts && curAlerts) {
+                    curAlerts.innerHTML = newAlerts.innerHTML;
+                    connectAlertTriggers();
+                }
+
+                // 3. Update Products Table Body
+                const newProductsTable = doc.getElementById('inventory-products-table');
+                if (newProductsTable) {
+                    const newTbody = newProductsTable.querySelector('tbody');
+                    if (newTbody) {
+                        tableBody.innerHTML = newTbody.innerHTML;
+                        allRows = Array.from(tableBody.querySelectorAll('.product-row'));
+                        updateFilters();
+                    }
+                }
+
+                // 4. Update Reservations List
+                const newReservations = doc.getElementById('inventory-reservations-list');
+                const curReservations = document.getElementById('inventory-reservations-list');
+                if (newReservations && curReservations) {
+                    curReservations.innerHTML = newReservations.innerHTML;
+                    reservationsPaginator?.refresh();
+                    bindReservationReleaseForms();
+                }
+
+                // 5. Update Warehouses List
+                const newWarehouses = doc.getElementById('inventory-warehouses-list');
+                const curWarehouses = document.getElementById('inventory-warehouses-list');
+                if (newWarehouses && curWarehouses) {
+                    curWarehouses.innerHTML = newWarehouses.innerHTML;
+                    warehousesPaginator?.refresh();
+                }
+
+                // 6. Update Recent Movements List
+                const newMovements = doc.getElementById('recent-movements-list');
+                const curMovements = document.getElementById('recent-movements-list');
+                if (newMovements && curMovements) {
+                    curMovements.innerHTML = newMovements.innerHTML;
+                    movementsPaginator?.refresh();
+                }
+
+                // 7. Re-bind popups in updated elements
+                if (typeof window.initCodexPopups === 'function') {
+                    window.initCodexPopups();
+                }
+            } catch (err) {
+                console.error('Error al actualizar datos de inventario:', err);
+                if (refreshStatus) refreshStatus.textContent = 'No se pudo actualizar. Se conservan los últimos datos.';
+            } finally {
+                isInventoryReloading = false;
+                if (refreshButton) refreshButton.disabled = false;
+                if (refreshStatus?.textContent === 'Actualizando...') refreshStatus.textContent = 'Datos actualizados';
             }
         }
+        window.reloadInventoryData = reloadInventoryData;
+
+        // Listen for real-time item creation/updates across the inventory module
+        window.addEventListener('codex:product-saved', () => reloadInventoryData());
+        window.addEventListener('codex:movement-saved', () => reloadInventoryData());
+        window.addEventListener('codex:reservation-saved', () => reloadInventoryData());
+        window.addEventListener('codex:warehouse-saved', () => reloadInventoryData());
+        window.addEventListener('codex:item-saved', () => reloadInventoryData());
+        window.addEventListener('message', (event) => {
+            if (event.origin === window.location.origin && event.data && (event.data.type === 'codex-popup-saved' || event.data.type === 'codex-popup-close')) {
+                reloadInventoryData();
+            }
+        });
     });
 </script>
+</div>
 <?= $this->endSection() ?>

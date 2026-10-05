@@ -36,8 +36,8 @@
             </div>
             
             <div class="col-12 d-flex gap-2 pt-2">
-                <button class="btn btn-dark icon-btn"><i class="bi bi-check-lg"></i> Confirmar Endoso</button>
-                <button type="button" class="btn btn-outline-dark icon-btn" onclick="window.parent.postMessage({ type: 'codex-popup-close' }, window.location.origin)"><i class="bi bi-x-lg"></i> Cancelar</button>
+                <button class="btn btn-dark icon-btn" title="Confirmar endoso" aria-label="Confirmar endoso"><i class="bi bi-check-lg"></i></button>
+                <button type="button" class="btn btn-outline-dark icon-btn" title="Cancelar" aria-label="Cancelar" onclick="window.parent.postMessage({ type: 'codex-popup-close' }, window.location.origin)"><i class="bi bi-x-lg"></i></button>
             </div>
         </form>
     </div>

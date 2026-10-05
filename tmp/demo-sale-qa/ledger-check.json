@@ -1,0 +1,83 @@
+{
+    "cash": [
+        {
+            "amount": "400.00",
+            "payment_method": "cash",
+            "reference_type": "sale_payment",
+            "reference_number": "FCB-00000005"
+        },
+        {
+            "amount": "485.76",
+            "payment_method": "card",
+            "reference_type": "sale_payment",
+            "reference_number": "FCB-00000005"
+        }
+    ],
+    "journal": [
+        {
+            "id": "6d2e66ff-97c6-4388-bfa0-da0897bed271",
+            "entry_number": "48",
+            "description": "Venta #FCB-00000005",
+            "status": "posted",
+            "lines": [
+                {
+                    "account_id": "a6c6f50c-9595-4f7c-9c75-3eb4e0299a20",
+                    "description": "Ingreso por venta",
+                    "debit": "0.00",
+                    "credit": "727.27"
+                },
+                {
+                    "account_id": "755f2969-a626-41bf-9c7c-e9aafb2f4b72",
+                    "description": "Venta #FCB-00000005",
+                    "debit": "885.76",
+                    "credit": "0.00"
+                },
+                {
+                    "account_id": "029aaab2-d940-4be9-88c8-66b0d27834bb",
+                    "description": "IVA Debito Fiscal",
+                    "debit": "0.00",
+                    "credit": "152.73"
+                },
+                {
+                    "account_id": "a6c6f50c-9595-4f7c-9c75-3eb4e0299a20",
+                    "description": "Recargo por medio de pago",
+                    "debit": "0.00",
+                    "credit": "5.76"
+                }
+            ]
+        },
+        {
+            "id": "6f4d197f-1ab9-4a5b-bd3b-fa929aae323d",
+            "entry_number": "47",
+            "description": "Venta #FCB-00000005",
+            "status": "posted",
+            "lines": [
+                {
+                    "account_id": "029aaab2-d940-4be9-88c8-66b0d27834bb",
+                    "description": "IVA Debito Fiscal",
+                    "debit": "0.00",
+                    "credit": "152.73"
+                },
+                {
+                    "account_id": "a6c6f50c-9595-4f7c-9c75-3eb4e0299a20",
+                    "description": "Ingreso por venta",
+                    "debit": "0.00",
+                    "credit": "727.27"
+                },
+                {
+                    "account_id": "755f2969-a626-41bf-9c7c-e9aafb2f4b72",
+                    "description": "Venta #FCB-00000005",
+                    "debit": "885.76",
+                    "credit": "0.00"
+                },
+                {
+                    "account_id": "a6c6f50c-9595-4f7c-9c75-3eb4e0299a20",
+                    "description": "Recargo por medio de pago",
+                    "debit": "0.00",
+                    "credit": "5.76"
+                }
+            ]
+        }
+    ],
+    "vat": []
+}

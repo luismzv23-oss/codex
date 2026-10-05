@@ -1,0 +1,110 @@
+[
+    {
+        "id": "6f4d197f-1ab9-4a5b-bd3b-fa929aae323d",
+        "company_id": "df935c20-4fa4-4cf3-b5be-441d124aa934",
+        "entry_number": "47",
+        "entry_date": "2026-10-03",
+        "description": "Venta #FCB-00000005",
+        "reference_type": "sale",
+        "reference_id": "54afb42c-201e-4fa0-ad45-198dd5b60131",
+        "status": "posted",
+        "total_debit": "885.76",
+        "total_credit": "885.76",
+        "user_id": "e470fa3f-c326-4b57-9b5b-e741ee20acfa",
+        "posted_at": "2026-10-03 09:56:26",
+        "created_at": "2026-10-03 09:56:26",
+        "updated_at": null,
+        "lines": [
+            {
+                "id": "081850cf-2db2-4a11-af7c-dd24e7280991",
+                "journal_entry_id": "6f4d197f-1ab9-4a5b-bd3b-fa929aae323d",
+                "account_id": "029aaab2-d940-4be9-88c8-66b0d27834bb",
+                "description": "IVA Debito Fiscal",
+                "debit": "0.00",
+                "credit": "152.73",
+                "created_at": "2026-10-03 09:56:26"
+            },
+            {
+                "id": "333556a4-78d7-4970-a812-05229553c88d",
+                "journal_entry_id": "6f4d197f-1ab9-4a5b-bd3b-fa929aae323d",
+                "account_id": "a6c6f50c-9595-4f7c-9c75-3eb4e0299a20",
+                "description": "Ingreso por venta",
+                "debit": "0.00",
+                "credit": "727.27",
+                "created_at": "2026-10-03 09:56:26"
+            },
+            {
+                "id": "8d406d33-4ecb-4ba0-bc43-68b49288db43",
+                "journal_entry_id": "6f4d197f-1ab9-4a5b-bd3b-fa929aae323d",
+                "account_id": "755f2969-a626-41bf-9c7c-e9aafb2f4b72",
+                "description": "Venta #FCB-00000005",
+                "debit": "885.76",
+                "credit": "0.00",
+                "created_at": "2026-10-03 09:56:26"
+            },
+            {
+                "id": "a7a66706-a45c-4267-811c-5d45b0e0f20f",
+                "journal_entry_id": "6f4d197f-1ab9-4a5b-bd3b-fa929aae323d",
+                "account_id": "a6c6f50c-9595-4f7c-9c75-3eb4e0299a20",
+                "description": "Recargo por medio de pago",
+                "debit": "0.00",
+                "credit": "5.76",
+                "created_at": "2026-10-03 09:56:26"
+            }
+        ]
+    },
+    {
+        "id": "6d2e66ff-97c6-4388-bfa0-da0897bed271",
+        "company_id": "df935c20-4fa4-4cf3-b5be-441d124aa934",
+        "entry_number": "48",
+        "entry_date": "2026-10-03",
+        "description": "Venta #FCB-00000005",
+        "reference_type": "sale",
+        "reference_id": "54afb42c-201e-4fa0-ad45-198dd5b60131",
+        "status": "posted",
+        "total_debit": "885.76",
+        "total_credit": "885.76",
+        "user_id": "e470fa3f-c326-4b57-9b5b-e741ee20acfa",
+        "posted_at": "2026-10-03 09:56:26",
+        "created_at": "2026-10-03 09:56:26",
+        "updated_at": null,
+        "lines": [
+            {
+                "id": "101539f1-70d2-4a40-b912-17538d1b3580",
+                "journal_entry_id": "6d2e66ff-97c6-4388-bfa0-da0897bed271",
+                "account_id": "a6c6f50c-9595-4f7c-9c75-3eb4e0299a20",
+                "description": "Ingreso por venta",
+                "debit": "0.00",
+                "credit": "727.27",
+                "created_at": "2026-10-03 09:56:26"
+            },
+            {
+                "id": "b4e46c20-1002-42d5-94d8-297afacb0c40",
+                "journal_entry_id": "6d2e66ff-97c6-4388-bfa0-da0897bed271",
+                "account_id": "755f2969-a626-41bf-9c7c-e9aafb2f4b72",
+                "description": "Venta #FCB-00000005",
+                "debit": "885.76",
+                "credit": "0.00",
+                "created_at": "2026-10-03 09:56:26"
+            },
+            {
+                "id": "e83d358a-b5cf-4d69-9cec-45d7e465893f",
+                "journal_entry_id": "6d2e66ff-97c6-4388-bfa0-da0897bed271",
+                "account_id": "029aaab2-d940-4be9-88c8-66b0d27834bb",
+                "description": "IVA Debito Fiscal",
+                "debit": "0.00",
+                "credit": "152.73",
+                "created_at": "2026-10-03 09:56:26"
+            },
+            {
+                "id": "fab36144-6812-4d58-bec2-3ebc140d206b",
+                "journal_entry_id": "6d2e66ff-97c6-4388-bfa0-da0897bed271",
+                "account_id": "a6c6f50c-9595-4f7c-9c75-3eb4e0299a20",
+                "description": "Recargo por medio de pago",
+                "debit": "0.00",
+                "credit": "5.76",
+                "created_at": "2026-10-03 09:56:26"
+            }
+        ]
+    }
+]

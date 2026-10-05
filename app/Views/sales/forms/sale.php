@@ -6,13 +6,18 @@ $selectedCompanyId = $selectedCompanyId ?? '';
 <?= $this->extend('layouts/app') ?>
 
 <?= $this->section('content') ?>
-<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+<?php $salesLive = false; ?>
+<?= view('sales/ui_start', get_defined_vars()) ?>
+<script src="<?= base_url('assets/js/sale-receipt-window.js') ?>"></script>
+<?php if (!(($isPopup ?? false) || service('request')->getGet('popup') === '1')): ?>
+<header class="insight-hero sales-hero">
     <div>
         <h1 class="h2 mb-1"><?= empty($sale) ? 'Venta nueva' : 'Editar venta' ?></h1>
         <p class="text-secondary mb-0">Crea el borrador, selecciona productos con stock.</p>
     </div>
-    <div class="d-flex flex-wrap gap-2">
-        <?php if (! empty($companies)): ?>
+    <?= view('sales/banner_actions', get_defined_vars()) ?>
+</header>
+<div class="sales-page-tools mb-3"><?php if (! empty($companies)): ?>
             <form method="get" action="<?= site_url('ventas') ?>" class="d-flex gap-2">
                 <select name="company_id" class="form-select">
                     <?php foreach ($companies as $company): ?>
@@ -21,17 +26,8 @@ $selectedCompanyId = $selectedCompanyId ?? '';
                 </select>
                 <button class="btn btn-outline-dark icon-btn" title="Cambiar empresa" aria-label="Cambiar empresa"><i class="bi bi-arrow-repeat"></i></button>
             </form>
-        <?php endif; ?>
-        <a href="<?= site_url('ventas/reportes' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" title="Reportes" aria-label="Reportes"><i class="bi bi-graph-up-arrow"></i></a>
-        <?php if ($context['canManage']): ?>
-            <a href="<?= site_url('ventas/pos' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-dark icon-btn" title="POS" aria-label="POS"><i class="bi bi-display"></i></a>
-            <a href="<?= site_url('ventas/kiosco' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" title="Kiosco" aria-label="Kiosco"><i class="bi bi-shop"></i></a>
-            <a href="<?= site_url('ventas/listas-precio/nueva' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Lista de precios" data-popup-subtitle="Configurar precios comerciales por producto." title="Lista de precios" aria-label="Lista de precios"><i class="bi bi-tags"></i></a>
-            <a href="<?= site_url('ventas/promociones/nueva' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Promocion" data-popup-subtitle="Crear promociones comerciales activas." title="Promociones" aria-label="Promociones"><i class="bi bi-percent"></i></a>
-        <?php endif; ?>
-        <a href="<?= site_url('ventas/clientes/nuevo' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Cliente" data-popup-subtitle="Alta rapida de cliente para ventas." title="Nuevo cliente" aria-label="Nuevo cliente"><i class="bi bi-person-plus"></i></a>
-    </div>
-</div>
+        <?php endif; ?></div>
+<?php endif; ?>
 <?php
 $sale = $sale ?? null;
 $saleItems = $saleItems ?? [];
@@ -468,6 +464,7 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
 
     const syncTotals = () => {
         let subtotal = 0; let taxTotal = 0; let paidTotal = 0;
+        const displayRows = [];
         body.querySelectorAll('tr').forEach((row) => {
             const qty = Number(row.querySelector('.sale-quantity')?.value || 0);
             const price = Number(row.querySelector('.sale-unit-price')?.value || 0);
@@ -480,6 +477,7 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
             const tax = Math.round((lineGross - net) * 100) / 100;
             subtotal += net;
             taxTotal += tax;
+            displayRows.push({row, gross:lineGross, rate:taxRate});
         });
         paymentsBody.querySelectorAll('.sale-payment-amount').forEach((field) => { paidTotal += Number(field.value || 0); });
         const types = (paymentRows?.data() || []).map(line => line.type);
@@ -488,6 +486,12 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
         paymentBase = Math.max(0, Math.round((subtotal + taxTotal - Number(globalDiscount.value || 0) - paymentDiscount) * 100) / 100);
         const lines = paymentRows?.data() || [];
         const total = paymentBase + lines.reduce((sum,line) => sum + line.surcharge, 0);
+        if (useConfiguredPayments) {
+            const display = window.distributePaymentTotal(displayRows, total);
+            subtotal = display.reduce((sum,line)=>sum+line.net,0);
+            taxTotal = display.reduce((sum,line)=>sum+line.tax,0);
+            display.forEach(line => { line.row.querySelector('.sale-line-total').textContent = formatMoney(line.gross); });
+        }
         if (useConfiguredPayments) {
             paidTotal = lines.filter(line => line.type !== 'transfer').reduce((sum,line) => sum + line.total, 0);
             const assigned = lines.reduce((sum,line) => sum + line.total, 0);
@@ -643,9 +647,33 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
             if (previousBase !== paymentBase) paymentRows?.syncBase();
         });
         const paymentForm = paymentsBody.closest('form');
-        paymentForm.addEventListener('submit', event => {
+        let savingPos = false;
+        paymentForm.addEventListener('submit', async event => {
+            event.preventDefault();
+            if (savingPos) return;
             syncTotals();
-            try { paymentRows.validate(); } catch (error) { event.preventDefault(); alert(error.message); }
+            try { paymentRows.validate(); } catch (error) { alert(error.message); return; }
+            const receiptWindow = window.openSaleReceiptWindow(() => window.location.reload());
+            savingPos = true;
+            const buttons = Array.from(paymentForm.querySelectorAll('button[type="submit"], button:not([type])'));
+            buttons.forEach(button => button.disabled = true);
+            let registered = false;
+            try {
+                const response = await fetch(paymentForm.action, {method:'POST', body:new FormData(paymentForm), headers:{'X-Requested-With':'XMLHttpRequest'}});
+                const data = await response.json();
+                if (data.csrf_token) {
+                    const token = paymentForm.querySelector('input[name="<?= csrf_token() ?>"]');
+                    if (token) token.value = data.csrf_token;
+                }
+                if (!response.ok || data.status !== 'ok') throw new Error(data.message || 'No se pudo registrar la venta.');
+                registered = true;
+                receiptWindow.show(data.receipt_url);
+            } catch (error) {
+                receiptWindow.close();
+                alert(registered ? 'La venta se registró. Abre su comprobante desde Ventas; no vuelvas a registrarla.' : error.message);
+            } finally {
+                if (!registered) { savingPos = false; buttons.forEach(button => button.disabled = false); }
+            }
         });
         paymentForm.addEventListener('formdata', event => paymentRows.appendTo(event.formData));
     }
@@ -852,4 +880,5 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
     updateArcaCheckbox();
 })();
 </script>
+<?= view('sales/ui_end') ?>
 <?= $this->endSection() ?>

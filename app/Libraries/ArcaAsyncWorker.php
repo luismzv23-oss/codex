@@ -102,6 +102,8 @@ class ArcaAsyncWorker
         }
 
         try {
+            $items = $db->table('sale_items')->where('sale_id', $saleId)->get()->getResultArray();
+            [$sale] = PaymentFiscalPolicy::forSale($sale, $items);
             // Build fiscal voucher payload
             $voucher = [
                 'DocTipo'    => $sale['customer_doc_type'] ?? 96,

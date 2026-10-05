@@ -1,5 +1,7 @@
 <?= $this->extend('layouts/app') ?>
 <?= $this->section('content') ?>
+<?php $salesLive = false; ?>
+<?= view('sales/ui_start', get_defined_vars()) ?>
 <?php
 $consumerFinalId = '';
 foreach (($customers ?? []) as $c) {
@@ -23,7 +25,8 @@ $productCatalog = array_values(array_map(static function (array $product): array
 ?>
 <div id="codex-kiosk-toast" class="codex-kiosk-toast"><i class="bi bi-check-circle-fill"></i><span></span></div>
 
-<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-2">
+<?php if (!(($isPopup ?? false) || service('request')->getGet('popup') === '1')): ?>
+<header class="insight-hero sales-hero">
     <div class="d-flex align-items-center gap-3">
         <h1 class="h2 mb-0">Facturacion kiosco</h1>
         <?php if (!empty($cashSession)): ?>
@@ -39,18 +42,9 @@ $productCatalog = array_values(array_map(static function (array $product): array
             </span>
         <?php endif; ?>
     </div>
-    <div class="d-flex align-items-center gap-2">
-        <a href="<?= site_url('ventas/pos' . (!empty($companyId) ? '?company_id=' . $companyId : '')) ?>"
-            class="btn btn-outline-dark icon-btn" title="Venta POS" aria-label="Venta POS"><i
-                class="bi bi-display"></i></a>
-        <a href="<?= site_url('ventas/kiosco' . (!empty($companyId) ? '?company_id=' . $companyId : '')) ?>"
-            class="btn btn-dark icon-btn" title="Venta kiosco" aria-label="Venta kiosco"><i class="bi bi-shop"></i></a>
-        <a href="<?= site_url('ventas' . (!empty($companyId) ? '?company_id=' . $companyId : '')) ?>"
-            class="btn btn-outline-dark icon-btn" title="Volver a Ventas" aria-label="Volver a Ventas"><i
-                class="bi bi-arrow-left"></i></a>
-
-    </div>
-</div>
+    <?= view('sales/banner_actions', get_defined_vars()) ?>
+</header>
+<?php endif; ?>
 <p class="text-secondary mb-4">Pantalla continua de emision rapida · Escanea codigo de barras o busca por nombre
     · <kbd>F2</kbd> Cobrar · <kbd>F4</kbd> Cancelar · <kbd>F5</kbd> Imprimir</p>
 
@@ -265,6 +259,9 @@ $productCatalog = array_values(array_map(static function (array $product): array
         </div>
     </div>
 </div>
+<script src="<?= base_url('assets/js/qrcode-generator.js') ?>"></script>
+<script src="<?= base_url('assets/js/kiosk-ticket-design.js') ?>"></script>
+<script src="<?= base_url('assets/js/sale-receipt-window.js') ?>"></script>
 <script src="<?= base_url('assets/js/kiosk-payments.js') ?>"></script>
 <script src="<?= base_url('assets/js/sales-product-search.js') ?>"></script>
 <script>
@@ -503,21 +500,19 @@ $productCatalog = array_values(array_map(static function (array $product): array
         const surchargeBase = () => Math.max(0, roundMoney(productsTotal() - paymentDiscount()));
         const surchargeAmount = () => roundMoney((paymentRows?.data() || []).reduce((sum,line)=>sum+line.surcharge,0));
         const totalAmount = () => roundMoney(surchargeBase() + surchargeAmount());
+        const displayedItems = (target = totalAmount()) => window.distributePaymentTotal(
+            Array.from(items.values()).map(item => ({item, gross: lineGrossAmount(item), rate: Number(item.tax_rate ?? defaultTax?.rate ?? 0)})), target);
         const escapeSummary = value => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[char]));
         const summaryHtml = () => {
             const taxesByRate = new Map();
-            items.forEach(item => {
-                const rate = Number(item.tax_rate ?? defaultTax?.rate ?? 0);
-                const gross = lineGrossAmount(item);
-                const tax = roundMoney(gross - roundMoney(gross / (1 + rate / 100)));
+            const displayed = displayedItems();
+            displayed.forEach(({rate, tax}) => {
                 taxesByRate.set(rate, roundMoney((taxesByRate.get(rate) || 0) + tax));
             });
             const row = (label, amount) => `<div style="display:flex;justify-content:space-between;gap:24px"><span>${escapeSummary(label)}</span><span>${formatMoney(amount)}</span></div>`;
-            return row('Subtotal neto', subtotalAmount())
+            return row('Subtotal neto', roundMoney(displayed.reduce((sum,line)=>sum+line.net,0)))
                 + Array.from(taxesByRate, ([rate, amount]) => row(`IVA ${formatMoney(rate)} %`, amount)).join('')
-                + (paymentDiscount() > 0 ? row('Descuento por medio de pago', -paymentDiscount()) : '')
-                + row('Total con impuestos', surchargeBase())
-                + (paymentRows?.data() || []).filter(line=>line.rate>0).map(line=>row(`Recargo ${line.code} (${formatMoney(line.rate)} %)`,line.surcharge)).join('');
+                + row('Total con impuestos', totalAmount());
         };
 
 
@@ -530,6 +525,14 @@ $productCatalog = array_values(array_map(static function (array $product): array
 
         // ── Change (vuelto) calculation ─────────────────────
         const updatePaymentSummary = () => {
+            displayedItems().forEach(({item, gross}) => {
+                const quantityField = Array.from(ticketBody.querySelectorAll('.kiosk-qty')).find(field => field.dataset.id === String(item.id));
+                const row = quantityField?.closest('tr');
+                if (row) {
+                    row.querySelector('.line-total').textContent = formatMoney(gross);
+                    row.querySelector('input[readonly]').value = (gross / Number(item.quantity)).toFixed(2);
+                }
+            });
             totalLabel.textContent = formatMoney(totalAmount());
             taxBreakdownLabel.innerHTML = items.size ? summaryHtml() : '';
             taxBreakdownLabel.style.display = items.size ? 'block' : 'none';
@@ -790,257 +793,25 @@ $productCatalog = array_values(array_map(static function (array $product): array
         });
 
         // ── Ticket print markup ─────────────────────────────
-        const buildPrintMarkup = () => {
-            const printedAt = new Date().toLocaleString('es-AR');
-            const paperWidth = ticketSettings.ticket_paper_width || '80mm';
-
-            const fontFamilyOption = ticketSettings.ticket_font_family || 'Courier';
-            let fontFamilyStyle = '"Courier New", Courier, monospace';
-            let fontWeightStyle = 'normal';
-            if (fontFamilyOption === 'Helvetica 75 Bold') {
-                fontFamilyStyle = '"Helvetica 75 Bold", "Helvetica Neue", Helvetica, Arial, sans-serif';
-                fontWeightStyle = 'bold';
-            } else if (fontFamilyOption === 'Helvetica') {
-                fontFamilyStyle = '"Helvetica Neue", Helvetica, Arial, sans-serif';
-            } else if (fontFamilyOption === 'DejaVu Sans') {
-                fontFamilyStyle = '"DejaVu Sans", sans-serif';
-            } else if (fontFamilyOption === 'DejaVu Serif') {
-                fontFamilyStyle = '"DejaVu Serif", serif';
-            } else if (fontFamilyOption === 'Times-Roman') {
-                fontFamilyStyle = '"Times New Roman", Times, serif';
-            }
-
-            const topLeftText = ticketSettings.ticket_custom_text_top_left || '';
-            const topRightText = ticketSettings.ticket_custom_text_top_right || '';
-            const boldTopLeft = Number(ticketSettings.ticket_bold_top_left) === 1;
-            const boldTopRight = Number(ticketSettings.ticket_bold_top_right) === 1;
-
-            const companySubtitle = ticketSettings.ticket_company_subtitle || '';
-            const companyAddress = ticketSettings.ticket_company_address || '';
-            const companyPhone = ticketSettings.ticket_company_phone || '';
-
-            const rows = Array.from(items.values()).map((item) => {
-                const base = Number(item.quantity) * Number(item.unit_price);
-                const discountAmount = base * (Number(item.discount_rate || 0) / 100);
-                const amount = base - discountAmount;
-                const discountText = item.discount_rate > 0 ? ` <span style="font-size:10px">- ${Number(item.discount_rate).toFixed(0)}%</span>` : '';
-
-                const skuPart = Number(ticketSettings.ticket_show_sku) === 1 ? `[${item.sku}] ` : '';
-                const brandPart = (Number(ticketSettings.ticket_show_brand) === 1 && item.brand)
-                    ? `<div class="ticket-meta">${item.brand}</div>`
-                    : '';
-
-                const showBreakdown = Number(ticketSettings.ticket_show_item_breakdown) === 1;
-                const breakdownHtml = showBreakdown
-                    ? `<span>${Number(item.quantity)} x ${formatMoney(item.unit_price)}${discountText}</span>`
-                    : `<span>Cant: ${Number(item.quantity)}</span>`;
-
-                return `
-                    <div class="ticket-line">
-                        <div class="ticket-name">${skuPart}${item.name}</div>
-                        ${brandPart}
-                        <div class="ticket-row">
-                            ${breakdownHtml}
-                            <strong>${formatMoney(amount)}</strong>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-
-            const receivedTotal = paymentRows.data().reduce((sum,line)=>sum+line.received,0);
-            const change = Math.max(0, receivedTotal - totalAmount());
-
-            const headerTitle = ticketSettings.ticket_header_title || companyLegalName || companyName;
-
-            const showCustomer = Number(ticketSettings.ticket_show_customer) === 1;
-            const customerHtml = showCustomer
-                ? `
-                    <div class="ticket-small" style="margin-top:6px; border-top:1px dashed #000; padding-top:4px; text-align:left;">
-                        <strong>Cliente:</strong> ${kioskCustomerName.value}<br>
-                        ${kioskDocumentDisplay ? `<strong>Doc:</strong> ${kioskDocumentDisplay.value}` : ''}
-                    </div>
-                `
-                : '';
-
-            const showUser = Number(ticketSettings.ticket_show_user) === 1;
-            const userHtml = showUser
-                ? `<div class="ticket-small" style="text-align:left;"><strong>Vendedor:</strong> ${userName}</div>`
-                : '';
-
-            const footerHtml = ticketSettings.ticket_footer_notes
-                ? `
-                    <div class="ticket-small" style="margin-top:10px; border-top:1px dashed #000; padding-top:6px; text-align:center; white-space:pre-wrap;">
-                        ${ticketSettings.ticket_footer_notes}
-                    </div>
-                `
-                : '';
-
-            const printableWidth = paperWidth === '58mm' ? '50mm' : '72mm';
-
-            return `<!doctype html>
-<html lang="es">
-<head>
-    <meta charset="utf-8">
-    <title>Ticket ${paperWidth}</title>
-    <style>
-        @page {
-            size: ${paperWidth} auto;
-            margin: 3mm;
-        }
-        * {
-            box-sizing: border-box;
-        }
-        body {
-            margin: 0;
-            font-family: ${fontFamilyStyle};
-            font-weight: ${fontWeightStyle};
-            background: #f7f4ef;
-            color: #000;
-        }
-        .preview-shell {
-            min-height: 100vh;
-            display: flex;
-            align-items: flex-start;
-            justify-content: center;
-            padding: 18px;
-        }
-        .preview-card {
-            width: 100%;
-            max-width: 360px;
-        }
-        .ticket {
-            width: ${paperWidth};
-            max-width: 100%;
-            background: #fff;
-            margin: 0 auto;
-            padding: 5mm 4mm;
-            border-radius: 12px;
-            box-shadow: 0 16px 40px rgba(0,0,0,.14);
-            color: #000;
-        }
-        .ticket-center {
-            text-align: center;
-        }
-        .ticket-small {
-            font-size: 11px;
-            color: #000;
-            line-height: 1.35;
-        }
-        .ticket-line {
-            padding: 6px 0;
-        }
-        .ticket-name {
-            font-size: 12px;
-            font-weight: 700;
-            margin-bottom: 2px;
-            word-break: break-word;
-        }
-        .ticket-meta {
-            font-size: 11px;
-            color: #000;
-            margin-bottom: 4px;
-        }
-        .ticket-row {
-            display: flex;
-            justify-content: space-between;
-            gap: 8px;
-            font-size: 12px;
-        }
-        .ticket-total {
-            border-top: 1px solid #000;
-            margin-top: 8px;
-            padding-top: 8px;
-            display: flex;
-            justify-content: space-between;
-            font-size: 15px;
-            font-weight: 700;
-        }
-        .preview-actions {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            margin-top: 14px;
-        }
-        .preview-actions button {
-            border: 1px solid #1f2328;
-            border-radius: 10px;
-            background: #fff;
-            padding: 9px 14px;
-            cursor: pointer;
-        }
-        @media print {
-            body {
-                background: #fff;
-                color: #000 !important;
-            }
-            .ticket, .ticket * {
-                color: #000 !important;
-                background: #fff !important;
-            }
-            .preview-actions {
-                display: none;
-            }
-            .ticket {
-                box-shadow: none;
-                border-radius: 0;
-                margin: 0;
-                width: ${printableWidth};
-            }
-            .preview-shell {
-                padding: 0;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="preview-shell">
-        <div class="preview-card">
-            <div class="ticket">
-                <div class="ticket-center">
-                    <div style="font-size:14px; font-weight:700; text-transform:uppercase; margin-bottom:4px;">${headerTitle}</div>
-                    ${companySubtitle ? `<div style="font-size:11px; font-weight:700; text-transform:uppercase; margin-bottom:4px;">${companySubtitle}</div>` : ''}
-                    ${companyTaxId ? `<div class="ticket-small">CUIT: ${companyTaxId}</div>` : ''}
-                    ${companyAddress ? `<div class="ticket-small">${companyAddress}</div>` : ''}
-                    ${companyPhone ? `<div class="ticket-small">${companyPhone}</div>` : ''}
-                    ${(topLeftText || topRightText) ? `
-                    <div style="display: flex; justify-content: space-between; font-size: 11px; margin-top: 4px; padding-bottom: 4px; border-bottom: 1px dashed #000;">
-                        <span style="font-weight: ${boldTopLeft ? 'bold' : 'normal'}; text-align: left; white-space: pre-line;">${topLeftText}</span>
-                        <span style="font-weight: ${boldTopRight ? 'bold' : 'normal'}; text-align: right; white-space: pre-line;">${topRightText}</span>
-                    </div>` : `
-                    <div style="margin:4px 0; border-bottom:1px dashed #000;"></div>
-                    `}
-                    <div><strong><?= esc($settings['kiosk_document_label'] ?? 'Ticket Consumidor Final') ?></strong></div>
-                    <div class="ticket-small">${printedAt}</div>
-                    <div class="ticket-small">${currencyField.options[currencyField.selectedIndex].text}</div>
-                    <div class="ticket-small">Referencia: ${referenceField.value}</div>
-                </div>
-                
-                ${rows}
-                
-                <div class="ticket-small" style="margin-top:6px;border-top:1px dashed #000;padding-top:4px;">${summaryHtml()}</div>
-                <div class="ticket-total">
-                    <span>TOTAL A PAGAR</span>
-                    <span>${totalLabel.textContent}</span>
-                </div>
-
-                
-                <div class="ticket-small" style="margin-top:8px; text-align:left;"><strong>Pago:</strong> ${paymentRows.data().map(line=>`${escapeSummary(line.code)}: ${formatMoney(line.total)}${line.type === 'transfer' ? ' (pendiente de confirmaci&oacute;n)' : ''}`).join('<br>')}</div>
-                <div class="ticket-small" style="text-align:left;"><strong>Importe informado:</strong> ${formatMoney(receivedTotal)}</div>
-                ${change > 0 ? '<div class="ticket-small" style="font-weight:700; color:#198754; text-align:left;"><strong>Vuelto:</strong> ' + formatMoney(change) + '</div>' : ''}
-                
-                ${customerHtml}
-                ${userHtml}
-                ${footerHtml}
-            </div>
-            <div class="preview-actions">
-                <button type="button" onclick="window.print()">Imprimir</button>
-                <button type="button" onclick="window.close()">Cerrar</button>
-            </div>
-        </div>
-    </div>
-</body>
-</html>`;
+        let lastPrintedTicket = null;
+        let lastReceiptUrl = null;
+        const ticketData = () => {
+            const taxes = new Map();
+            const receiptTotal = totalAmount();
+            const displayed = displayedItems(receiptTotal);
+            displayed.forEach(({rate, tax}) => {
+                taxes.set(rate, roundMoney((taxes.get(rate) || 0) + tax));
+            });
+            return {companyName: companyLegalName || companyName, taxId: companyTaxId,
+                date: new Date().toLocaleString('es-AR'), document: kioskDocumentDisplay?.value || defaultKioskDocLabel,
+                reference: referenceField.value, currency: currencyField.value, customer: kioskCustomerName.value,
+                user: userName, items: displayed.map(({item,gross}) => ({...item, unit_price:gross/Number(item.quantity), line_total:gross, discount_rate:0})),
+                subtotal: roundMoney(displayed.reduce((sum,line)=>sum+line.net,0)), discount: 0, total: receiptTotal,
+                taxes: Array.from(taxes, ([rate, amount]) => ({label: `IVA ${formatMoney(rate)} %`, amount})),
+                payments: paymentRows.data().map(line => ({...line})), draft: true};
         };
+        const buildPrintMarkup = () => window.renderKioskTicket(ticketSettings, items.size ? ticketData() : lastPrintedTicket);
+
 
         // ── Event listeners ─────────────────────────────────
         searchField.addEventListener('input', () => searchProducts());
@@ -1060,6 +831,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
         // ── Continuous flow: AJAX submit ────────────────────
         form.addEventListener('submit', (event) => {
             event.preventDefault();
+            if (submitBtn.disabled) return;
             if (items.size === 0) {
                 beepError();
                 showToast('Agrega al menos un producto', 'exclamation-triangle-fill');
@@ -1070,6 +842,8 @@ $productCatalog = array_values(array_map(static function (array $product): array
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
 
+            const submittedTicket = ticketData();
+            const receiptWindow = window.openSaleReceiptWindow();
             const formData = new FormData(form);
             paymentRows.appendTo(formData);
             fetch(form.action, {
@@ -1103,7 +877,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                     return data;
                 })
                 .then(data => {
-                    if (!data) return;
+                    if (!data) { receiptWindow.close(); return; }
 
                     // Refresh the CSRF token for the next submit
                     if (data.csrf_token) {
@@ -1111,6 +885,10 @@ $productCatalog = array_values(array_map(static function (array $product): array
                     }
 
                     if (data.status === 'ok') {
+                        lastReceiptUrl = data.receipt_url;
+                        if (lastReceiptUrl) receiptWindow.show(lastReceiptUrl);
+                        else receiptWindow.close();
+                        lastPrintedTicket = {...submittedTicket, draft: false, reference: data.sale_number || submittedTicket.reference, ...data.ticket_fiscal};
                         beepConfirm();
                         let toastMsg = 'Venta registrada ✓ ' + (data.sale_number || referenceField.value);
                         if (data.arca_cae) {
@@ -1137,6 +915,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                     }
                 })
                 .catch(err => {
+                    receiptWindow.close();
                     beepError();
                     showToast('Error al registrar: ' + err.message, 'x-circle-fill');
                 })
@@ -1147,11 +926,15 @@ $productCatalog = array_values(array_map(static function (array $product): array
         });
 
         printButton.addEventListener('click', () => {
-            if (items.size === 0) {
+            if (items.size === 0 && lastReceiptUrl) {
+                window.openSaleReceiptWindow().show(lastReceiptUrl);
+                return;
+            }
+            if (items.size === 0 && !lastPrintedTicket) {
                 showToast('Agrega productos antes de imprimir', 'exclamation-triangle-fill');
                 return;
             }
-            try { paymentRows.validate(); } catch (error) { showToast(error.message, 'exclamation-triangle'); return; }
+            try { if (items.size) paymentRows.validate(); } catch (error) { showToast(error.message, 'exclamation-triangle'); return; }
             const popup = window.open('', 'codex-kiosk-ticket', 'width=460,height=820');
             if (!popup) return;
             popup.document.open();
@@ -1314,4 +1097,5 @@ $productCatalog = array_values(array_map(static function (array $product): array
         focusProductSearch();
     })();
 </script>
+<?= view('sales/ui_end') ?>
 <?= $this->endSection() ?>

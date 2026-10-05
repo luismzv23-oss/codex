@@ -41,55 +41,41 @@ class CashController extends BaseController
             $cashRegisterId = (string) ($session->get('active_cash_register_id') ?? '');
         }
 
-        $activeSessions = $service->activeSessions($companyId, $cashRegisterId);
-
-        $activeSessionsMap = [];
-        foreach ($activeSessions as $s) {
-            $activeSessionsMap[$s['cash_register_id']] = $s;
-        }
-
-        $registers = $service->registerRows($companyId);
         $isVendedor = $this->roleSlug() === 'vendedor';
-        $currentUserId = $this->currentUser()['id'] ?? '';
-        $hasAnyOpenSessionByMe = false;
-
-        // Check if current seller already has an open session
-        $sellerSessions = (new CashSessionModel())
-            ->where('company_id', $companyId)
-            ->where('status', 'open')
-            ->where('opened_by', $currentUserId)
-            ->findAll();
-        if ($sellerSessions !== []) {
-            $hasAnyOpenSessionByMe = true;
+        $currentUserId = (string) ($this->currentUser()['id'] ?? '');
+        // Resolve ownership before applying a user-supplied register filter.
+        $activeSessions = $service->activeSessions($companyId);
+        $activeSessionsMap = array_column($activeSessions, null, 'cash_register_id');
+        $registers = $service->registerRows($companyId);
+        $hasAnyOpenSessionByMe = count(array_filter($activeSessions, static fn($row) => $row['opened_by'] === $currentUserId)) > 0;
+        if ($isVendedor) {
+            $cashRegisterId = (string) ($activeSessions[0]['cash_register_id'] ?? '');
+            if ($cashRegisterId === '') session()->remove('active_cash_register_id');
+            else session()->set('active_cash_register_id', $cashRegisterId);
         }
+        $filterRegisterId = $cashRegisterId;
 
         if ($isVendedor) {
-            $filteredRegisters = [];
-            foreach ($registers as $r) {
-                $activeSess = $activeSessionsMap[$r['id']] ?? null;
-                if ($activeSess && $activeSess['opened_by'] === $currentUserId) {
-                    $filteredRegisters[] = $r;
-                }
-            }
-            if ($filteredRegisters === []) {
-                foreach ($registers as $r) {
-                    $activeSess = $activeSessionsMap[$r['id']] ?? null;
-                    if (!$activeSess) {
-                        $filteredRegisters[] = $r;
-                    }
-                }
-            }
-            $registers = $filteredRegisters;
+            return view('cash/seller', [
+                'pageTitle' => 'Mi caja',
+                'context' => $context,
+                'registers' => $registers,
+                'activeSessionsMap' => $activeSessionsMap,
+                'hasOpenSession' => $hasAnyOpenSessionByMe,
+            ]);
         }
 
-        $filterRegisterId = $cashRegisterId;
-        if ($isVendedor && empty($cashRegisterId)) {
-            $filterRegisterId = array_column($registers, 'id');
+        [$dashboardFrom, $dashboardTo] = \App\Libraries\CashDashboard::period($this->request->getGet('from'), $this->request->getGet('to'));
+        $dashboardRegisters = array_values(array_filter(array_column($registers, 'id'), static fn($id) => $cashRegisterId === '' || $id === $cashRegisterId));
+        if ($isVendedor && !$hasAnyOpenSessionByMe) $dashboardRegisters = [];
+        $dashboard = (new \App\Libraries\CashDashboard())->load($companyId, $dashboardRegisters, $dashboardFrom, $dashboardTo, $isVendedor ? $currentUserId : null);
+        if ($this->request->getGet('cash_dashboard') === '1') {
+            return $this->response->setHeader('Cache-Control', 'no-store')->setJSON(['html'=>view('cash/dashboard', ['dashboard'=>$dashboard])]);
         }
 
         $vendorFilter = trim((string) $this->request->getGet('vendor_id'));
         $sessions = $service->recentSessions($companyId, 100, $filterRegisterId, $vendorFilter ?: null);
-        $movements = $service->recentMovements($companyId, 20, $filterRegisterId);
+        $movements = $service->recentMovements($companyId, 100, $filterRegisterId);
         $paymentMethods = $service->paymentMethodBreakdown($companyId, $filterRegisterId);
 
         $sessionVendors = db_connect()->table('cash_sessions cs')
@@ -102,12 +88,12 @@ class CashController extends BaseController
 
         return view('cash/index', [
             'pageTitle' => 'Caja y Tesoreria',
+            'dashboard' => $dashboard,
             'hasAnyOpenSessionByMe' => $hasAnyOpenSessionByMe,
             'context' => $context,
             'companies' => $this->cashCompanies(),
             'selectedCompanyId' => $companyId,
             'selectedRegisterId' => $cashRegisterId,
-            'summary' => $service->summary($companyId, $cashRegisterId),
             'registers' => $registers,
             'sessions' => $sessions,
             'activeSessionsMap' => $activeSessionsMap,
@@ -267,13 +253,19 @@ class CashController extends BaseController
             }
         }
 
-        $db = db_connect();
-        $db->transStart();
-
-
         $transferFunds = $this->request->getPost('transfer_funds') === '1';
         $destRegisterId = trim((string) $this->request->getPost('dest_cash_register_id'));
         $transferAmount = (float) $this->request->getPost('transfer_amount');
+        $destSession = null;
+        if ($transferFunds) {
+            $destSession = (new CashSessionModel())->where('company_id', $companyId)
+                ->where('cash_register_id', $destRegisterId)->where('status', 'open')->first();
+            if (!$destSession || $destRegisterId === $session['cash_register_id'] || $transferAmount <= 0) {
+                return redirect()->back()->withInput()->with('error', 'Para rendir efectivo selecciona otra caja con una sesion abierta y un monto mayor a cero.');
+            }
+        }
+        $db = db_connect();
+        $db->transStart();
 
         if ($transferFunds && $destRegisterId !== '' && $transferAmount > 0) {
             $destRegister = (new CashRegisterModel())->where('company_id', $companyId)->find($destRegisterId);
@@ -441,6 +433,10 @@ class CashController extends BaseController
             return redirect()->back()->withInput()->with('error', 'Debes seleccionar una sesion y un medio.');
         }
 
+        $ownedSession = $this->cashService()->ownedSession($context['company']['id'], $sessionId);
+        if (!$ownedSession || $ownedSession['status'] !== 'open') {
+            return redirect()->back()->withInput()->with('error', 'Debes seleccionar una sesion abierta propia.');
+        }
         $this->cashService()->createReconciliation([
             'company_id' => $context['company']['id'],
             'cash_session_id' => $sessionId,
@@ -582,7 +578,7 @@ class CashController extends BaseController
 
     private function cashService(): CashService
     {
-        return new CashService();
+        return new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null);
     }
 
     public function endorseCheckForm(string $checkId)
@@ -593,6 +589,7 @@ class CashController extends BaseController
         }
 
         $check = (new \App\Models\CashCheckModel())->where('company_id', $context['company']['id'])->find($checkId);
+        if ($this->roleSlug() === 'vendedor' && ($check['created_by'] ?? null) !== ($this->currentUser()['id'] ?? '')) $check = null;
         if (!$check || !in_array($check['status'], ['portfolio', 'received'], true)) {
             return redirect()->to($this->cashRoute('caja', $context['company']['id']))->with('error', 'El cheque no está disponible para endoso.');
         }
@@ -647,6 +644,7 @@ class CashController extends BaseController
         }
 
         $check = (new \App\Models\CashCheckModel())->where('company_id', $context['company']['id'])->find($checkId);
+        if ($this->roleSlug() === 'vendedor' && ($check['created_by'] ?? null) !== ($this->currentUser()['id'] ?? '')) $check = null;
         if (!$check || !in_array($check['status'], ['portfolio', 'received'], true)) {
             return redirect()->to($this->cashRoute('caja', $context['company']['id']))->with('error', 'El cheque no está disponible para depósito.');
         }
@@ -698,6 +696,7 @@ class CashController extends BaseController
         }
 
         $check = (new \App\Models\CashCheckModel())->where('company_id', $context['company']['id'])->find($checkId);
+        if ($this->roleSlug() === 'vendedor' && ($check['created_by'] ?? null) !== ($this->currentUser()['id'] ?? '')) $check = null;
         if (!$check || !in_array($check['status'], ['deposited', 'endorsed'], true)) {
             return redirect()->to($this->cashRoute('caja', $context['company']['id']))->with('error', 'El cheque no está en un estado que permita rechazo.');
         }
@@ -748,8 +747,7 @@ class CashController extends BaseController
             return $context;
         }
 
-        $sessionModel = new CashSessionModel();
-        $session = $sessionModel->where('company_id', $context['company']['id'])->find($sessionId);
+        $session = $this->cashService()->ownedSession($context['company']['id'], $sessionId);
         if (!$session) {
             return redirect()->to($this->cashRoute('caja', $context['company']['id']))->with('error', 'La sesión de caja no existe.');
         }

@@ -438,15 +438,7 @@
         $summaryRows['Descuento general'] = -(float) $sale['global_discount_total'];
     }
     $summaryRows['Total con impuestos'] = (float) $sale['total'] - (float) ($sale['payment_surcharge_amount'] ?? 0);
-    $paymentLines = array_values(array_filter($payments ?? [], static fn($line) => !empty($line['payment_method_id']) && ($line['status'] ?? '') !== 'reversed'));
-    foreach ($paymentLines as $paymentLine) {
-        if ((float) $paymentLine['surcharge_amount'] <= 0) { continue; }
-        $label = 'Recargo ' . $paymentLine['payment_method_code'] . ' (' . number_format((float) $paymentLine['surcharge_rate'], 2, ',', '.') . ' %)';
-        $summaryRows[$label] = ($summaryRows[$label] ?? 0) + (float) $paymentLine['surcharge_amount'];
-    }
-    if (!$paymentLines && (float) ($sale['payment_surcharge_rate'] ?? 0) > 0) {
-        $summaryRows['Recargo ' . ($sale['payment_method_code'] ?? '') . ' (' . number_format((float) $sale['payment_surcharge_rate'], 2, ',', '.') . ' %)'] = (float) $sale['payment_surcharge_amount'];
-    }
+    $paymentLines = array_values(array_filter($payments ?? [], static fn($line) => !empty($line['payment_method_id']) && ($line['status'] ?? '') !== 'reversed' && (int)($line['show_on_receipt'] ?? 1) === 1));
     ?>
     <div class="section">
         <table style="width:55%;margin-left:auto;border-collapse:collapse;">
@@ -460,10 +452,10 @@
     <!-- 6. Footer, CAE & Barcode block -->
     <?php if ($paymentLines): ?>
         <table style="width:100%;margin-top:16px;font-size:11px;">
-            <tr><th>Medio de pago</th><th>Asignado</th><th>Recargo</th><th>Total</th><th>Estado</th></tr>
+            <tr><th>Medio de pago</th><th>Total</th><th>Estado</th></tr>
             <?php foreach ($paymentLines as $line): ?>
-                <tr><td><?= esc($line['payment_method_code']) ?></td><td><?= number_format((float)$line['base_amount'],2,',','.') ?></td><td><?= number_format((float)$line['surcharge_amount'],2,',','.') ?></td><td><?= number_format((float)$line['amount'],2,',','.') ?></td><td><?= ($line['status'] ?? '') === 'pending' ? 'Pendiente de confirmación' : 'Registrado' ?></td></tr>
-                <?php if ($line['payment_method'] === 'cash'): ?><tr><td colspan="5">Efectivo entregado: <?= number_format((float)$line['received_amount'],2,',','.') ?> · Vuelto: <?= number_format((float)$line['change_amount'],2,',','.') ?></td></tr><?php endif; ?>
+                <tr><td><?= esc($line['payment_method_code']) ?></td><td><?= number_format((float)$line['amount'],2,',','.') ?></td><td><?= ($line['status'] ?? '') === 'pending' ? 'Pendiente de confirmación' : 'Registrado' ?></td></tr>
+                <?php if ($line['payment_method'] === 'cash'): ?><tr><td colspan="3">Efectivo entregado: <?= number_format((float)$line['received_amount'],2,',','.') ?> · Vuelto: <?= number_format((float)$line['change_amount'],2,',','.') ?></td></tr><?php endif; ?>
             <?php endforeach; ?>
         </table>
     <?php endif; ?>

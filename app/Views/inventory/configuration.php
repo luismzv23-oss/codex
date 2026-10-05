@@ -7,31 +7,33 @@
         <p class="text-secondary mb-0">Parametros del sistema, depositos operativos y base de productos por empresa.</p>
     </div>
     <div class="d-flex flex-wrap gap-2">
-        <?php if (! empty($companies)): ?>
-            <form method="get" action="<?= site_url('inventario/configuracion') ?>" class="d-flex gap-2">
-                <select name="company_id" class="form-select">
-                    <?php foreach ($companies as $company): ?>
-                        <option value="<?= esc($company['id']) ?>" <?= $selectedCompanyId === $company['id'] ? 'selected' : '' ?>><?= esc($company['name']) ?></option>
-                    <?php endforeach; ?>
-                </select>
-                <button class="btn btn-outline-dark icon-btn" title="Cambiar empresa" aria-label="Cambiar empresa"><i class="bi bi-arrow-repeat"></i></button>
-            </form>
-        <?php endif; ?>
         <a href="<?= site_url('inventario' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark">Volver</a>
     </div>
 </div>
 
 <div class="row g-4">
-    <!-- Interactive Search Toolbar -->
+    <!-- Interactive Search Toolbar with Company Filter -->
     <div class="col-12">
         <div class="card border-0 shadow-sm rounded-4 bg-light">
-            <div class="card-body p-3 d-flex flex-wrap justify-content-between align-items-center gap-3">
-                <div class="input-group" style="max-width: 400px;">
-                    <span class="input-group-text bg-white border-end-0 text-secondary"><i class="bi bi-search"></i></span>
-                    <input type="text" id="inventorySearchInput" class="form-control border-start-0 ps-0 shadow-none" placeholder="Filtrar depósitos, ubicaciones, reservas, productos..." aria-label="Buscar en configuración de inventario">
-                    <button class="btn btn-white border border-start-0 text-secondary" type="button" id="clearInventorySearchBtn" style="display: none;" title="Limpiar busqueda"><i class="bi bi-x-lg"></i></button>
+            <div class="card-body p-3 d-flex align-items-center justify-content-between gap-3">
+                <div class="d-flex align-items-center gap-3 flex-grow-1">
+                    <?php if (! empty($companies)): ?>
+                        <form method="get" action="<?= site_url('inventario/configuracion') ?>" class="d-flex align-items-center gap-2 mb-0">
+                            <select name="company_id" class="form-select bg-white" style="width: auto; min-width: 200px;">
+                                <?php foreach ($companies as $company): ?>
+                                    <option value="<?= esc($company['id']) ?>" <?= $selectedCompanyId === $company['id'] ? 'selected' : '' ?>><?= esc($company['name']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <button type="submit" class="btn btn-outline-dark icon-btn bg-white flex-shrink-0" title="Cambiar empresa" aria-label="Cambiar empresa"><i class="bi bi-arrow-repeat"></i></button>
+                        </form>
+                    <?php endif; ?>
+                    <div class="input-group flex-grow-1" style="max-width: 420px;">
+                        <span class="input-group-text bg-white border-end-0 text-secondary"><i class="bi bi-search"></i></span>
+                        <input type="text" id="inventorySearchInput" class="form-control border-start-0 ps-0 shadow-none bg-white" placeholder="Filtrar depósitos, ubicaciones, reservas, productos..." aria-label="Buscar en configuración de inventario">
+                        <button class="btn btn-white border border-start-0 text-secondary" type="button" id="clearInventorySearchBtn" style="display: none;" title="Limpiar busqueda"><i class="bi bi-x-lg"></i></button>
+                    </div>
                 </div>
-                <div class="small text-secondary">
+                <div class="small text-secondary text-nowrap d-none d-lg-block">
                     <i class="bi bi-info-circle me-1"></i> Escribe para buscar en tiempo real en todos los listados de la página.
                 </div>
             </div>

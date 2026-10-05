@@ -17,6 +17,12 @@ class CompanyPaymentMethodService
                 throw new RuntimeException('Medio de pago no disponible.');
             }
             $data = ['company_id' => $companyId];
+            if (array_key_exists('show_on_receipt', $input)) {
+                if (!in_array($input['show_on_receipt'], ['0','1',0,1], true)) { throw new RuntimeException('Visibilidad del comprobante inválida.'); }
+                $data['show_on_receipt'] = (int)$input['show_on_receipt'];
+            } elseif (!$id) {
+                $data['show_on_receipt'] = 1;
+            }
             $percentage = $input['percentage'] ?? '0.00';
             if ((! is_string($percentage) && ! is_int($percentage) && ! is_float($percentage))
                 || ! preg_match('/^\d+(?:\.\d{1,2})?$/D', (string) $percentage)

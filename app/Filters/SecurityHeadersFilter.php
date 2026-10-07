@@ -49,6 +49,8 @@ class SecurityHeadersFilter implements FilterInterface
             "form-action 'self'",
         ]);
 
-        $response->setHeader('Content-Security-Policy', $csp);
+        if (!$response->hasHeader('Content-Security-Policy')) {
+            $response->setHeader('Content-Security-Policy', $csp);
+        }
     }
 }

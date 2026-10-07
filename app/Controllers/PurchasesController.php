@@ -655,42 +655,7 @@ class PurchasesController extends BaseController
         $exchangeRate = (float) ($this->request->getPost('exchange_rate') ?: 1);
         if (! is_finite($exchangeRate) || $exchangeRate <= 0) { throw new \RuntimeException('Tipo de cambio invalido.'); }
         (new PurchaseIntegrityService())->validateInvoice($companyId, $supplierId, $purchaseReceiptId, $currencyCode, $rows);
-        $totals = $this->purchaseTotals($rows);
-        $invoiceId = (new PurchaseInvoiceModel())->insert([
-            'company_id' => $companyId,
-            'supplier_id' => $supplierId,
-            'purchase_receipt_id' => $purchaseReceiptId,
-            'invoice_number' => $invoiceNumber,
-            'currency_code' => $currencyCode,
-            'exchange_rate' => $exchangeRate,
-            'subtotal' => $totals['subtotal'],
-            'tax_total' => $totals['tax_total'],
-            'total' => $totals['total'],
-            'issue_date' => trim((string) $this->request->getPost('issue_date')) ?: date('Y-m-d H:i:s'),
-            'due_date' => trim((string) $this->request->getPost('due_date')) ?: null,
-            'status' => 'registered',
-            'notes' => trim((string) $this->request->getPost('notes')),
-            'created_by' => $this->currentUser()['id'],
-        ], true);
-
-        $itemModel = new PurchaseInvoiceItemModel();
-        foreach ($rows as $row) {
-            $itemModel->insert(array_merge($row, ['purchase_invoice_id' => $invoiceId]));
-            if (! empty($row['product_id'])) {
-                (new SupplierCostHistoryModel())->insert([
-                    'company_id' => $companyId,
-                    'supplier_id' => $supplierId,
-                    'product_id' => $row['product_id'],
-                    'purchase_invoice_id' => $invoiceId,
-                    'currency_code' => $currencyCode,
-                    'exchange_rate' => $exchangeRate,
-                    'unit_cost' => (float) $row['unit_cost'],
-                    'observed_at' => trim((string) $this->request->getPost('issue_date')) ?: date('Y-m-d H:i:s'),
-                ]);
-            }
-        }
-
-        (new PurchaseIntegrityService())->syncInvoice($companyId, (string) $invoiceId);
+        (new \App\Libraries\PurchaseInvoiceRegistration())->register($companyId, $this->currentUser()['id'], (array) $this->request->getPost(), $rows);
 
         return $this->popupOrRedirect($this->purchaseRoute('compras', $companyId), 'Factura proveedor registrada correctamente.');
     }
@@ -1034,7 +999,8 @@ class PurchasesController extends BaseController
     private function invoiceRows(string $companyId): array
     {
         return db_connect()->table('purchase_invoices pi')
-            ->select('pi.*, s.name AS supplier_name, pr.receipt_number')
+            ->select('pi.*, s.name AS supplier_name, pr.receipt_number, pd.id AS document_id')
+            ->join('purchase_documents pd', 'pd.purchase_invoice_id = pi.id AND pd.company_id = pi.company_id', 'left')
             ->join('suppliers s', 's.id = pi.supplier_id')
             ->join('purchase_receipts pr', 'pr.id = pi.purchase_receipt_id', 'left')
             ->where('pi.company_id', $companyId)

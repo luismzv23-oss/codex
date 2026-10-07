@@ -133,3 +133,11 @@ _modules/*
 
 /results/
 /phpunit*.xml
+
+# Local PDF processing and private document keys
+/.venv-pdf/
+/writable/keys/
+/writable/private/
+
+/tmp/import-ui/
+/scripts/pdf/__pycache__/

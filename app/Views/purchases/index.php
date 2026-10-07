@@ -165,7 +165,7 @@
                         <tbody>
                         <?php foreach ($invoices as $invoice): ?>
                             <tr class="data-row" data-supplier="<?= esc($invoice['supplier_name']) ?>" data-number="<?= esc($invoice['invoice_number']) ?>">
-                                <td><?= esc($invoice['invoice_number']) ?><div class="small text-secondary"><?= esc(! empty($invoice['issue_date']) ? date('d/m/Y H:i', strtotime($invoice['issue_date'])) : '-') ?></div></td>
+                                <td><?= esc($invoice['invoice_number']) ?><?php if (!empty($invoice['document_id'])): ?> <a href="<?= site_url('compras/documentos/'.$invoice['document_id'].'/archivo?download=1&company_id='.rawurlencode($selectedCompanyId)) ?>" title="Descargar original" aria-label="Descargar original"><i class="bi bi-file-earmark-lock"></i></a><?php endif; ?><div class="small text-secondary"><?= esc(! empty($invoice['issue_date']) ? date('d/m/Y H:i', strtotime($invoice['issue_date'])) : '-') ?></div></td>
                                 <td><?= esc($invoice['supplier_name']) ?></td>
                                 <td><?= esc($invoice['receipt_number'] ?: '-') ?></td>
                                 <td><?= esc($invoice['currency_code']) ?></td>

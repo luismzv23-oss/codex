@@ -14,7 +14,7 @@
     <nav class="purchases-hero-actions" aria-label="Acciones de compras">
     <?php if (!$purchaseEditing): ?><button type="button" data-purchases-refresh class="btn btn-outline-dark icon-btn" title="Actualizar resumen" aria-label="Actualizar resumen"><i class="bi bi-arrow-clockwise"></i></button><?php else: ?><a class="btn btn-outline-dark icon-btn" href="<?= site_url('compras?'.$purchaseQuery) ?>" title="Volver a Compras" aria-label="Volver a Compras"><i class="bi bi-arrow-left"></i></a><?php endif; ?>
     <?php if ($context['canManage']): ?>
-    <?php foreach (['proveedores/nuevo'=>['Proveedor','person-badge'],'ordenes/nueva'=>['Orden de compra','cart-plus'],'facturas/nueva'=>['Factura proveedor','receipt'],'notas-credito/nueva'=>['Nota de crédito','file-earmark-minus']] as $route=>[$label,$icon]): ?>
+    <?php foreach (['proveedores/nuevo'=>['Proveedor','person-badge'],'ordenes/nueva'=>['Orden de compra','cart-plus'],'facturas/nueva'=>['Factura proveedor','receipt'],'documentos/importar'=>['Importar factura','file-earmark-arrow-up'],'notas-credito/nueva'=>['Nota de crédito','file-earmark-minus']] as $route=>[$label,$icon]): ?>
         <a href="<?= site_url('compras/'.$route.'?'.$purchaseQuery) ?>" class="btn btn-outline-dark icon-btn" title="<?= esc($label) ?>" aria-label="<?= esc($label) ?>" <?= !$purchaseEditing ? 'data-popup="true"' : '' ?> data-popup-title="<?= esc($label) ?>"><i class="bi bi-<?= esc($icon) ?>" aria-hidden="true"></i></a>
     <?php endforeach; ?>
     <?php endif; ?>

@@ -108,6 +108,7 @@ class SalesController extends BaseController
             'summary' => $this->salesSummary($companyId, $filters),
             'filters' => $filters,
             'sales' => $this->salesRows($companyId, $filters),
+            'deliveryNotes' => $this->deliveryNoteRows($companyId, $filters),
             'priceLists' => $this->priceListOptions($companyId),
             'promotions' => $this->activePromotions($companyId),
             'receivableSummary' => $this->receivableSummary($companyId),
@@ -2809,6 +2810,33 @@ class SalesController extends BaseController
             ->getResultArray();
     }
 
+    private function deliveryNoteRows(string $companyId, array $filters = []): array
+    {
+        $builder = db_connect()->table('sales_delivery_notes dn')
+            ->select('dn.*, c.name AS customer_name, w.name AS warehouse_name, u.name AS created_by_name, o.order_number')
+            ->join('customers c', 'c.id = dn.customer_id', 'left')
+            ->join('inventory_warehouses w', 'w.id = dn.warehouse_id', 'left')
+            ->join('users u', 'u.id = dn.created_by', 'left')
+            ->join('sales_orders o', 'o.id = dn.sales_order_id', 'left')
+            ->where('dn.company_id', $companyId)
+            ->orderBy('dn.created_at', 'DESC');
+
+        if (!empty($filters['status'])) {
+            $builder->where('dn.status', $filters['status']);
+        }
+        if (!empty($filters['customer_id'])) {
+            $builder->where('dn.customer_id', $filters['customer_id']);
+        }
+        if (!empty($filters['date_from'])) {
+            $builder->where('dn.delivery_date >=', $filters['date_from']);
+        }
+        if (!empty($filters['date_to'])) {
+            $builder->where('dn.delivery_date <=', $filters['date_to']);
+        }
+
+        return $builder->get()->getResultArray();
+    }
+
     /**
      * Returns only sales that have been authorized by ARCA
      * (have a CAE assigned and arca_status = 'Autorizado').
@@ -4812,6 +4840,9 @@ class SalesController extends BaseController
             'pageTitle'       => 'Nuevo Presupuesto',
             'formAction'      => site_url('ventas/presupuestos'),
             'companyId'       => $companyId,
+            'context'         => $context,
+            'user'            => $this->currentUser(),
+            'isPopup'         => $this->isPopupRequest(),
             'customers'       => (new CustomerModel())->where('company_id', $companyId)->where('active', 1)->orderBy('name')->findAll(),
             'products'        => $this->salesProductCatalog($companyId),
             'agents'          => (new SalesAgentModel())->where('company_id', $companyId)->where('active', 1)->findAll(),
@@ -4831,9 +4862,7 @@ class SalesController extends BaseController
         if ($referenceError !== null) { return redirect()->back()->withInput()->with('error', $referenceError); }
         $db = db_connect();
 
-        $lastNum = $db->table('sales_quotes')->where('company_id', $companyId)->selectMax('quote_number')->get()->getRowArray();
-        $nextNum = ((int)($lastNum['quote_number'] ?? 0)) + 1;
-        $quoteNumber = 'PR-' . str_pad((string)$nextNum, 8, '0', STR_PAD_LEFT);
+        $quoteNumber = $this->nextSequenceNumber($companyId, 'PRESUPUESTO', 'PRE');
 
         $customer = null;
         $customerId = trim((string)$this->request->getPost('customer_id')) ?: null;
@@ -4895,7 +4924,7 @@ class SalesController extends BaseController
             ]);
         }
 
-        return redirect()->to(site_url('ventas'))->with('message', 'Presupuesto ' . $quoteNumber . ' creado.');
+        return $this->popupOrRedirect($this->salesRoute('ventas', $companyId), 'Presupuesto ' . $quoteNumber . ' creado.');
     }
 
     public function approveQuote(string $quoteId)
@@ -4928,6 +4957,9 @@ class SalesController extends BaseController
             'pageTitle'       => 'Pedido desde Presupuesto',
             'formAction'      => site_url('ventas/pedidos'),
             'companyId'       => $companyId,
+            'context'         => $context,
+            'user'            => $this->currentUser(),
+            'isPopup'         => $this->isPopupRequest(),
             'fromQuote'       => $quote,
             'fromQuoteItems'  => $quoteItems,
             'customers'       => (new CustomerModel())->where('company_id', $companyId)->where('active', 1)->orderBy('name')->findAll(),
@@ -4952,6 +4984,9 @@ class SalesController extends BaseController
             'pageTitle'       => 'Nuevo Pedido',
             'formAction'      => site_url('ventas/pedidos'),
             'companyId'       => $companyId,
+            'context'         => $context,
+            'user'            => $this->currentUser(),
+            'isPopup'         => $this->isPopupRequest(),
             'fromQuote'       => [],
             'fromQuoteItems'  => [],
             'customers'       => (new CustomerModel())->where('company_id', $companyId)->where('active', 1)->orderBy('name')->findAll(),
@@ -4971,9 +5006,7 @@ class SalesController extends BaseController
         if ($referenceError !== null) { return redirect()->back()->withInput()->with('error', $referenceError); }
         $db = db_connect();
 
-        $lastNum = $db->table('sales_orders')->where('company_id', $companyId)->selectMax('order_number')->get()->getRowArray();
-        $nextNum = ((int)($lastNum['order_number'] ?? 0)) + 1;
-        $orderNumber = 'PD-' . str_pad((string)$nextNum, 8, '0', STR_PAD_LEFT);
+        $orderNumber = $this->nextSequenceNumber($companyId, 'PEDIDO', 'PED');
 
         $customer = null;
         $customerId = trim((string)$this->request->getPost('customer_id')) ?: null;
@@ -5039,7 +5072,7 @@ class SalesController extends BaseController
                 ->update(['status' => 'converted', 'converted_to_order_id' => $orderId, 'updated_at' => date('Y-m-d H:i:s')]);
         }
 
-        return redirect()->to(site_url('ventas'))->with('message', 'Pedido ' . $orderNumber . ' creado.');
+        return $this->popupOrRedirect($this->salesRoute('ventas', $companyId), 'Pedido ' . $orderNumber . ' creado.');
     }
 
     public function approveOrder(string $orderId)
@@ -5072,6 +5105,9 @@ class SalesController extends BaseController
             'pageTitle'       => 'Remito desde Pedido',
             'formAction'      => site_url('ventas/remitos'),
             'companyId'       => $companyId,
+            'context'         => $context,
+            'user'            => $this->currentUser(),
+            'isPopup'         => $this->isPopupRequest(),
             'fromOrder'       => $order,
             'fromOrderItems'  => $orderItems,
             'customers'       => (new CustomerModel())->where('company_id', $companyId)->where('active', 1)->orderBy('name')->findAll(),
@@ -5107,6 +5143,9 @@ class SalesController extends BaseController
             'pageTitle'       => 'Nuevo Remito',
             'formAction'      => site_url('ventas/remitos'),
             'companyId'       => $companyId,
+            'context'         => $context,
+            'user'            => $this->currentUser(),
+            'isPopup'         => $this->isPopupRequest(),
             'fromOrder'       => [],
             'fromOrderItems'  => [],
             'customers'       => (new CustomerModel())->where('company_id', $companyId)->where('active', 1)->orderBy('name')->findAll(),
@@ -5124,9 +5163,7 @@ class SalesController extends BaseController
         if ($referenceError !== null) { return redirect()->back()->withInput()->with('error', $referenceError); }
         $db = db_connect();
 
-        $lastNum = $db->table('sales_delivery_notes')->where('company_id', $companyId)->selectMax('delivery_number')->get()->getRowArray();
-        $nextNum = ((int)($lastNum['delivery_number'] ?? 0)) + 1;
-        $deliveryNumber = 'RM-' . str_pad((string)$nextNum, 8, '0', STR_PAD_LEFT);
+        $deliveryNumber = $this->nextSequenceNumber($companyId, 'REMITO', 'RTO');
 
         $customer = null;
         $customerId = trim((string)$this->request->getPost('customer_id')) ?: null;
@@ -5189,7 +5226,7 @@ class SalesController extends BaseController
             }
         }
 
-        return redirect()->to(site_url('ventas'))->with('message', 'Remito ' . $deliveryNumber . ' creado.');
+        return $this->popupOrRedirect($this->salesRoute('ventas', $companyId), 'Remito ' . $deliveryNumber . ' creado.');
     }
 
     public function dispatchDeliveryNote(string $noteId)

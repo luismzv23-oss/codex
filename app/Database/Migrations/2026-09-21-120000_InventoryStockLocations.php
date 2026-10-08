@@ -19,8 +19,12 @@ class InventoryStockLocations extends Migration
         if ($this->db->DBDriver !== 'MySQLi') {
             throw new \RuntimeException('Esta migracion requiere MySQL/MariaDB.');
         }
+
+        // VIRTUAL (no STORED) para evitar la restricción de MySQL 8.x que impide
+        // tener ON DELETE SET NULL / ON UPDATE CASCADE en columnas usadas por
+        // columnas generadas STORED.
         $clauses = [
-            "ADD COLUMN location_key VARCHAR(36) GENERATED ALWAYS AS (COALESCE(location_id, '')) STORED",
+            "ADD COLUMN location_key VARCHAR(36) GENERATED ALWAYS AS (COALESCE(location_id, '')) VIRTUAL",
             'ADD UNIQUE KEY uq_inventory_stock_location (company_id, product_id, warehouse_id, location_key)',
         ];
         if ($oldIndex !== null) {

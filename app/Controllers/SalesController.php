@@ -108,6 +108,8 @@ class SalesController extends BaseController
             'summary' => $this->salesSummary($companyId, $filters),
             'filters' => $filters,
             'sales' => $this->salesRows($companyId, $filters),
+            'quotes' => $this->quoteRows($companyId, $filters),
+            'orders' => $this->orderRows($companyId, $filters),
             'deliveryNotes' => $this->deliveryNoteRows($companyId, $filters),
             'priceLists' => $this->priceListOptions($companyId),
             'promotions' => $this->activePromotions($companyId),
@@ -2786,6 +2788,18 @@ class SalesController extends BaseController
             ->join('sales src', 'src.id = s.source_sale_id', 'left')
             ->join('sales_document_types srcdt', 'srcdt.id = src.document_type_id', 'left')
             ->where('s.company_id', $companyId)
+            ->groupStart()
+                ->where('dt.category IS NULL')
+                ->orWhereNotIn('dt.category', ['delivery_note', 'quote', 'order'])
+            ->groupEnd()
+            ->groupStart()
+                ->where('dt.code IS NULL')
+                ->orWhereNotIn('dt.code', ['REMITO', 'RTO', 'RM', 'PRESUPUESTO', 'PRE', 'PEDIDO', 'PED'])
+            ->groupEnd()
+            ->notLike('s.sale_number', 'RTO-', 'after')
+            ->notLike('s.sale_number', 'RM-', 'after')
+            ->notLike('s.sale_number', 'PRE-', 'after')
+            ->notLike('s.sale_number', 'PED-', 'after')
             ->orderBy('s.issue_date', 'DESC');
 
         if (!empty($filters['status'])) {
@@ -2810,31 +2824,205 @@ class SalesController extends BaseController
             ->getResultArray();
     }
 
+    private function quoteRows(string $companyId, array $filters = []): array
+    {
+        // Actualizar automáticamente presupuestos de ciclo vencidos en base de datos
+        db_connect()->table('sales_quotes')
+            ->where('company_id', $companyId)
+            ->where('valid_until IS NOT NULL')
+            ->where('valid_until <', date('Y-m-d'))
+            ->whereIn('status', ['draft', 'sent', 'approved'])
+            ->set(['status' => 'expired'])
+            ->update();
+
+        // 1. Presupuestos de ciclo comercial (sales_quotes)
+        $builderSq = db_connect()->table('sales_quotes sq')
+            ->select('sq.id, sq.company_id, sq.quote_number, sq.quote_date, sq.valid_until, sq.status, sq.currency_code, sq.subtotal, sq.tax_total, sq.discount_total, sq.total, sq.customer_name_snapshot, sq.notes, sq.created_at, sq.approved_at, c.name AS customer_name, u.name AS created_by_name, sa.name AS sales_agent_name, "cycle" AS source_type, NULL AS sale_id')
+            ->join('customers c', 'c.id = sq.customer_id', 'left')
+            ->join('users u', 'u.id = sq.created_by', 'left')
+            ->join('sales_agents sa', 'sa.id = sq.sales_agent_id', 'left')
+            ->where('sq.company_id', $companyId);
+
+        if (!empty($filters['status'])) {
+            $builderSq->where('sq.status', $filters['status']);
+        }
+        if (!empty($filters['customer_id'])) {
+            $builderSq->where('sq.customer_id', $filters['customer_id']);
+        }
+        if (!empty($filters['date_from'])) {
+            $builderSq->where('sq.quote_date >=', $filters['date_from']);
+        }
+        if (!empty($filters['date_to'])) {
+            $builderSq->where('sq.quote_date <=', $filters['date_to']);
+        }
+        $cycleQuotes = $builderSq->get()->getResultArray();
+
+        // 2. Presupuestos directos en sales
+        $builderSales = db_connect()->table('sales s')
+            ->select('s.id, s.company_id, s.sale_number AS quote_number, DATE(s.issue_date) AS quote_date, DATE(s.due_date) AS valid_until, s.status, "ARS" AS currency_code, s.subtotal, s.tax_total, (s.item_discount_total + s.global_discount_total) AS discount_total, s.total, s.customer_name_snapshot, s.notes, s.created_at, NULL AS approved_at, c.name AS customer_name, u.name AS created_by_name, sa.name AS sales_agent_name, "sale" AS source_type, s.id AS sale_id')
+            ->join('sales_document_types dt', 'dt.id = s.document_type_id', 'left')
+            ->join('customers c', 'c.id = s.customer_id', 'left')
+            ->join('users u', 'u.id = s.created_by', 'left')
+            ->join('sales_agents sa', 'sa.id = s.sales_agent_id', 'left')
+            ->where('s.company_id', $companyId)
+            ->groupStart()
+                ->where('dt.category', 'quote')
+                ->orWhereIn('dt.code', ['PRESUPUESTO', 'PRE'])
+                ->orLike('s.sale_number', 'PRE-', 'after')
+            ->groupEnd();
+
+        if (!empty($filters['status'])) {
+            $builderSales->where('s.status', $filters['status']);
+        }
+        if (!empty($filters['customer_id'])) {
+            $builderSales->where('s.customer_id', $filters['customer_id']);
+        }
+        if (!empty($filters['date_from'])) {
+            $builderSales->where('s.issue_date >=', $filters['date_from'] . ' 00:00:00');
+        }
+        if (!empty($filters['date_to'])) {
+            $builderSales->where('s.issue_date <=', $filters['date_to'] . ' 23:59:59');
+        }
+        $directQuotes = $builderSales->get()->getResultArray();
+
+        $merged = array_merge($cycleQuotes, $directQuotes);
+
+        $today = date('Y-m-d');
+        foreach ($merged as &$row) {
+            // Si la fecha de vencimiento ya pasó y no está en estado final (convertido, rechazado o cancelado), marcar vencido
+            if (!empty($row['valid_until']) && $row['valid_until'] < $today) {
+                if (!in_array($row['status'], ['converted', 'rejected', 'cancelled'], true)) {
+                    $row['status'] = 'expired';
+                }
+            } elseif ($row['source_type'] === 'sale') {
+                if ($row['status'] === 'confirmed') {
+                    $row['status'] = 'approved';
+                } elseif ($row['status'] === 'cancelled') {
+                    $row['status'] = 'rejected';
+                }
+            }
+        }
+        unset($row);
+
+        usort($merged, static fn($a, $b) => strcmp((string)($b['created_at'] ?? ''), (string)($a['created_at'] ?? '')));
+        return $merged;
+    }
+
+    private function orderRows(string $companyId, array $filters = []): array
+    {
+        // 1. Pedidos de ciclo comercial (sales_orders)
+        $builderSo = db_connect()->table('sales_orders so')
+            ->select('so.id, so.company_id, so.order_number, so.order_date, so.expected_delivery_date, so.status, so.currency_code, so.subtotal, so.tax_total, so.discount_total, so.total, so.customer_name_snapshot, so.notes, so.created_at, so.approved_at, c.name AS customer_name, u.name AS created_by_name, sa.name AS sales_agent_name, sq.quote_number, "cycle" AS source_type, NULL AS sale_id')
+            ->join('customers c', 'c.id = so.customer_id', 'left')
+            ->join('users u', 'u.id = so.created_by', 'left')
+            ->join('sales_agents sa', 'sa.id = so.sales_agent_id', 'left')
+            ->join('sales_quotes sq', 'sq.id = so.sales_quote_id', 'left')
+            ->where('so.company_id', $companyId);
+
+        if (!empty($filters['status'])) {
+            $builderSo->where('so.status', $filters['status']);
+        }
+        if (!empty($filters['customer_id'])) {
+            $builderSo->where('so.customer_id', $filters['customer_id']);
+        }
+        if (!empty($filters['date_from'])) {
+            $builderSo->where('so.order_date >=', $filters['date_from']);
+        }
+        if (!empty($filters['date_to'])) {
+            $builderSo->where('so.order_date <=', $filters['date_to']);
+        }
+        $cycleOrders = $builderSo->get()->getResultArray();
+
+        // 2. Pedidos directos en sales
+        $builderSales = db_connect()->table('sales s')
+            ->select('s.id, s.company_id, s.sale_number AS order_number, DATE(s.issue_date) AS order_date, NULL AS expected_delivery_date, s.status, "ARS" AS currency_code, s.subtotal, s.tax_total, (s.item_discount_total + s.global_discount_total) AS discount_total, s.total, s.customer_name_snapshot, s.notes, s.created_at, NULL AS approved_at, c.name AS customer_name, u.name AS created_by_name, sa.name AS sales_agent_name, NULL AS quote_number, "sale" AS source_type, s.id AS sale_id')
+            ->join('sales_document_types dt', 'dt.id = s.document_type_id', 'left')
+            ->join('customers c', 'c.id = s.customer_id', 'left')
+            ->join('users u', 'u.id = s.created_by', 'left')
+            ->join('sales_agents sa', 'sa.id = s.sales_agent_id', 'left')
+            ->where('s.company_id', $companyId)
+            ->groupStart()
+                ->where('dt.category', 'order')
+                ->orWhereIn('dt.code', ['PEDIDO', 'PED'])
+                ->orLike('s.sale_number', 'PED-', 'after')
+            ->groupEnd();
+
+        if (!empty($filters['status'])) {
+            $builderSales->where('s.status', $filters['status']);
+        }
+        if (!empty($filters['customer_id'])) {
+            $builderSales->where('s.customer_id', $filters['customer_id']);
+        }
+        if (!empty($filters['date_from'])) {
+            $builderSales->where('s.issue_date >=', $filters['date_from'] . ' 00:00:00');
+        }
+        if (!empty($filters['date_to'])) {
+            $builderSales->where('s.issue_date <=', $filters['date_to'] . ' 23:59:59');
+        }
+        $directOrders = $builderSales->get()->getResultArray();
+
+        $merged = array_merge($cycleOrders, $directOrders);
+        usort($merged, static fn($a, $b) => strcmp((string)($b['created_at'] ?? ''), (string)($a['created_at'] ?? '')));
+        return $merged;
+    }
+
     private function deliveryNoteRows(string $companyId, array $filters = []): array
     {
-        $builder = db_connect()->table('sales_delivery_notes dn')
-            ->select('dn.*, c.name AS customer_name, w.name AS warehouse_name, u.name AS created_by_name, o.order_number')
+        // 1. Remitos del ciclo de entrega (sales_delivery_notes)
+        $builderDn = db_connect()->table('sales_delivery_notes dn')
+            ->select('dn.id, dn.company_id, dn.delivery_number, dn.delivery_date, dn.status, dn.warehouse_id, dn.shipping_address, dn.carrier, dn.tracking_number, dn.customer_name_snapshot, dn.dispatched_at, dn.delivered_at, dn.created_at, c.name AS customer_name, w.name AS warehouse_name, u.name AS created_by_name, o.order_number, "cycle" AS source_type, NULL AS sale_id')
             ->join('customers c', 'c.id = dn.customer_id', 'left')
             ->join('inventory_warehouses w', 'w.id = dn.warehouse_id', 'left')
             ->join('users u', 'u.id = dn.created_by', 'left')
             ->join('sales_orders o', 'o.id = dn.sales_order_id', 'left')
-            ->where('dn.company_id', $companyId)
-            ->orderBy('dn.created_at', 'DESC');
+            ->where('dn.company_id', $companyId);
 
         if (!empty($filters['status'])) {
-            $builder->where('dn.status', $filters['status']);
+            $builderDn->where('dn.status', $filters['status']);
         }
         if (!empty($filters['customer_id'])) {
-            $builder->where('dn.customer_id', $filters['customer_id']);
+            $builderDn->where('dn.customer_id', $filters['customer_id']);
         }
         if (!empty($filters['date_from'])) {
-            $builder->where('dn.delivery_date >=', $filters['date_from']);
+            $builderDn->where('dn.delivery_date >=', $filters['date_from']);
         }
         if (!empty($filters['date_to'])) {
-            $builder->where('dn.delivery_date <=', $filters['date_to']);
+            $builderDn->where('dn.delivery_date <=', $filters['date_to']);
         }
+        $cycleNotes = $builderDn->get()->getResultArray();
 
-        return $builder->get()->getResultArray();
+        // 2. Remitos registrados en la tabla sales
+        $builderSales = db_connect()->table('sales s')
+            ->select('s.id, s.company_id, s.sale_number AS delivery_number, DATE(s.issue_date) AS delivery_date, s.status, s.warehouse_id, NULL AS shipping_address, NULL AS carrier, NULL AS tracking_number, s.customer_name_snapshot, s.delivered_at AS dispatched_at, s.delivered_at, s.created_at, c.name AS customer_name, w.name AS warehouse_name, u.name AS created_by_name, NULL AS order_number, "sale" AS source_type, s.id AS sale_id')
+            ->join('sales_document_types dt', 'dt.id = s.document_type_id', 'left')
+            ->join('customers c', 'c.id = s.customer_id', 'left')
+            ->join('inventory_warehouses w', 'w.id = s.warehouse_id', 'left')
+            ->join('users u', 'u.id = s.created_by', 'left')
+            ->where('s.company_id', $companyId)
+            ->groupStart()
+                ->where('dt.category', 'delivery_note')
+                ->orWhereIn('dt.code', ['REMITO', 'RTO', 'RM'])
+                ->orLike('s.sale_number', 'RTO-', 'after')
+                ->orLike('s.sale_number', 'RM-', 'after')
+            ->groupEnd();
+
+        if (!empty($filters['status'])) {
+            $builderSales->where('s.status', $filters['status']);
+        }
+        if (!empty($filters['customer_id'])) {
+            $builderSales->where('s.customer_id', $filters['customer_id']);
+        }
+        if (!empty($filters['date_from'])) {
+            $builderSales->where('s.issue_date >=', $filters['date_from'] . ' 00:00:00');
+        }
+        if (!empty($filters['date_to'])) {
+            $builderSales->where('s.issue_date <=', $filters['date_to'] . ' 23:59:59');
+        }
+        $directSalesNotes = $builderSales->get()->getResultArray();
+
+        $merged = array_merge($cycleNotes, $directSalesNotes);
+        usort($merged, static fn($a, $b) => strcmp((string)($b['created_at'] ?? ''), (string)($a['created_at'] ?? '')));
+        return $merged;
     }
 
     /**
@@ -4939,7 +5127,30 @@ class SalesController extends BaseController
             return redirect()->back()->with('error', 'Presupuesto no disponible o ya aprobado.');
         }
 
-        return redirect()->to(site_url('ventas'))->with('message', 'Presupuesto aprobado.');
+        return redirect()->back()->with('message', 'Presupuesto aprobado.');
+    }
+
+    public function rejectQuote(string $quoteId)
+    {
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+        $companyId = $context['company']['id'];
+
+        $updated = db_connect()->table('sales_quotes')
+            ->where('id', $quoteId)
+            ->where('company_id', $companyId)
+            ->whereNotIn('status', ['converted'])
+            ->update(['status' => 'rejected', 'updated_at' => date('Y-m-d H:i:s')]);
+
+        if (db_connect()->affectedRows() === 0) {
+            // Presupuesto directo en sales
+            db_connect()->table('sales')
+                ->where('id', $quoteId)
+                ->where('company_id', $companyId)
+                ->update(['status' => 'cancelled', 'updated_at' => date('Y-m-d H:i:s')]);
+        }
+
+        return redirect()->back()->with('message', 'Presupuesto marcado como rechazado.');
     }
 
     public function quoteToOrder(string $quoteId)
@@ -5087,7 +5298,7 @@ class SalesController extends BaseController
             return redirect()->back()->with('error', 'Pedido no disponible o ya aprobado.');
         }
 
-        return redirect()->to(site_url('ventas'))->with('message', 'Pedido aprobado.');
+        return redirect()->back()->with('message', 'Pedido aprobado.');
     }
 
     public function orderToDeliveryNote(string $orderId)

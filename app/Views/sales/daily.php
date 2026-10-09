@@ -54,7 +54,8 @@
 </div>
 
 
-<div class="sales-tabs-container mb-3">
+
+<div class="sales-tabs-container mb-3">
     <ul class="nav nav-pills sales-custom-pills" id="diarios-tab" role="tablist">
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="ventas-tab" data-bs-toggle="pill" data-bs-target="#tab-ventas" type="button" role="tab" aria-controls="tab-ventas" aria-selected="true">
@@ -139,7 +140,7 @@
                                     <td><?= esc(date('d/m/Y H:i', strtotime($sale['issue_date']))) ?></td>
                                     <td class="text-end">
                                         <div class="small text-secondary mb-1"><?= esc($sale['sales_agent_name'] ?: 'Sin vendedor') ?> / <?= esc($sale['sales_zone_name'] ?: 'Sin zona') ?></div>
-                                        <a href="<?= site_url('ventas/' . $sale['id'] . '/pdf' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-sm btn-outline-danger icon-btn" title="PDF" aria-label="PDF" target="_blank"><i class="bi bi-file-earmark-pdf"></i></a>
+                                        <a href="<?= site_url('ventas/' . $sale['id'] . '/pdf' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-sm btn-outline-danger icon-btn" title="Visualizar PDF" aria-label="Visualizar PDF" data-popup="true" data-popup-pdf="true" data-popup-title="Comprobante PDF" data-popup-subtitle="Consulta, imprime o descarga el documento."><i class="bi bi-file-earmark-pdf"></i></a>
                                         <?php
                                         $conversionTargets = match ($sale['document_category'] ?? '') {
                                             'quote'         => ['PEDIDO' => 'Generar pedido', 'FACTURA_B' => 'Generar factura'],
@@ -244,6 +245,7 @@
                                     </td>
                                     <td><?= esc(date('d/m/Y', strtotime($q['quote_date']))) ?></td>
                                     <td class="text-end">
+                                        <?= view('sales/document_actions', ['row'=>$q, 'kind'=>'presupuesto', 'companyId'=>$selectedCompanyId]) ?>
                                         <?php if (($q['source_type'] ?? '') === 'cycle'): ?>
                                             <?php if ($q['status'] === 'draft' && $context['canManage']): ?>
                                                 <form method="post" action="<?= site_url('ventas/presupuestos/' . $q['id'] . '/aprobar' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="d-inline">
@@ -325,6 +327,7 @@
                                     <td><?= !empty($o['expected_delivery_date']) ? esc(date('d/m/Y', strtotime($o['expected_delivery_date']))) : '<span class="text-secondary">-</span>' ?></td>
                                     <td><?= esc(date('d/m/Y', strtotime($o['order_date']))) ?></td>
                                     <td class="text-end">
+                                        <?= view('sales/document_actions', ['row'=>$o, 'kind'=>'pedido', 'companyId'=>$selectedCompanyId]) ?>
                                         <?php if (($o['source_type'] ?? '') === 'cycle'): ?>
                                             <?php if ($o['status'] === 'pending' && $context['canManage']): ?>
                                                 <form method="post" action="<?= site_url('ventas/pedidos/' . $o['id'] . '/aprobar' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="d-inline">
@@ -393,6 +396,7 @@
                                     </td>
                                     <td><?= esc(date('d/m/Y', strtotime($dn['delivery_date']))) ?></td>
                                     <td class="text-end">
+                                        <?= view('sales/document_actions', ['row'=>$dn, 'kind'=>'remito', 'companyId'=>$selectedCompanyId]) ?>
                                         <?php if ($dn['status'] === 'pending' && $context['canManage']): ?>
                                             <form method="post" action="<?= site_url('ventas/remitos/' . $dn['id'] . '/despachar' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="d-inline">
                                                 <?= csrf_field() ?>

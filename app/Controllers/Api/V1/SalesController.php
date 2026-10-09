@@ -1738,6 +1738,9 @@ class SalesController extends BaseApiController
         $db = db_connect();
 
         $category = (string) ($documentType['category'] ?? 'invoice');
+        if ($category === 'delivery_note') {
+            [$sale, $items] = (new \App\Libraries\DeliveryNotePricing())->refresh($companyId, $sale, $items);
+        }
         if ($category === 'order') {
             $result = $this->reserveStockForSale($companyId, $sale, $items);
             if ($result !== true) { return $result; }

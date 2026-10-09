@@ -265,6 +265,7 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     $routes->get('ventas/pedidos/(:segment)/facturar', 'SalesController::orderToInvoice/$1', ['filter' => 'permission:systems.view']);
 
     // ── Ciclo Comercial: Remitos ────────────────────────
+    $routes->get('ventas/documentos/(:segment)/(:segment)/(:segment)', 'SalesController::commercialDocument/$1/$2/$3', ['filter' => 'permission:systems.view']);
     $routes->get('ventas/remitos/nuevo', 'SalesController::createDeliveryNoteForm', ['filter' => 'permission:systems.view']);
     $routes->post('ventas/remitos', 'SalesController::storeDeliveryNote', ['filter' => 'permission:systems.view']);
     $routes->post('ventas/remitos/(:segment)/despachar', 'SalesController::dispatchDeliveryNote/$1', ['filter' => 'permission:systems.view']);

@@ -2121,6 +2121,7 @@ class SalesController extends BaseController
         $creator = !empty($sale['created_by']) ? (new \App\Models\UserModel())->find($sale['created_by']) : null;
         $data = array_merge([
             'companyName'=>$context['company']['legal_name'] ?: $context['company']['name'], 'taxId'=>$context['company']['tax_id'] ?? '',
+            'documentCategory'=>$doc['category'] ?? '', 'documentCode'=>$doc['code'] ?? $sale['document_code'],
             'document'=>$doc['name'] ?? $sale['document_code'], 'reference'=>$fiscal['documentNumber'] ?? $sale['sale_number'],
             'date'=>$sale['confirmed_at'] ?? $sale['issue_date'], 'currency'=>$sale['currency_code'],
             'customer'=>$sale['customer_name_snapshot'] ?? '', 'user'=>$creator['name'] ?? '',
@@ -4411,6 +4412,9 @@ class SalesController extends BaseController
             }
 
             $category = (string) ($documentType['category'] ?? 'invoice');
+        if ($category === 'delivery_note') {
+            [$sale, $items] = (new \App\Libraries\DeliveryNotePricing())->refresh($companyId, $sale, $items);
+        }
             $impactsStock = (int) ($documentType['impacts_stock'] ?? 0) === 1;
 
             if (!$warehouseId && $impactsStock) {
@@ -4967,6 +4971,40 @@ class SalesController extends BaseController
             'expiration_date' => $payload['expiration_date'] ?? null,
             'notes' => $payload['notes'] ?? null,
         ]);
+    }
+
+    public function commercialDocument(string $kind, string $source, string $id)
+    {
+        $context = $this->salesContext('view');
+        if ($context instanceof RedirectResponse) return $context;
+        $map = [
+            'presupuesto'=>['sales_quotes','sales_quote_items','sales_quote_id','quote_number','quote_date','Presupuesto'],
+            'pedido'=>['sales_orders','sales_order_items','sales_order_id','order_number','order_date','Pedido'],
+            'remito'=>['sales_delivery_notes','sales_delivery_note_items','sales_delivery_note_id','delivery_number','delivery_date','Remito'],
+        ];
+        if (!isset($map[$kind]) || !in_array($source,['sale','cycle'],true)) return $this->response->setStatusCode(404)->setBody('Documento no disponible.');
+        [$table,$itemsTable,$foreignKey,$number,$date,$title] = $map[$kind];
+        $db = db_connect();
+        if ($source === 'sale') {
+            $document = $this->ownedSale($context['company']['id'],$id);
+            if (!$document) return $this->response->setStatusCode(404)->setBody('Documento no disponible.');
+            $type = $db->table('sales_document_types')->where('company_id',$context['company']['id'])->where('id',$document['document_type_id'])->get()->getRowArray();
+            $category = $type['category'] ?? '';
+            $allowed = ['presupuesto'=>'quote','pedido'=>'order','remito'=>'delivery_note'];
+            if ($category !== $allowed[$kind]) return $this->response->setStatusCode(404)->setBody('Documento no disponible.');
+            $items = $this->saleItems($id);
+            $document['number'] = $document['sale_number']; $document['date'] = $document['issue_date'];
+        } else {
+            $document = $db->table($table)->where('company_id',$context['company']['id'])->where('id',$id)->get()->getRowArray();
+            if (!$document) return $this->response->setStatusCode(404)->setBody('Documento no disponible.');
+            $items = $db->table($itemsTable)->where($foreignKey,$id)->orderBy('sort_order')->get()->getResultArray();
+            $document['number'] = $document[$number]; $document['date'] = $document[$date];
+        }
+        $data = ['document'=>$document,'items'=>$items,'company'=>$context['company'],'title'=>$title,'unpriced'=>$kind==='remito'];
+        $this->response->setHeader('Cache-Control','private, no-store');
+        $filename = $kind.'-'.preg_replace('/[^a-zA-Z0-9_-]/','-', $document['number']).'.pdf';
+        $disposition = $this->request->getGet('download') === '1' ? 'attachment' : 'inline';
+        return $this->renderPdf('sales/pdf/commercial',$data,$filename)->setHeader('Content-Disposition',$disposition.'; filename="'.$filename.'"');
     }
 
     private function renderPdf(string $view, array $data, string $filename)

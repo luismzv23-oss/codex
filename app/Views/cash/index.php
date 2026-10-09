@@ -147,7 +147,6 @@
                                             <a href="<?= site_url('caja/cajas/' . $register['id'] . '/eliminar' . (! empty($selectedCompanyId) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-sm btn-outline-danger icon-btn" onclick="return confirm('¿Está seguro de eliminar o desactivar esta caja?')" title="Eliminar caja" aria-label="Eliminar caja"><i class="bi bi-trash"></i></a>
                                         <?php endif; ?>
                                     </div>
-                                    <?php endif; ?>
                                 </td>
                             </tr>
                         <?php endforeach; ?>

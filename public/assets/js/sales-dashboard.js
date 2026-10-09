@@ -51,7 +51,7 @@
             const summary = document.createElement('span');summary.setAttribute('aria-live','polite');
             const controls=document.createElement('div');const previous=document.createElement('button');const next=document.createElement('button');const position=document.createElement('span');
             [previous,next].forEach(button=>{button.type='button';button.className='btn btn-outline-secondary btn-sm';});
-            previous.textContent='Anterior';next.textContent='Siguiente';controls.append(previous,position,next);pager.append(summary,controls);host.after(pager);
+            previous.innerHTML='<i class="bi bi-chevron-left" aria-hidden="true"></i>';previous.title='Anterior';previous.setAttribute('aria-label','Anterior');next.innerHTML='<i class="bi bi-chevron-right" aria-hidden="true"></i>';next.title='Siguiente';next.setAttribute('aria-label','Siguiente');controls.append(previous,position,next);pager.append(summary,controls);host.after(pager);
             const render=()=>{
                 const global = content.querySelector('#salesSearchInput')?.value.toLocaleLowerCase() || '';
                 const customer = host.id === 'receivables-table' ? content.querySelector('#receivable-customer-filter')?.value : '';

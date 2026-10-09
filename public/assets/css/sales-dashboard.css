@@ -19,6 +19,13 @@
 .sales-shell .form-control,.sales-shell .form-select{border-color:var(--line);border-radius:9px}
 .sales-pager{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:16px 20px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
 .sales-pager div{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.sales-pager .btn{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:32px!important;height:32px!important;min-width:32px!important;padding:0!important;border-radius:8px!important;font-size:13px!important}
+.sales-pager .btn i{font-size:13px!important;line-height:1!important}
+.sales-shell .icon-btn,.sales-list-controls .icon-btn{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:36px!important;height:36px!important;min-width:36px!important;padding:0!important;border-radius:9px!important;font-size:15px!important;flex-shrink:0!important;line-height:1!important;text-decoration:none!important}
+.sales-shell .icon-btn i,.sales-list-controls .icon-btn i{font-size:16px!important;line-height:1!important;display:inline-flex!important}
+.sales-shell .icon-btn.btn-dark,.sales-list-controls .icon-btn.btn-dark,.sales-list-controls a.btn-dark{background:#1c2942!important;border-color:#1c2942!important;color:#ffffff!important;box-shadow:0 2px 8px rgba(28,41,66,0.18)!important}
+.sales-shell .icon-btn.btn-dark i,.sales-list-controls .icon-btn.btn-dark i,.sales-list-controls a.btn-dark i{color:#ffffff!important;font-size:16px!important;-webkit-text-stroke:0.5px #ffffff!important}
+.sales-shell .icon-btn.btn-dark:hover,.sales-list-controls .icon-btn.btn-dark:hover,.sales-list-controls a.btn-dark:hover{background:#2b3b5e!important;border-color:#2b3b5e!important;color:#ffffff!important}
 .sales-list-heading{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:20px}
 .sales-list-title{min-width:0;flex:1}
 .sales-list-title p{margin-bottom:0!important}
@@ -56,3 +63,14 @@
 @media(max-width:575px){.sales-shell .sales-list-heading{gap:12px}.sales-list-controls{gap:6px;flex-basis:52%}.sales-list-controls .sales-search{font-size:10px}.sales-list-description p{font-size:11px}.sales-list-heading h2{font-size:18px}.sales-filters>[class*=col-]{flex-basis:100%}}
 
 @media(min-width:1001px){.sales-shell .sales-hero-actions{flex-wrap:nowrap}.sales-hero-actions .icon-btn{flex-shrink:0}}
+
+/* Sales Segmented Tabs */
+.sales-tabs-container{display:flex;align-items:center;justify-content:flex-start}
+.sales-custom-pills{display:inline-flex;align-items:center;gap:4px;background:#ffffff;border:1px solid var(--line,#e5e9f2);border-radius:9999px;padding:4px;box-shadow:0 4px 14px rgba(28,41,66,0.04);margin-bottom:0}
+.sales-custom-pills .nav-link{display:inline-flex;align-items:center;gap:8px;padding:8px 18px;border-radius:9999px!important;font-size:13px;font-weight:600;color:var(--muted,#66748b);background:transparent;border:1px solid transparent;transition:all .2s cubic-bezier(0.4,0,0.2,1);cursor:pointer;line-height:1}
+.sales-custom-pills .nav-link i{font-size:14px;color:inherit}
+.sales-custom-pills .nav-link .tab-badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:9999px;font-size:11px;font-weight:700;background:#eef1f6;color:#475569;transition:all .2s ease}
+.sales-custom-pills .nav-link:hover:not(.active){color:var(--ink,#1c2942);background:#f6f8fc}
+.sales-custom-pills .nav-link.active{background:linear-gradient(110deg,#131e37 0%,#252d50 100%)!important;color:#ffffff!important;border-color:#313d66;box-shadow:0 4px 12px rgba(19,30,55,0.22)}
+.sales-custom-pills .nav-link.active .tab-badge{background:rgba(255,255,255,0.2);color:#ffffff}
+.sales-custom-pills .nav-link:focus-visible{outline:2px solid #7165ec;outline-offset:2px}

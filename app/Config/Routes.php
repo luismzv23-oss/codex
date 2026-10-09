@@ -264,6 +264,7 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     $routes->get('ventas/presupuestos/nuevo', 'SalesController::createQuoteForm', ['filter' => 'permission:systems.view']);
     $routes->post('ventas/presupuestos', 'SalesController::storeQuote', ['filter' => 'permission:systems.view']);
     $routes->post('ventas/presupuestos/(:segment)/aprobar', 'SalesController::approveQuote/$1', ['filter' => 'permission:systems.view']);
+    $routes->post('ventas/presupuestos/(:segment)/rechazar', 'SalesController::rejectQuote/$1', ['filter' => 'permission:systems.view']);
     $routes->get('ventas/presupuestos/(:segment)/a-pedido', 'SalesController::quoteToOrder/$1', ['filter' => 'permission:systems.view']);
 
     // ── Ciclo Comercial: Pedidos ────────────────────────

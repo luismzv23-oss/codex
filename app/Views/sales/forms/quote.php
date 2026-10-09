@@ -9,6 +9,7 @@
     <div class="card-body p-4">
         <form method="post" action="<?= esc($formAction) ?>" class="row g-3" id="quote-form">
             <?= csrf_field() ?>
+            <?php if (!empty($isPopup) || service('request')->getGet('popup') === '1'): ?><input type="hidden" name="popup" value="1"><?php endif; ?>
             <?php if (!empty($companyId)): ?><input type="hidden" name="company_id" value="<?= esc($companyId) ?>"><?php endif; ?>
             <div class="col-md-3"><label class="form-label">Fecha</label><input type="date" name="quote_date" class="form-control" value="<?= date('Y-m-d') ?>" required></div>
             <div class="col-md-3"><label class="form-label">Valido hasta</label><input type="date" name="valid_until" class="form-control" value="<?= date('Y-m-d', strtotime('+30 days')) ?>"></div>

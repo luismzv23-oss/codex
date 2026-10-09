@@ -9,6 +9,7 @@
     <div class="card-body p-4">
         <form method="post" action="<?= esc($formAction) ?>" class="row g-3">
             <?= csrf_field() ?>
+            <?php if (!empty($isPopup) || service('request')->getGet('popup') === '1'): ?><input type="hidden" name="popup" value="1"><?php endif; ?>
             <?php if (!empty($companyId)): ?><input type="hidden" name="company_id" value="<?= esc($companyId) ?>"><?php endif; ?>
             <?php if (!empty($fromOrder['id'])): ?><input type="hidden" name="sales_order_id" value="<?= esc($fromOrder['id']) ?>"><?php endif; ?>
             <div class="col-md-3"><label class="form-label">Fecha remito</label><input type="date" name="delivery_date" class="form-control" value="<?= date('Y-m-d') ?>" required></div>

@@ -13,6 +13,7 @@ final class SalesCollectionTest extends CIUnitTestCase
     {
         parent::setUp(); helper('app');
         $this->db = db_connect('tests');
+        $this->db->resetDataCache();
         $schemas = [
             'companies' => 'id, currency_code',
             'customers' => 'id, company_id, active',

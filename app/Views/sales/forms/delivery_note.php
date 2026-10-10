@@ -62,7 +62,7 @@ function addDnLine(data = {}) {
     row.innerHTML = `<td><select name="items[${dnIdx}][product_id]" class="form-select form-select-sm">${prodOpts}</select>
         ${data.sales_order_item_id ? `<input type="hidden" name="items[${dnIdx}][sales_order_item_id]" value="${data.sales_order_item_id}">` : ''}</td>
         <td class="text-secondary">${data.quantity || '-'}</td>
-        <td><input type="number" step="0.01" min="0.01" name="items[${dnIdx}][quantity]" class="form-control form-control-sm" value="${qtyPending}" required></td>
+        <td><input type="number" step="1" min="1" name="items[${dnIdx}][quantity]" class="form-control form-control-sm" value="${qtyPending}" required></td>
         <td><input type="text" name="items[${dnIdx}][lot_number]" class="form-control form-control-sm" placeholder="Opcional"></td>
         <td><input type="text" name="items[${dnIdx}][serial_number]" class="form-control form-control-sm" placeholder="Opcional"></td>
         <td><button type="button" class="btn btn-outline-danger btn-sm icon-btn" onclick="this.closest('tr').remove()"><i class="bi bi-trash"></i></button></td>`;

@@ -17,7 +17,7 @@
             </div>
             <div class="col-md-6">
                 <label class="form-label">Umbral de movimiento inusual</label>
-                <input type="number" step="0.01" min="0" name="unusual_movement_threshold" class="form-control" value="<?= esc(old('unusual_movement_threshold', $settings['unusual_movement_threshold'] ?? '100')) ?>">
+                <input type="number" step="1" min="0" name="unusual_movement_threshold" class="form-control" value="<?= esc(old('unusual_movement_threshold', $settings['unusual_movement_threshold'] ?? '100')) ?>">
             </div>
             <div class="col-md-6">
                 <label class="form-label">Dias sin rotacion</label>

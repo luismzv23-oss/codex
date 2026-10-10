@@ -45,11 +45,11 @@
             </div>
             <div class="col-md-4">
                 <label class="form-label">Stock minimo</label>
-                <input type="number" step="0.01" min="0" name="min_stock" class="form-control" value="<?= esc(old('min_stock', isset($product['min_stock']) ? number_format((float) $product['min_stock'], 2, '.', '') : '0.00')) ?>">
+                <input type="number" step="1" min="1" name="min_stock" class="form-control" value="<?= esc(old('min_stock', isset($product['min_stock']) ? number_format((float) $product['min_stock'], 2, '.', '') : '0.00')) ?>">
             </div>
             <div class="col-md-4">
                 <label class="form-label">Stock maximo</label>
-                <input type="number" step="0.01" min="0" name="max_stock" class="form-control" value="<?= esc(old('max_stock', isset($product['max_stock']) ? number_format((float) $product['max_stock'], 2, '.', '') : '0.00')) ?>">
+                <input type="number" step="1" min="1" name="max_stock" class="form-control" value="<?= esc(old('max_stock', isset($product['max_stock']) ? number_format((float) $product['max_stock'], 2, '.', '') : '0.00')) ?>">
             </div>
             <div class="col-md-4">
                 <label class="form-label">Precio unitario de compra</label>
@@ -71,7 +71,7 @@
             </div>
             <div class="col-md-4">
                 <label class="form-label">Stock inicial</label>
-                <input type="number" step="0.01" min="0" name="initial_stock" class="form-control" value="<?= esc(old('initial_stock', isset($currentStock) ? number_format((float) $currentStock, 2, '.', '') : '0.00')) ?>">
+                <input type="number" step="1" min="1" name="initial_stock" class="form-control" value="<?= esc(old('initial_stock', isset($currentStock) ? number_format((float) $currentStock, 2, '.', '') : '0.00')) ?>">
             </div>
 
             <div class="col-md-4">
@@ -127,7 +127,7 @@
                                 </select>
                             </div>
                             <div class="col-md-4">
-                                <input type="number" step="0.01" min="0" name="component_quantity[]" class="form-control" placeholder="Cantidad" value="<?= esc($row[1] !== null && $row[1] !== '' ? number_format((float) $row[1], 2, '.', '') : '') ?>">
+                                <input type="number" step="1" min="1" name="component_quantity[]" class="form-control" placeholder="Cantidad" value="<?= esc($row[1] !== null && $row[1] !== '' ? number_format((float) $row[1], 2, '.', '') : '') ?>">
                             </div>
                         <?php endforeach; ?>
                     </div>

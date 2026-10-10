@@ -94,7 +94,7 @@ const prodOpts = productList.map(p => `<option value="${p.id}" data-price="${p.s
 function addQuoteLine() {
     const row = document.createElement('tr');
     row.innerHTML = `<td><select name="items[${qIdx}][product_id]" class="form-select form-select-sm" onchange="autoPrice(this)">${prodOpts}</select></td>
-        <td><input type="number" step="0.01" min="0.01" name="items[${qIdx}][quantity]" class="form-control form-control-sm" value="1" oninput="calcQuote()"></td>
+        <td><input type="number" step="1" min="1" name="items[${qIdx}][quantity]" class="form-control form-control-sm" value="1" oninput="calcQuote()"></td>
         <td><input type="number" step="0.01" name="items[${qIdx}][unit_price]" class="form-control form-control-sm q-price" value="${productList[0]?.sale_price||0}" oninput="calcQuote()"></td>
         <td><input type="number" step="0.01" name="items[${qIdx}][discount_pct]" class="form-control form-control-sm" value="0" oninput="calcQuote()"></td>
         <td><input type="number" step="0.01" name="items[${qIdx}][tax_rate]" class="form-control form-control-sm" value="21" oninput="calcQuote()"></td>

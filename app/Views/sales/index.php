@@ -113,7 +113,7 @@
                     <div class="border rounded-3 p-3 mb-2" data-sales-item>
                         <strong><?= esc($promotion['name']) ?></strong>
                         <div class="small text-secondary">
-                            <?= esc($promotion['promotion_type'] === 'percent' ? number_format((float) $promotion['value'], 2, ',', '.') . '% off' : 'Descuento fijo ' . number_format((float) $promotion['value'], 2, ',', '.')) ?>
+                            <?= esc($promotion['promotion_type'] === 'percent' ? number_format((float) $promotion['value'], 2, ',', '.') . '% off' : ($promotion['promotion_type'] === 'price' ? 'Precio promocional ' : 'Descuento fijo ') . number_format((float) $promotion['value'], 2, ',', '.')) ?>
                             / <?= esc($promotion['scope'] === 'all' ? 'Todos los productos' : 'Productos seleccionados') ?>
                         </div>
                     </div>

@@ -1,6 +1,6 @@
 <div class="col-12" data-payment-lines>
     <div class="d-flex justify-content-between align-items-center"><h3 class="h6">Desglose del cobro (<?= esc($currencyCode) ?>)</h3><button type="button" class="btn btn-outline-dark icon-btn" data-add-payment title="Agregar medio" aria-label="Agregar medio"><i class="bi bi-plus-lg"></i></button></div>
-    <p class="small text-secondary">La suma debe coincidir con los importes a aplicar. Si incluye una transferencia, el recibo completo quedará pendiente hasta verificarla; no reducirá saldos mientras tanto.</p>
+    <p class="small text-secondary">Los medios inmediatos se aplican al registrar. Cada transferencia se aplica al verificarla. En anticipos, el importe recibido queda como saldo a favor.</p>
     <div data-payment-rows></div>
     <template data-payment-template>
         <div class="row g-2 mb-3" data-payment-row>

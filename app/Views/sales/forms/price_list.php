@@ -1,46 +1,22 @@
 <?= $this->extend('layouts/app') ?>
-
 <?= $this->section('content') ?>
-<?php $salesLive = false; ?>
-<?= view('sales/ui_start', get_defined_vars()) ?>
-<div class="card border-0 shadow-sm rounded-4">
-    <div class="card-body p-4">
-        <div class="mb-3">
-            <h2 class="h5 mb-1">Lista de precios</h2>
-            <p class="text-secondary mb-0">Define precios comerciales específicos por producto para ventas y POS.</p>
-        </div>
-        <form method="post" action="<?= esc($formAction) . ($isPopup ? '?popup=1' : '') ?>" class="row g-3">
-            <?= csrf_field() ?>
-            <?php if ($isPopup): ?><input type="hidden" name="popup" value="1"><?php endif; ?>
-            <?php if (! empty($companyId)): ?><input type="hidden" name="company_id" value="<?= esc($companyId) ?>"><?php endif; ?>
-            <div class="col-md-6"><label class="form-label">Nombre</label><input type="text" name="name" class="form-control" required></div>
-            <div class="col-md-3"><label class="form-label">Predeterminada</label><select name="is_default" class="form-select"><option value="0">No</option><option value="1">Si</option></select></div>
-            <div class="col-md-3"><label class="form-label">Estado</label><select name="active" class="form-select"><option value="1">Activa</option><option value="0">Inactiva</option></select></div>
-            <div class="col-12"><label class="form-label">Descripcion</label><textarea name="description" class="form-control" rows="2"></textarea></div>
-            <div class="col-12">
-                <div class="table-responsive">
-                    <table class="table align-middle">
-                        <thead><tr><th>Producto</th><th>Precio lista</th></tr></thead>
-                        <tbody>
-                            <?php foreach ($products as $index => $product): ?>
-                                <tr>
-                                    <td>
-                                        <?= esc($product['sku'] . ' - ' . $product['name']) ?>
-                                        <input type="hidden" name="items[<?= $index ?>][product_id]" value="<?= esc($product['id']) ?>">
-                                    </td>
-                                    <td><input type="number" step="0.01" min="0" name="items[<?= $index ?>][price]" class="form-control" value="<?= esc(number_format((float) ($product['sale_price'] ?? 0), 2, '.', '')) ?>"></td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            <div class="col-12 d-flex gap-2 pt-2">
-                <button class="btn btn-dark icon-btn"><i class="bi bi-check-lg"></i></button>
-                <button type="button" class="btn btn-outline-dark icon-btn" onclick="window.parent.postMessage({ type: 'codex-popup-close' }, window.location.origin)"><i class="bi bi-x-lg"></i></button>
-            </div>
-        </form>
-    </div>
-</div>
-<?= view('sales/ui_end') ?>
-<?= $this->endSection() ?>
+<?php $salesLive=false; ?><?= view('sales/ui_start',get_defined_vars()) ?>
+<style>
+#price-manager .price-product-row{display:grid;grid-template-columns:minmax(0,1fr) 65px 85px 110px 140px 42px;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid #e2e6ed}
+#price-manager .price-column-head{font-size:12px;color:#657593;background:#f5f7fa;margin-top:16px}
+#price-manager .price-product-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+#price-manager .price-stock,#price-manager .price-current{text-align:right}
+#price-manager .price-edit{width:100%;min-width:0}
+@media(max-width:800px){#price-manager .price-product-row{grid-template-columns:minmax(0,1fr) 120px 42px;gap:8px}#price-manager .price-stock,#price-manager .price-current{display:none}}
+@media(max-width:420px){#price-manager .price-product-row{grid-template-columns:minmax(0,1fr) 90px 38px;gap:5px}}
+</style>
+<div id="price-manager" data-endpoint="<?= site_url('ventas/listas-precio/productos') ?>" data-company="<?= esc($companyId,'attr') ?>" data-header="<?= csrf_header() ?>" data-csrf="<?= csrf_hash() ?>">
+<div class="card border-0 rounded-4 shadow-sm"><div class="card-body p-4">
+<h2 class="h5">Lista de precios</h2><label for="price-search" class="form-label">Buscar producto por codigo o nombre</label><input id="price-search" class="form-control mb-3" type="search" placeholder="Buscar en todo el inventario" autocomplete="off">
+<div class="d-flex align-items-end gap-2 flex-wrap"><div style="flex:1;min-width:180px"><label class="form-label" for="price-list">Lista que deseas actualizar</label><select id="price-list" class="form-select"></select></div>
+<button id="price-new" class="btn btn-outline-dark icon-btn" title="Crear lista" aria-label="Crear lista"><i class="bi bi-plus-lg"></i></button><button id="price-settings" class="btn btn-outline-dark icon-btn" title="Editar lista" aria-label="Editar lista"><i class="bi bi-gear"></i></button></div>
+<p class="small text-secondary mt-2">El precio se guarda en la lista seleccionada. El precio base de inventario se conserva.</p><p id="price-status" role="status"></p>
+<form id="price-metadata" hidden class="border rounded-3 p-3 mb-3"><div class="row g-2"><div class="col-md-6"><label for="price-name" class="form-label">Nombre</label><input id="price-name" class="form-control" required maxlength="120"></div><div class="col-md-3"><label for="price-default" class="form-label">Predeterminada</label><select id="price-default" class="form-select"><option value="0">No</option><option value="1">Si</option></select></div><div class="col-md-3"><label for="price-active" class="form-label">Estado</label><select id="price-active" class="form-select"><option value="1">Activa</option><option value="0">Inactiva</option></select></div><div class="col-12"><label for="price-description" class="form-label">Descripcion</label><input id="price-description" class="form-control" maxlength="1000"></div></div><div class="mt-3"><button class="btn btn-dark icon-btn" title="Guardar lista" aria-label="Guardar lista"><i class="bi bi-check-lg"></i></button><button type="button" id="price-cancel" class="btn btn-outline-dark icon-btn" title="Cancelar" aria-label="Cancelar"><i class="bi bi-x-lg"></i></button></div></form>
+<div class="price-product-row price-column-head" aria-hidden="true"><span>Producto</span><span class="price-stock">Stock</span><span class="price-stock">Disponible</span><span class="price-current">Precio actual</span><span>Precio lista</span><span></span></div><div id="price-products"></div><div id="price-pages" class="d-flex justify-content-end align-items-center gap-2 mt-3"></div>
+</div></div></div><script src="<?= base_url('assets/js/price-list-manager.js') ?>" defer></script>
+<?= view('sales/ui_end') ?><?= $this->endSection() ?>

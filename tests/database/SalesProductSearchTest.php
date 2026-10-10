@@ -12,6 +12,8 @@ final class SalesProductSearchTest extends CIUnitTestCase
         parent::setUp();
         $db = db_connect('tests');
         foreach ([
+            'sales_promotions' => 'id TEXT PRIMARY KEY, company_id TEXT, name TEXT, promotion_type TEXT, scope TEXT, value REAL, active INTEGER, start_date TEXT, end_date TEXT',
+            'sales_promotion_items' => 'promotion_id TEXT, product_id TEXT',
             'inventory_products' => 'id TEXT PRIMARY KEY, company_id TEXT, sku TEXT, name TEXT, brand TEXT, active INTEGER, sale_price REAL',
             'inventory_warehouses' => 'id TEXT PRIMARY KEY, company_id TEXT, active INTEGER',
             'inventory_stock_levels' => 'id TEXT PRIMARY KEY, company_id TEXT, product_id TEXT, warehouse_id TEXT, quantity REAL, reserved_quantity REAL',

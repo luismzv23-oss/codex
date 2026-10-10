@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Promociones</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+    <link href="http://localhost:8080/assets/css/app.css" rel="stylesheet">
+    <link href="http://localhost:8080/assets/css/codex-assist.css" rel="stylesheet">
+    <meta name="codex-api-base" content="http://localhost:8080/api/v1">
+    <meta name="csrf-token" content="e0bcee5c10d9a43ab70dfbada31bd958b1c3c4dbebddd844c739c61498492046">
+    <style>
+        body.popup-mode {
+            background: #f6f1eb;
+        }
+        .popup-shell {
+            max-width: 760px;
+            margin: 0 auto;
+            padding: 18px 12px 22px;
+        }
+        .popup-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(20, 20, 20, 0.42);
+            backdrop-filter: blur(6px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            z-index: 1080;
+        }
+        .popup-overlay.is-open {
+            display: flex;
+        }
+        .popup-card {
+            width: min(1180px, 96vw);
+            max-height: min(92vh, 920px);
+            display: flex;
+            flex-direction: column;
+            background: #fff;
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 24px 80px rgba(0,0,0,.25);
+            border: 1px solid rgba(0,0,0,.08);
+            transition: width 0.2s ease;
+        }
+        .popup-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 14px 18px;
+            border-bottom: 1px solid rgba(0,0,0,.08);
+            background: #fbf8f3;
+        }
+        .icon-btn {
+            width: 2.25rem;
+            height: 2.25rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .popup-frame {
+            width: 100%;
+            min-height: 420px;
+            border: 0;
+            display: block;
+        }
+        .codex-pagination {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 18px;
+            padding-top: 14px;
+            border-top: 1px solid rgba(0, 0, 0, 0.08);
+        }
+        .codex-pagination__summary {
+            color: #6c757d;
+            font-size: .95rem;
+        }
+        .codex-pagination__controls {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .codex-pagination__pages {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .codex-pagination__btn {
+            min-width: 40px;
+            height: 40px;
+            padding: 0 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(17, 24, 39, 0.14);
+            background: #fff;
+            color: #111827;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all .2s ease;
+        }
+        .codex-pagination__btn:hover:not(:disabled) {
+            background: #212529;
+            color: #fff;
+            border-color: #212529;
+        }
+        .codex-pagination__btn.is-active {
+            background: #212529;
+            color: #fff;
+            border-color: #212529;
+            box-shadow: 0 10px 24px rgba(17, 24, 39, 0.16);
+        }
+        .codex-pagination__btn:disabled {
+            opacity: .45;
+            cursor: not-allowed;
+        }
+        .switcher-card:hover {
+            background-color: rgba(33, 37, 41, 0.05);
+            transform: translateY(-2px);
+        }
+        .switcher-card:hover .icon-btn {
+            background-color: #212529 !important;
+            color: #fff !important;
+        }
+    </style>
+    <link href="http://localhost:8080/assets/css/popup-forms.css" rel="stylesheet">
+</head>
+<body class="">
+            <nav class="navbar navbar-expand-lg bg-white bg-opacity-75 border-bottom sticky-top backdrop-blur">
+            <div class="container">
+                <a class="navbar-brand fw-bold" href="http://localhost:8080/dashboard">Codex Core</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="mainNav">
+                    <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                                                                                                                                            </ul>
+                    <div class="d-flex align-items-center gap-3">
+                        <!-- Lanzador de Módulos (Quick Switcher) -->
+                        
+                        <div class="small text-end">
+                            <div class="fw-semibold"></div>
+                            <div class="text-secondary"></div>
+                        </div>
+                        <a href="http://localhost:8080/logout" class="btn btn-outline-dark btn-sm">Salir</a>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    
+    <main class="container py-4">
+                                <link rel="stylesheet" href="http://localhost:8080/assets/css/dashboard-insights.css">
+<link rel="stylesheet" href="http://localhost:8080/assets/css/inventory-dashboard.css">
+<link rel="stylesheet" href="http://localhost:8080/assets/css/sales-dashboard.css">
+<div class="insight-shell inventory-shell sales-shell" data-sales-live="0">
+<div id="price-manager" data-endpoint="http://localhost:8080/ventas/listas-precio/productos" data-company="qa" data-header="X-CSRF-TOKEN" data-csrf="12dbbb4448f56fbbfe301e4425f1c33943a491c3b3f113c58e0423fd1ea33a27">
+<div class="card border-0 rounded-4 shadow-sm"><div class="card-body p-4">
+<h2 class="h5">Lista de precios</h2><label for="price-search" class="form-label">Buscar producto por codigo o nombre</label><input id="price-search" class="form-control mb-3" type="search" placeholder="Buscar en todo el inventario" autocomplete="off">
+<div class="d-flex align-items-end gap-2 flex-wrap"><div style="flex:1;min-width:180px"><label class="form-label" for="price-list">Lista que deseas actualizar</label><select id="price-list" class="form-select"></select></div>
+<button id="price-new" class="btn btn-outline-dark icon-btn" title="Crear lista" aria-label="Crear lista"><i class="bi bi-plus-lg"></i></button><button id="price-settings" class="btn btn-outline-dark icon-btn" title="Editar lista" aria-label="Editar lista"><i class="bi bi-gear"></i></button></div>
+<p class="small text-secondary mt-2">El precio se guarda en la lista seleccionada. El precio base de inventario se conserva.</p><p id="price-status" role="status"></p>
+<form id="price-metadata" hidden class="border rounded-3 p-3 mb-3"><div class="row g-2"><div class="col-md-6"><label for="price-name" class="form-label">Nombre</label><input id="price-name" class="form-control" required maxlength="120"></div><div class="col-md-3"><label for="price-default" class="form-label">Predeterminada</label><select id="price-default" class="form-select"><option value="0">No</option><option value="1">Si</option></select></div><div class="col-md-3"><label for="price-active" class="form-label">Estado</label><select id="price-active" class="form-select"><option value="1">Activa</option><option value="0">Inactiva</option></select></div><div class="col-12"><label for="price-description" class="form-label">Descripcion</label><input id="price-description" class="form-control" maxlength="1000"></div></div><div class="mt-3"><button class="btn btn-dark icon-btn" title="Guardar lista" aria-label="Guardar lista"><i class="bi bi-check-lg"></i></button><button type="button" id="price-cancel" class="btn btn-outline-dark icon-btn" title="Cancelar" aria-label="Cancelar"><i class="bi bi-x-lg"></i></button></div></form>
+<div id="price-products"></div><div id="price-pages" class="d-flex justify-content-end align-items-center gap-2 mt-3"></div>
+</div></div></div><script src="http://localhost:8080/assets/js/price-list-manager.js" defer></script>
+</div>
+<script src="http://localhost:8080/assets/js/sales-dashboard.js"></script>
+    </main>
+
+            <div class="popup-overlay" id="codex-popup">
+            <div class="popup-card">
+                <div class="popup-head">
+                    <div>
+                        <strong class="d-block" id="codex-popup-title">Formulario</strong>
+                        <span class="text-secondary small" id="codex-popup-subtitle">Gestion del registro actual.</span>
+                    </div>
+                    <button type="button" class="btn btn-outline-dark btn-sm icon-btn" id="codex-popup-close" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
+                </div>
+                <iframe class="popup-frame" id="codex-popup-frame" title="Formulario del sistema"></iframe>
+            </div>
+        </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.select-search').forEach((el) => {
+                new TomSelect(el, { create: false, sortField: { field: "text", direction: "asc" } });
+            });
+        });
+    </script>
+                <script>
+            (() => {
+                const overlay = document.getElementById('codex-popup');
+                const frame = document.getElementById('codex-popup-frame');
+                const closeButton = document.getElementById('codex-popup-close');
+                const title = document.getElementById('codex-popup-title');
+                const subtitle = document.getElementById('codex-popup-subtitle');
+                const card = overlay.querySelector('.popup-card');
+
+                if (!overlay || !frame || !closeButton || !title || !subtitle || !card) {
+                    return;
+                }
+
+                const resizePopup = () => {
+                    if (frame.src === 'about:blank') {
+                        return;
+                    }
+
+                    if (frame.dataset.pdf === 'true') {
+                        const headHeight = overlay.querySelector('.popup-head')?.offsetHeight ?? 72;
+                        frame.style.height = `${Math.max(260, Math.floor(window.innerHeight * 0.9) - headHeight)}px`;
+                        return;
+                    }
+
+                    try {
+                        const doc = frame.contentWindow?.document;
+
+                        if (!doc) {
+                            return;
+                        }
+
+                        const bodyHeight = doc.body ? doc.body.scrollHeight : 0;
+                        const htmlHeight = doc.documentElement ? doc.documentElement.scrollHeight : 0;
+                        const contentHeight = Math.max(bodyHeight, htmlHeight, 420);
+                        const headHeight = overlay.querySelector('.popup-head')?.offsetHeight ?? 72;
+                        const availableHeight = Math.max(420, Math.floor(window.innerHeight * 0.9) - headHeight);
+
+                        frame.style.height = `${Math.min(contentHeight, availableHeight)}px`;
+                    } catch (error) {
+                        frame.style.height = '640px';
+                    }
+                };
+
+                const openPopup = (link) => {
+                    const url = new URL(link.href, window.location.origin);
+                    url.searchParams.set('popup', '1');
+                    frame.dataset.pdf = link.dataset.popupPdf || 'false';
+                    frame.src = url.toString();
+                    title.textContent = link.dataset.popupTitle || link.textContent.trim() || 'Formulario';
+                    subtitle.textContent = link.dataset.popupSubtitle || 'Gestion del registro actual.';
+                    if (link.dataset.popupWidth) {
+                        card.style.width = link.dataset.popupWidth;
+                    } else {
+                        card.style.width = '';
+                    }
+                    overlay.classList.add('is-open');
+                    if (frame.dataset.pdf === 'true') resizePopup();
+                };
+
+                const closePopup = () => {
+                    overlay.classList.remove('is-open');
+                    frame.src = 'about:blank';
+                    frame.style.height = '420px';
+                    card.style.width = '';
+                };
+
+                document.addEventListener('click', (event) => {
+                    const link = event.target.closest('a[data-popup="true"]');
+
+                    if (!link) {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    openPopup(link);
+                });
+
+                closeButton.addEventListener('click', closePopup);
+                frame.addEventListener('load', resizePopup);
+                window.addEventListener('resize', resizePopup);
+                overlay.addEventListener('click', (event) => {
+                    if (event.target === overlay) {
+                        closePopup();
+                    }
+                });
+
+                window.showCodexToast = (message, type = 'success') => {
+                    let container = document.getElementById('codex-toast-container');
+                    if (!container) {
+                        container = document.createElement('div');
+                        container.id = 'codex-toast-container';
+                        container.style.position = 'fixed';
+                        container.style.top = '20px';
+                        container.style.right = '20px';
+                        container.style.zIndex = '99999';
+                        container.style.display = 'flex';
+                        container.style.flexDirection = 'column';
+                        container.style.gap = '10px';
+                        container.style.pointerEvents = 'none';
+                        document.body.appendChild(container);
+                    }
+
+                    const toast = document.createElement('div');
+                    toast.className = `alert alert-${type === 'error' ? 'danger' : 'success'} alert-dismissible shadow-lg border-0 rounded-4 px-4 py-3 mb-0`;
+                    toast.style.pointerEvents = 'auto';
+                    toast.style.minWidth = '280px';
+                    toast.style.maxWidth = '420px';
+                    toast.style.transition = 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)';
+                    toast.style.transform = 'translateY(-10px)';
+                    toast.style.opacity = '0';
+                    toast.innerHTML = `
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-${type === 'error' ? 'exclamation-octagon-fill' : 'check-circle-fill'} fs-5"></i>
+                            <div class="fw-semibold text-wrap">${message}</div>
+                        </div>
+                    `;
+                    container.appendChild(toast);
+
+                    requestAnimationFrame(() => {
+                        toast.style.transform = 'translateY(0)';
+                        toast.style.opacity = '1';
+                    });
+
+                    setTimeout(() => {
+                        toast.style.transform = 'translateY(-10px)';
+                        toast.style.opacity = '0';
+                        setTimeout(() => toast.remove(), 300);
+                    }, 4000);
+                };
+
+                window.addEventListener('message', (event) => {
+                    if (event.origin !== window.location.origin || !event.data) {
+                        return;
+                    }
+
+                    if (event.data.type === 'codex-popup-saved') {
+                        closePopup();
+                        if (event.data.message) {
+                            window.showCodexToast(event.data.message, 'success');
+                        }
+                        if (event.data.entity) {
+                            window.dispatchEvent(new CustomEvent('codex:' + event.data.entity + '-saved', { detail: event.data }));
+                        }
+                        window.dispatchEvent(new CustomEvent('codex:item-saved', { detail: event.data }));
+                        return;
+                    }
+
+                    if (event.data.type === 'codex-customer-created') {
+                        closePopup();
+                        const customerEvent = new CustomEvent('codex:customer-created', { detail: event.data });
+                        window.dispatchEvent(customerEvent);
+                        if (!document.getElementById('sale-customer-id') && !document.getElementById('kiosk-customer-id')) {
+                            window.location.href = event.data.redirectUrl || window.location.href;
+                        }
+                        return;
+                    }
+
+                    if (event.data.type === 'codex-popup-close') {
+                        closePopup();
+                        if (event.data.forceReload) {
+                            window.location.href = event.data.redirectUrl || window.location.href;
+                        }
+                        return;
+                    }
+
+                    if (event.data.type === 'codex-popup-resize') {
+                        resizePopup();
+                    }
+                });
+            })();
+        </script>
+        <script>
+            (() => {
+                const buildPagination = (table) => {
+                    const pageSize = Number(table.dataset.codexPagination || 10);
+                    const tbody = table.tBodies[0];
+
+                    if (!tbody || !Number.isFinite(pageSize) || pageSize <= 0) {
+                        return;
+                    }
+
+                    const rows = Array.from(tbody.querySelectorAll(':scope > tr'));
+                    const validRows = rows.filter((row) => row.children.length > 1 || !row.querySelector('[colspan]'));
+
+                    if (validRows.length <= pageSize) {
+                        return;
+                    }
+
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'codex-pagination';
+
+                    const summary = document.createElement('div');
+                    summary.className = 'codex-pagination__summary';
+
+                    const controls = document.createElement('div');
+                    controls.className = 'codex-pagination__controls';
+
+                    const prev = document.createElement('button');
+                    prev.type = 'button';
+                    prev.className = 'codex-pagination__btn';
+                    prev.innerHTML = '<i class="bi bi-chevron-left"></i>';
+                    prev.setAttribute('aria-label', 'Pagina anterior');
+
+                    const pages = document.createElement('div');
+                    pages.className = 'codex-pagination__pages';
+
+                    const next = document.createElement('button');
+                    next.type = 'button';
+                    next.className = 'codex-pagination__btn';
+                    next.innerHTML = '<i class="bi bi-chevron-right"></i>';
+                    next.setAttribute('aria-label', 'Pagina siguiente');
+
+                    controls.append(prev, pages, next);
+                    wrapper.append(summary, controls);
+                    table.closest('.table-responsive')?.after(wrapper);
+
+                    const pageCount = Math.ceil(validRows.length / pageSize);
+                    let currentPage = 1;
+
+                    const renderPageButtons = () => {
+                        pages.innerHTML = '';
+                        const start = Math.max(1, currentPage - 2);
+                        const end = Math.min(pageCount, currentPage + 2);
+
+                        for (let page = start; page <= end; page++) {
+                            const button = document.createElement('button');
+                            button.type = 'button';
+                            button.className = `codex-pagination__btn${page === currentPage ? ' is-active' : ''}`;
+                            button.textContent = String(page);
+                            button.addEventListener('click', () => {
+                                currentPage = page;
+                                render();
+                            });
+                            pages.appendChild(button);
+                        }
+                    };
+
+                    const render = () => {
+                        const startIndex = (currentPage - 1) * pageSize;
+                        const endIndex = startIndex + pageSize;
+
+                        validRows.forEach((row, index) => {
+                            row.style.display = index >= startIndex && index < endIndex ? '' : 'none';
+                        });
+
+                        summary.textContent = `Mostrando ${startIndex + 1}-${Math.min(endIndex, validRows.length)} de ${validRows.length} registros`;
+                        prev.disabled = currentPage === 1;
+                        next.disabled = currentPage === pageCount;
+                        renderPageButtons();
+                    };
+
+                    prev.addEventListener('click', () => {
+                        if (currentPage > 1) {
+                            currentPage -= 1;
+                            render();
+                        }
+                    });
+
+                    next.addEventListener('click', () => {
+                        if (currentPage < pageCount) {
+                            currentPage += 1;
+                            render();
+                        }
+                    });
+
+                    render();
+                };
+
+                document.querySelectorAll('table[data-codex-pagination]').forEach(buildPagination);
+            })();
+        </script>
+        <script src="http://localhost:8080/assets/js/codex-assist-widget.js" defer></script>
+    </body>
+</html>

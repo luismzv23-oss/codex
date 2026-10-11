@@ -6,6 +6,7 @@ class SalesReceiptModel extends BaseUuidModel
 {
     protected $table = 'sales_receipts';
     protected $allowedFields = [
+        'processing_version', 'receipt_kind', 'received_amount', 'refunded_amount',
         'id',
         'company_id',
         'customer_id',

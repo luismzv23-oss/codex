@@ -15,6 +15,7 @@
         <?php if (! empty($companies)): ?>
 
         <?php endif; ?>
+        <?php if (in_array(auth_user()['role_slug'] ?? '', ['admin', 'superadmin'], true)): ?><a href="<?= site_url('ventas/cobranzas/cuentas?company_id=' . $selectedCompanyId) ?>" class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Cuentas de cobranzas" title="Configurar cuentas" aria-label="Configurar cuentas"><i class="bi bi-gear"></i></a><?php endif; ?>
         <?php if ($context['canManage']): ?>
             <a href="<?= site_url('ventas/cobranzas/nuevo' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-dark icon-btn" data-popup="true" data-popup-title="Nuevo recibo" data-popup-subtitle="Aplicar cobranza a comprobantes pendientes." title="Nuevo recibo" aria-label="Nuevo recibo"><i class="bi bi-cash-coin"></i></a>
         <?php endif; ?>
@@ -106,21 +107,21 @@
                             <?php $isVoided = ($receipt['status'] ?? '') === 'voided'; ?>
                             <tr class="<?= $isVoided ? 'table-secondary text-decoration-line-through' : '' ?>">
                                 <td>
-                                    <?= esc($receipt['receipt_number']) ?>
+                                    <?= esc($receipt['receipt_number']) ?><div class="small text-secondary"><?= ['advance'=>'Anticipo','return_credit'=>'Saldo por devolucion'][$receipt['receipt_kind'] ?? ''] ?? 'Cobro' ?></div>
                                     <div class="small text-secondary"><?= esc(date('d/m/Y H:i', strtotime($receipt['issue_date']))) ?></div>
                                 </td>
                                 <td><?= esc($receipt['customer_name']) ?></td>
                                 <td>
                                     <?php
-                                    $methodLabels = ['cash' => 'Efectivo', 'card' => 'Tarjeta', 'transfer' => 'Transferencia', 'check' => 'Cheque', 'qr' => 'QR', 'mixed' => 'Mixto'];
+                                    $methodLabels = ['cash' => 'Efectivo', 'card' => 'Tarjeta', 'transfer' => 'Transferencia', 'check' => 'Cheque', 'qr' => 'QR', 'mixed' => 'Mixto', 'credit' => 'Saldo a favor'];
                                     echo esc($methodLabels[$receipt['payment_method'] ?? ''] ?? ($receipt['payment_method'] ?? '-'));
                                     ?>
                                 </td>
-                                <td><?= number_format((float) ($receipt['total_amount'] ?? 0), 2, ',', '.') ?></td>
+                                <td><?= number_format((float) ($receipt['total_amount'] ?? 0), 2, ',', '.') ?><?php if (($receipt['available_amount'] ?? 0) > 0): ?><div class="small text-success">Disponible: <?= number_format($receipt['available_amount'], 2, ',', '.') ?></div><?php endif; ?></td>
                                 <td>
                                     <?php if ($isVoided): ?>
                                         <span class="badge bg-secondary">Anulado</span>
-                                    <?php elseif (($receipt['status'] ?? '') === 'pending'): ?><span class="badge bg-warning text-dark">Pendiente de verificación</span>
+                                    <?php elseif (in_array($receipt['status'] ?? '', ['pending', 'partial'], true)): ?><span class="badge bg-warning text-dark">Pendiente de verificación</span>
                                     <?php else: ?>
                                         <span class="badge bg-success">Aplicado</span>
                                     <?php endif; ?>
@@ -128,7 +129,7 @@
                                 <td class="text-end">
                                     <div class="d-flex gap-1 justify-content-end">
                                         <a href="<?= site_url('ventas/cobranzas/' . $receipt['id'] . '/detalle' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-outline-dark btn-sm icon-btn" data-popup="true" data-popup-title="Detalle de recibo" data-popup-subtitle="Comprobantes aplicados y datos del recibo." title="Ver detalle" aria-label="Ver detalle"><i class="bi bi-eye"></i></a>
-                                        <?php if ($context['canManage'] && ! $isVoided): ?>
+                                        <?php if ($context['canManage'] && !$isVoided && ($receipt['receipt_kind'] ?? '') !== 'return_credit' && (float) ($receipt['refunded_amount'] ?? 0) === 0.0): ?>
                                             <form method="post" action="<?= site_url('ventas/cobranzas/' . $receipt['id'] . '/anular' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" onsubmit="const reason = prompt('Motivo del reverso de fondos y aplicaciones:'); if (!reason || !reason.trim()) return false; this.elements.reason.value = reason; return confirm('Se registrarán contramovimientos de fondos y contabilidad. ¿Continuar?');">
                                                 <?= csrf_field() ?>
                                                 <input type="hidden" name="reason"><button type="submit" class="btn btn-outline-danger btn-sm icon-btn" title="Anular recibo" aria-label="Anular recibo"><i class="bi bi-x-circle"></i></button>
@@ -154,6 +155,13 @@
 <form method="post" action="<?= site_url('ventas/' . $payment['sale_id'] . '/pagos/' . $payment['id'] . '/confirmar?company_id=' . $selectedCompanyId) ?>" class="d-flex gap-2"><?= csrf_field() ?><input name="confirmation_note" class="form-control" aria-label="Evidencia de verificación" placeholder="Evidencia de verificación" required maxlength="500"><button class="btn btn-outline-success icon-btn" title="Confirmar transferencia" aria-label="Confirmar transferencia"><i class="bi bi-check2-circle"></i></button></form>
 </td></tr><?php endforeach; ?>
 </tbody></table></div></div></section>
+<?php endif; ?>
+<?php if (!empty($unsettledPayments)): ?>
+<section class="card mt-4"><div class="card-body"><h2 class="h5">Cobros de ventas por acreditar</h2><p class="text-secondary">Registra la acreditacion del importe completo. No genera un nuevo cobro al cliente.</p>
+<table data-sales-table class="table"><thead><tr><th>Venta</th><th>Medio</th><th>Importe</th><th>Acreditacion bancaria</th></tr></thead><tbody>
+<?php foreach ($unsettledPayments as $payment): ?><tr><td><?= esc($payment['sale_number']) ?></td><td><?= esc(['card'=>'Tarjeta','check'=>'Cheque','qr'=>'Billetera'][$payment['payment_method']]) ?></td><td><?= number_format($payment['amount'], 2, ',', '.') ?></td><td>
+<form method="post" class="d-flex gap-2" action="<?= site_url('ventas/' . $payment['sale_id'] . '/pagos/' . $payment['id'] . '/acreditar?company_id=' . $selectedCompanyId) ?>"><?= csrf_field() ?><input name="evidence" class="form-control" placeholder="Referencia bancaria" aria-label="Referencia bancaria" required maxlength="500"><button class="btn btn-outline-success icon-btn" title="Acreditar en banco" aria-label="Acreditar en banco"><i class="bi bi-bank"></i></button></form>
+</td></tr><?php endforeach; ?></tbody></table></div></section>
 <?php endif; ?>
 </div>
 <?= view('sales/ui_end') ?>

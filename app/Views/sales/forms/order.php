@@ -72,7 +72,7 @@ function addOrderLine(data = {}) {
     const prodId = data.product_id || (productList[0]?.id || '');
     const price = data.unit_price || productList.find(p => p.id === prodId)?.sale_price || 0;
     row.innerHTML = `<td><select name="items[${oIdx}][product_id]" class="form-select form-select-sm" onchange="autoOrdPrice(this)">${prodOpts}</select></td>
-        <td><input type="number" step="0.01" min="0.01" name="items[${oIdx}][quantity]" class="form-control form-control-sm" value="${data.quantity||1}" oninput="calcOrd()"></td>
+        <td><input type="number" step="1" min="1" name="items[${oIdx}][quantity]" class="form-control form-control-sm" value="${data.quantity||1}" oninput="calcOrd()"></td>
         <td><input type="number" step="0.01" name="items[${oIdx}][unit_price]" class="form-control form-control-sm o-price" value="${Number(price).toFixed(2)}" oninput="calcOrd()"></td>
         <td><input type="number" step="0.01" name="items[${oIdx}][discount_pct]" class="form-control form-control-sm" value="${data.discount_pct||0}" oninput="calcOrd()"></td>
         <td><input type="number" step="0.01" name="items[${oIdx}][tax_rate]" class="form-control form-control-sm" value="${data.tax_rate||21}" oninput="calcOrd()"></td>

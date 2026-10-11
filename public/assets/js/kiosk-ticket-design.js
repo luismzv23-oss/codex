@@ -10,8 +10,9 @@
         return qr.createSvgTag({cellSize:3, margin:12, scalable:true});
     };
     window.renderKioskTicket = (settings, data, preview = false) => {
+        const delivery = data.documentCategory === 'delivery_note' || ['REMITO','RTO','RM'].includes(String(data.documentCode || '').toUpperCase());
         const get = key => settings['ticket_' + key] ?? settings[key];
-        const show = key => (!preview && data.cae && ['show_qr', 'show_authorization'].includes(key)) || Number(get(key) ?? 1) === 1;
+        const show = key => !(delivery && ['show_subtotal','show_taxes','show_discounts','show_payments','show_transparency','show_authorization','show_qr','show_currency'].includes(key)) && ((!preview && data.cae && ['show_qr', 'show_authorization'].includes(key)) || Number(get(key) ?? 1) === 1);
         const text = (key, fallback = '') => get(key) || fallback;
         const row = (label, value) => `<div class="row"><span>${escape(label)}</span><span>${escape(value)}</span></div>`;
         const block = (flag, content) => show(flag) && content ? `<section>${content}</section>` : '';
@@ -30,7 +31,7 @@
             const discount = base * Number(item.discount_rate || 0) / 100;
             return `<div class="item"><strong>${show('show_sku') && item.sku ? escape(item.sku) + ' · ' : ''}${escape(item.name)}</strong>
                 ${show('show_brand') ? line(item.brand) : ''}
-                ${row(show('show_item_breakdown') ? `${item.quantity} x ${money(item.unit_price)}` : `Cant.: ${item.quantity}`, money(item.line_total ?? (base - discount)))}
+                ${delivery ? row('Cantidad', item.quantity) : row(show('show_item_breakdown') ? `${item.quantity} x ${money(item.unit_price)}` : `Cant.: ${item.quantity}`, money(item.line_total ?? (base - discount)))}
                 ${show('show_discounts') && discount > 0 ? row(`Descuento ${money(item.discount_rate)} %`, '-' + money(discount)) : ''}</div>`;
         }).join('');
         return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Ticket</title><style>
@@ -47,7 +48,7 @@
         ${block('show_subtotal',row('Subtotal neto',money(data.subtotal)))}
         ${block('show_taxes',(data.taxes || []).map(t=>row(t.label,money(t.amount))).join(''))}
         ${block('show_discounts',data.discount > 0 ? row('Descuento por medio de pago','-' + money(data.discount)) : '')}
-        <div class="total">${row('TOTAL A PAGAR',money(data.total))}</div>
+        ${delivery ? '' : `<div class="total">${row('TOTAL A PAGAR',money(data.total))}</div>`}
         ${block('show_payments',visiblePayments.map(p=>row(p.code + (p.status === 'pending' || (!p.status && p.type === 'transfer') ? ' (pendiente)' : ''),money(p.total))).join(''))}
         ${block('show_transparency',line('RÉGIMEN DE TRANSPARENCIA FISCAL AL CONSUMIDOR (Ley 27.743)') + row('IVA contenido:', money(vat)) + row('Otros impuestos nacionales indirectos:', data.nationalTaxes == null ? 'No informado' : money(data.nationalTaxes)) + line('Los impuestos informados son solo los que corresponden a nivel nacional.'))}
         ${block('show_authorization',fiscal)}

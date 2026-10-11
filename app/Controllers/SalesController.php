@@ -370,6 +370,7 @@ class SalesController extends BaseController
             'receivableSummary' => $this->receivableSummary($companyId),
             'receivables' => $this->receivableRows($companyId),
             'receipts' => $this->receiptRows($companyId),
+            'unsettledPayments' => $context['canManage'] ? db_connect()->table('sale_payments p')->select('p.*, s.sale_number, s.currency_code')->join('sales s', 's.id=p.sale_id')->where('s.company_id', $companyId)->whereIn('p.payment_method', ['card', 'check', 'qr'])->whereIn('p.status', ['registered', 'confirmed'])->where('p.sales_receipt_id', null)->whereNotIn('p.id', db_connect()->table('journal_entries')->select('reference_id')->where('company_id', $companyId)->where('reference_type', 'payment_settlement'))->get()->getResultArray() : [],
             'pendingPayments' => $context['canManage'] ? db_connect()->table('sale_payments p')->select('p.*, s.sale_number, s.currency_code')->join('sales s', 's.id = p.sale_id')->where('s.company_id', $companyId)->where('p.status', 'pending')->whereIn('s.status', ['confirmed', 'returned_partial'])->where('p.sales_receipt_id', null)->get()->getResultArray() : [],
         ]);
     }
@@ -383,6 +384,7 @@ class SalesController extends BaseController
 
         return view('sales/forms/receipt', [
             'pageTitle' => 'Nuevo recibo',
+            'customers' => $this->customerOptions($context['company']['id']),
             'companyId' => $context['company']['id'],
             'receivables' => $this->receivableRows($context['company']['id']),
             'gateways' => (new CashPaymentGatewayModel())->where('company_id', $context['company']['id'])->where('active', 1)->orderBy('name', 'ASC')->findAll(),
@@ -393,14 +395,89 @@ class SalesController extends BaseController
         ]);
     }
 
+    public function collectionAccounts()
+    {
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+        if (!in_array($this->roleSlug(), ['admin', 'superadmin'], true)) return redirect()->back()->with('error', 'Solo administradores pueden configurar cuentas.');
+        $companyId = $context['company']['id'];
+        if (strtolower($this->request->getMethod()) === 'post') {
+            try {
+                (new \App\Libraries\SalesCollectionService())->configureAccounts($companyId, (array) $this->request->getPost('accounts'));
+                return $this->popupOrRedirect($this->salesRoute('ventas/cobranzas', $companyId), 'Cuentas actualizadas.');
+            } catch (\Throwable $e) { return redirect()->back()->withInput()->with('error', $e->getMessage()); }
+        }
+        $mapping = [];
+        foreach (db_connect()->table('company_settings')->where('company_id', $companyId)->like('key', 'account_', 'after')->get()->getResultArray() as $setting) $mapping[substr($setting['key'], 8)] = $setting['value'];
+        return view('sales/forms/collection_accounts', [
+            'pageTitle' => 'Cuentas de cobranzas', 'companyId' => $companyId, 'mapping' => $mapping,
+            'accounts' => db_connect()->table('accounts')->where('company_id', $companyId)->where('active', 1)->where('is_group', 0)->where('accepts_entries', 1)->orderBy('code')->get()->getResultArray(),
+            'isPopup' => $this->isPopupRequest(),
+        ]);
+    }
+
+    public function refundAdvance(string $id)
+    {
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+        try {
+            $payload = (array) $this->request->getPost();
+            (new \App\Libraries\SalesCollectionService(null, new CashService($this->roleSlug() === 'vendedor' ? (string) $this->currentUser()['id'] : null)))->refundAdvance($context['company']['id'], $id, $this->currentUser()['id'], $payload);
+            return $this->popupOrRedirect($this->salesRoute('ventas/cobranzas', $context['company']['id']), 'Reintegro registrado.');
+        } catch (\Throwable $e) { return redirect()->back()->withInput()->with('error', $e->getMessage()); }
+    }
+
+    public function applyAdvance(string $id)
+    {
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+        try {
+            $payload = (array) $this->request->getPost();
+            $payload['items'] = [];
+            foreach ((array) ($payload['items_receivable_id'] ?? []) as $i => $receivableId) {
+                $payload['items'][] = ['receivable_id' => $receivableId, 'applied_amount' => $payload['items_applied_amount'][$i] ?? 0];
+            }
+            $service = new \App\Libraries\SalesCollectionService();
+            $service->applyAdvance($context['company']['id'], $id, $this->currentUser()['id'], $payload);
+            return $this->popupOrRedirect($this->salesRoute('ventas/cobranzas', $context['company']['id']), 'Operacion registrada correctamente.');
+        } catch (\Throwable $e) { return redirect()->back()->withInput()->with('error', $e->getMessage()); }
+    }
+
+    public function settleReceiptPayment(string $id, string $paymentId)
+    {
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+        try {
+            $payload = (array) $this->request->getPost();
+
+            $service = new \App\Libraries\SalesCollectionService();
+            $service->settleReceiptPayment($context['company']['id'], $id, $paymentId, $this->currentUser()['id'], trim((string) ($payload['evidence'] ?? '')));
+            return $this->popupOrRedirect($this->salesRoute('ventas/cobranzas', $context['company']['id']), 'Operacion registrada correctamente.');
+        } catch (\Throwable $e) { return redirect()->back()->withInput()->with('error', $e->getMessage()); }
+    }
+
+    public function settleSalePayment(string $saleId, string $paymentId)
+    {
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+        try {
+            $payload = (array) $this->request->getPost();
+
+            $service = new \App\Libraries\SalesCollectionService();
+            $service->settleSalePayment($context['company']['id'], $saleId, $paymentId, $this->currentUser()['id'], trim((string) ($payload['evidence'] ?? '')));
+            return $this->popupOrRedirect($this->salesRoute('ventas/cobranzas', $context['company']['id']), 'Operacion registrada correctamente.');
+        } catch (\Throwable $e) { return redirect()->back()->withInput()->with('error', $e->getMessage()); }
+    }
+
     public function confirmReceipt(string $id)
     {
         $context = $this->salesContext('manage');
         if ($context instanceof RedirectResponse) { return $context; }
         try {
             $payload = (array) $this->request->getPost();
-            $applied = (new \App\Libraries\SalesCollectionService(null, new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null)))->confirm($context['company']['id'], $id, $this->currentUser()['id'], trim((string) ($payload['confirmation_note'] ?? '')));
-            if ($applied) { $receipt = (new SalesReceiptModel())->find($id); \App\Libraries\EventBus::emit('sale.payment_received', ['company_id' => $context['company']['id'], 'payment' => ['amount' => $receipt['total_amount']], 'receipt_id' => $id]); }
+            $before = (new SalesReceiptModel())->where('company_id', $context['company']['id'])->find($id);
+            $applied = (new \App\Libraries\SalesCollectionService(null, new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null)))->confirm($context['company']['id'], $id, $this->currentUser()['id'], trim((string) ($payload['confirmation_note'] ?? '')), trim((string) ($payload['payment_id'] ?? '')) ?: null);
+            if ($applied) { $receipt = (new SalesReceiptModel())->find($id); \App\Libraries\EventBus::emit('sale.payment_received', ['company_id' => $context['company']['id'], 'payment' => ['amount' => (float) $receipt['received_amount'] - (float) ($before['received_amount'] ?? 0)], 'receipt_id' => $id]); }
             return $this->popupOrRedirect($this->salesRoute('ventas/cobranzas', $context['company']['id']), 'Operación registrada correctamente.');
         } catch (\Throwable $e) { return redirect()->back()->withInput()->with('error', $e->getMessage()); }
     }
@@ -429,8 +506,8 @@ class SalesController extends BaseController
             }
             $receipt = (new \App\Libraries\SalesCollectionService(null, new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null)))->create($companyId, $this->currentUser()['id'], $payload,
                 fn() => $this->nextSequenceNumber($companyId, 'RECIBO', 'REC'));
-            if ($receipt['status'] === 'applied') { \App\Libraries\EventBus::emit('sale.payment_received', ['company_id' => $companyId, 'payment' => ['amount' => $receipt['total_amount']], 'receipt_id' => $receipt['id']]); }
-            return $this->popupOrRedirect($this->salesRoute('ventas/cobranzas', $companyId), $receipt['status'] === 'pending' ? 'Recibo pendiente: verifica la transferencia para aplicar sus importes.' : 'Cobro aplicado correctamente.');
+            if (empty($receipt['_replayed']) && (float) $receipt['received_amount'] > 0) { \App\Libraries\EventBus::emit('sale.payment_received', ['company_id' => $companyId, 'payment' => ['amount' => $receipt['received_amount']], 'receipt_id' => $receipt['id']]); }
+            return $this->popupOrRedirect($this->salesRoute('ventas/cobranzas', $companyId), in_array($receipt['status'], ['pending', 'partial'], true) ? 'Medios recibidos aplicados. Quedan transferencias pendientes de verificar.' : 'Cobro registrado correctamente.');
         } catch (\Throwable $e) { return redirect()->back()->withInput()->with('error', $e->getMessage()); }
     }
 
@@ -465,6 +542,8 @@ class SalesController extends BaseController
             'selectedCompanyId' => $companyId,
             'receipt' => $receipt,
             'receiptItems' => $receiptItems,
+            'availableAdvance' => (new \App\Libraries\SalesCollectionService())->availableAdvance($receipt),
+            'receivables' => array_values(array_filter($this->receivableRows($companyId), static fn($r) => $r['customer_id'] === $receipt['customer_id'])),
             'customer' => $customer,
             'isPopup' => $this->isPopupRequest(),
         ]);
@@ -1147,10 +1226,56 @@ class SalesController extends BaseController
         return view('sales/forms/price_list', [
             'pageTitle' => 'Lista de precios',
             'formAction' => site_url('ventas/listas-precio'),
-            'products' => $this->salesProductCatalog($context['company']['id']),
+            'products' => [],
             'companyId' => $context['company']['id'],
             'isPopup' => $this->isPopupRequest(),
         ]);
+    }
+
+    public function priceListProducts()
+    {
+        $context=$this->salesContext('manage');
+        if ($context instanceof RedirectResponse) return $this->response->setStatusCode(403)->setJSON(['error'=>'No tienes permiso para gestionar listas de precios.']);
+        $company=$context['company']['id'];$db=db_connect();$selected=(string)$this->request->getGet('list_id');
+        if ($this->request->getMethod()==='post') {
+            try {
+                $input=$this->request->getJSON(true) ?: [];
+                $selected=(new \App\Libraries\InventoryIntegrityService())->transaction($company,function() use($input,$company,$db) {
+                    $id=trim((string)($input['list_id']??''));
+                    $list=$id!==''?(new SalesPriceListModel())->where('company_id',$company)->find($id):null;
+                    if ($id!=='' && !$list) throw new \RuntimeException('Lista no disponible en esta empresa.');
+                    if (($input['action']??'')==='metadata') {
+                        $name=trim((string)($input['name']??''));
+                        if ($name==='' || mb_strlen($name)>120) throw new \RuntimeException('Indica un nombre de hasta 120 caracteres.');
+                        $values=['company_id'=>$company,'name'=>$name,'description'=>mb_substr(trim((string)($input['description']??'')),0,1000),'is_default'=>!empty($input['is_default'])?1:0,'active'=>!empty($input['active'])?1:0];
+                        if ($values['is_default'] && !$values['active']) throw new \RuntimeException('La lista predeterminada debe estar activa.');
+                        if ($values['is_default']) $db->table('sales_price_lists')->where('company_id',$company)->update(['is_default'=>0]);
+                        $model=new SalesPriceListModel();
+                        if ($list) { if (!$model->update($id,$values)) throw new \RuntimeException('No se pudo actualizar la lista.'); }
+                        else { $id=$model->insert($values,true);if(!$id)throw new \RuntimeException('No se pudo crear la lista.'); }
+                    } else {
+                        if (!$list) throw new \RuntimeException('Primero selecciona o crea una lista.');
+                        $product=$db->table('inventory_products')->where('company_id',$company)->where('id',(string)($input['product_id']??''))->get()->getRowArray();
+                        $price=filter_var($input['price']??null,FILTER_VALIDATE_FLOAT);
+                        if (!$product || $price===false || !is_finite($price) || $price<=0 || $price>9999999999) throw new \RuntimeException('Selecciona un producto y un precio mayor que cero.');
+                        $model=new SalesPriceListItemModel();$existing=$model->where('price_list_id',$id)->where('product_id',$product['id'])->first();
+                        $values=['price_list_id'=>$id,'product_id'=>$product['id'],'price'=>round($price,2)];
+                        $ok=$existing?$model->update($existing['id'],$values):$model->insert($values);
+                        if (!$ok) throw new \RuntimeException('No se pudo actualizar el precio.');
+                    }
+                    return $id;
+                });
+            } catch (\Throwable $e) {return $this->response->setStatusCode(422)->setJSON(['error'=>$e instanceof \RuntimeException?$e->getMessage():'No se pudo guardar el cambio.','csrf'=>csrf_hash()]);}
+        }
+        $lists=(new SalesPriceListModel())->where('company_id',$company)->orderBy('is_default','DESC')->orderBy('name')->findAll();
+        if ($selected==='') $selected=$lists[0]['id']??'';
+        if ($selected!=='' && !in_array($selected,array_column($lists,'id'),true)) return $this->response->setStatusCode(404)->setJSON(['error'=>'Lista no disponible.']);
+        $products=$db->table('inventory_products')->select('id,sku,name,brand,unit,sale_price,active')->where('company_id',$company)->orderBy('name')->get()->getResultArray();
+        $stock=$db->table('inventory_stock_levels')->select('product_id, SUM(quantity) AS stock, SUM(reserved_quantity) AS reserved',false)->where('company_id',$company)->groupBy('product_id')->get()->getResultArray();
+        $stock=array_column($stock,null,'product_id');
+        $prices=$selected!==''?(new SalesPriceListItemModel())->where('price_list_id',$selected)->findAll():[];$prices=array_column($prices,'price','product_id');
+        foreach($products as &$product){$product['list_price']=$prices[$product['id']]??null;$product['stock']=(float)($stock[$product['id']]['stock']??0);$product['available']=$product['stock']-(float)($stock[$product['id']]['reserved']??0);}unset($product);
+        return $this->response->setStatusCode(200)->setHeader('Cache-Control','no-store')->setJSON(['lists'=>$lists,'list_id'=>$selected,'products'=>$products,'csrf'=>csrf_hash()]);
     }
 
     public function storePriceList()
@@ -1205,14 +1330,43 @@ class SalesController extends BaseController
             return $context;
         }
 
+        if (!in_array($this->roleSlug(), ['admin','operador','superadmin'], true)) return $this->response->setStatusCode(403)->setBody('Solo administradores y operadores pueden gestionar promociones.');
         return view('sales/forms/promotion', [
             'pageTitle' => 'Promocion',
             'formAction' => site_url('ventas/promociones'),
-            'products' => $this->salesProductCatalog($context['company']['id']),
+            'products' => [],
             'gateways' => (new CashPaymentGatewayModel())->where('company_id', $context['company']['id'])->where('active', 1)->orderBy('name', 'ASC')->findAll(),
             'companyId' => $context['company']['id'],
             'isPopup' => $this->isPopupRequest(),
         ]);
+    }
+
+    public function productPromotions()
+    {
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) return $this->response->setStatusCode(403)->setJSON(['error'=>'Acceso no disponible.']);
+        if (!in_array($this->roleSlug(), ['admin','operador','superadmin'], true)) return $this->response->setStatusCode(403)->setJSON(['error'=>'Solo administradores y operadores pueden gestionar promociones.']);
+        $company = $context['company']['id']; $db = db_connect();
+        if ($this->request->getMethod() === 'post') {
+            try {
+                $input = $this->request->getJSON(true) ?: [];
+                $product = $db->table('inventory_products')->where('company_id',$company)->where('id',(string)($input['product_id'] ?? ''))->where('active',1)->get()->getRowArray();
+                if (!$product) throw new \RuntimeException('Selecciona un producto disponible.');
+                $price = filter_var($input['price'] ?? null, FILTER_VALIDATE_FLOAT);
+                if ($price === false || !is_finite($price) || $price <= 0 || $price >= (float)$product['sale_price']) throw new \RuntimeException('El precio promocional debe ser mayor que cero y menor que el precio actual.');
+                $start = \DateTimeImmutable::createFromFormat('!Y-m-d\TH:i',(string)($input['start'] ?? ''));
+                $end = \DateTimeImmutable::createFromFormat('!Y-m-d\TH:i',(string)($input['end'] ?? ''));
+                if (!$start || !$end || $start->format('Y-m-d\TH:i') !== ($input['start'] ?? '') || $end->format('Y-m-d\TH:i') !== ($input['end'] ?? '') || $end <= $start || $end->getTimestamp() <= time()) throw new \RuntimeException('Indica una vigencia valida; el fin debe ser posterior al inicio y al momento actual.');
+                (new \App\Libraries\InventoryIntegrityService())->transaction($company, function () use ($company,$product,$price,$start,$end,$db) {
+                    $overlap=$db->table('sales_promotions sp')->join('sales_promotion_items si','si.promotion_id=sp.id')->where('sp.company_id',$company)->where('si.product_id',$product['id'])->where('sp.active',1)->groupStart()->where('sp.start_date IS NULL')->orWhere('sp.start_date <=',$end->format('Y-m-d H:i:s'))->groupEnd()->groupStart()->where('sp.end_date IS NULL')->orWhere('sp.end_date >=',$start->format('Y-m-d H:i:s'))->groupEnd()->countAllResults();
+                    if ($overlap) throw new \RuntimeException('Este producto ya tiene una promocion en esas fechas. Elige otro periodo.');
+                    $id=(new SalesPromotionModel())->insert(['company_id'=>$company,'name'=>$product['sku'].' - '.$product['name'],'promotion_type'=>'price','scope'=>'selected','value'=>round($price,2),'start_date'=>$start->format('Y-m-d H:i:s'),'end_date'=>$end->format('Y-m-d H:i:s'),'active'=>1],true);
+                    if (!$id || !(new SalesPromotionItemModel())->insert(['promotion_id'=>$id,'product_id'=>$product['id']])) throw new \RuntimeException('No se pudo guardar la promocion.');
+                });
+            } catch (\Throwable $e) { return $this->response->setStatusCode(422)->setJSON(['error'=>$e instanceof \RuntimeException ? $e->getMessage() : 'No se pudo guardar la promocion.','csrf'=>csrf_hash()]); }
+        }
+        $rows=$db->table('sales_promotions sp')->select('sp.id, sp.name, sp.promotion_type, sp.value, sp.start_date, sp.end_date, sp.active, p.sku, p.name AS product_name, p.sale_price')->join('sales_promotion_items si','si.promotion_id=sp.id')->join('inventory_products p','p.id=si.product_id AND p.company_id=sp.company_id')->where('sp.company_id',$company)->orderBy('sp.created_at','DESC')->get()->getResultArray();
+        return $this->response->setStatusCode(200)->setHeader('Cache-Control','no-store')->setJSON(['rows'=>$rows,'csrf'=>csrf_hash()]);
     }
 
     public function storePromotion()
@@ -1222,6 +1376,8 @@ class SalesController extends BaseController
         if ($context instanceof RedirectResponse) {
             return $context;
         }
+
+        if (!in_array($this->roleSlug(), ['admin','operador','superadmin'], true)) return $this->response->setStatusCode(403)->setBody('Solo administradores y operadores pueden gestionar promociones.');
 
         $name = trim((string) $this->request->getPost('name'));
         if ($name === '') {
@@ -1822,6 +1978,8 @@ class SalesController extends BaseController
             return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('error', 'Venta no disponible.');
         }
 
+        (new \App\Libraries\SalesCollectionService())->assertSaleCanCancel($context['company']['id'], $id);
+
         if (in_array($sale['status'], ['cancelled', 'returned_total'], true)) {
             return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('error', 'La venta ya no puede cancelarse.');
         }
@@ -1856,7 +2014,7 @@ class SalesController extends BaseController
 
         $this->syncReceivableForSale($id);
         $this->syncSaleCommission($context['company']['id'], $id);
-        (new AccountingService())->syncSale($context['company']['id'], $id, $this->currentUser()['id']);
+        (new AccountingService())->reverseCancelledSale($context['company']['id'], $id, $this->currentUser()['id']);
         EventBus::emit('sale.cancelled', ['company_id' => $context['company']['id'], 'sale' => (new SaleModel())->find($id)]);
         $this->logAudit($context['company']['id'], 'sales', 'sale', $id, 'cancel', $sale, (new SaleModel())->find($id));
         $this->logDocumentEvent($context['company']['id'], 'sales', 'sale', $id, 'cancelled', ['sale_number' => $sale['sale_number'] ?? null]);
@@ -2068,7 +2226,9 @@ class SalesController extends BaseController
         $this->refreshSalePaymentStatus($id);
         $this->syncReceivableForSale($id);
         $this->syncSaleCommission($context['company']['id'], $id);
-        (new AccountingService())->syncSaleReturn($context['company']['id'], (string) $returnId, $this->currentUser()['id']);
+        $returnAccounting = (new AccountingService())->syncSaleReturn($context['company']['id'], (string) $returnId, $this->currentUser()['id']);
+        if (empty($returnAccounting['ok'])) throw new \RuntimeException($returnAccounting['error'] ?? 'No se pudo contabilizar la devolucion.');
+        (new \App\Libraries\SalesCollectionService())->creditSaleReturn($context['company']['id'], $id, (string) $returnId, $this->currentUser()['id']);
         $this->logAudit($context['company']['id'], 'sales', 'sale_return', $returnId, 'create', null, (new SaleReturnModel())->find($returnId));
         $this->logDocumentEvent($context['company']['id'], 'sales', 'sale_return', $returnId, 'registered', ['sale_id' => $id]);
 
@@ -2121,6 +2281,7 @@ class SalesController extends BaseController
         $creator = !empty($sale['created_by']) ? (new \App\Models\UserModel())->find($sale['created_by']) : null;
         $data = array_merge([
             'companyName'=>$context['company']['legal_name'] ?: $context['company']['name'], 'taxId'=>$context['company']['tax_id'] ?? '',
+            'documentCategory'=>$doc['category'] ?? '', 'documentCode'=>$doc['code'] ?? $sale['document_code'],
             'document'=>$doc['name'] ?? $sale['document_code'], 'reference'=>$fiscal['documentNumber'] ?? $sale['sale_number'],
             'date'=>$sale['confirmed_at'] ?? $sale['issue_date'], 'currency'=>$sale['currency_code'],
             'customer'=>$sale['customer_name_snapshot'] ?? '', 'user'=>$creator['name'] ?? '',
@@ -3277,13 +3438,18 @@ class SalesController extends BaseController
 
     private function receiptRows(string $companyId): array
     {
-        return db_connect()->table('sales_receipts sr')
+        $rows = db_connect()->table('sales_receipts sr')
             ->select('sr.*, c.name AS customer_name')
             ->join('customers c', 'c.id = sr.customer_id')
             ->where('sr.company_id', $companyId)
             ->orderBy('sr.issue_date', 'DESC')
             ->get()
             ->getResultArray();
+        $applied = db_connect()->table('sales_receipt_items i')->select('i.sales_receipt_id, SUM(i.settled_amount) AS amount', false)->join('sales_receipts r', 'r.id=i.sales_receipt_id')->where('r.company_id', $companyId)->groupBy('i.sales_receipt_id')->get()->getResultArray();
+        $totals = array_column($applied, 'amount', 'sales_receipt_id');
+        foreach ($rows as &$row) $row['available_amount'] = in_array($row['receipt_kind'] ?? '', ['advance', 'return_credit'], true) && $row['status'] !== 'voided' ? max(0, round((float) $row['received_amount'] - (float) ($row['refunded_amount'] ?? 0) - (float) ($totals[$row['id']] ?? 0), 2)) : 0;
+        unset($row);
+        return $rows;
     }
 
 
@@ -3402,10 +3568,12 @@ class SalesController extends BaseController
         }
 
         $discountRate = 0.0;
+        $promotionalPrice = null;
         $promotions = $promotionMap['promotions'] ?? [];
         $productPromotions = $promotionMap['product_map'][$productId] ?? [];
         foreach ($promotions as $promotion) {
             if (($promotion['scope'] ?? 'selected') === 'all' || in_array($promotion['id'], $productPromotions, true)) {
+                if (($promotion['promotion_type'] ?? '') === 'price') $promotionalPrice = (float)$promotion['value'];
                 if (($promotion['promotion_type'] ?? 'percent') === 'percent') {
                     $discountRate = max($discountRate, (float) ($promotion['value'] ?? 0));
                 } elseif (($promotion['promotion_type'] ?? '') === 'fixed') {
@@ -3414,7 +3582,7 @@ class SalesController extends BaseController
             }
         }
 
-        return ['unit_price' => $price, 'promotion_discount_rate' => $discountRate];
+        return ['unit_price' => $promotionalPrice ?? $price, 'promotion_discount_rate' => $promotionalPrice !== null ? 0 : $discountRate, 'has_promotional_price'=>$promotionalPrice !== null];
     }
 
     private function promotionSnapshot(string $companyId, array $items): array
@@ -3464,7 +3632,7 @@ class SalesController extends BaseController
             'products' => array_map(static fn(array $p): array => [
                 'id' => $p['id'], 'sku' => $p['sku'], 'name' => $p['name'],
                 'brand' => $p['brand'] ?? '', 'unit' => $p['unit'] ?? 'unidad',
-                'sale_price' => (float) $p['sale_price'], 'stocks' => $p['stocks'],
+                'regular_price' => (float) ($p['regular_price'] ?? $p['sale_price']), 'sale_price' => (float) $p['sale_price'], 'stocks' => $p['stocks'],
                 'image' => $p['image'] ?? null,
             ], $products),
         ]);
@@ -3503,8 +3671,13 @@ class SalesController extends BaseController
             ];
         }
 
-        return array_map(static function (array $product) use ($stockMap): array {
+        $promotionMap = $this->promotionMap($companyId);
+        return array_map(function (array $product) use ($stockMap, $promotionMap): array {
             $product['sale_price'] = (float) ($product['sale_price'] ?? 0);
+            $product['regular_price'] = $product['sale_price'];
+            foreach ($promotionMap['promotions'] as $promotion) {
+                if ($promotion['promotion_type'] === 'price' && in_array($promotion['id'], $promotionMap['product_map'][$product['id']] ?? [], true)) $product['sale_price'] = (float)$promotion['value'];
+            }
             $product['cost_price'] = (float) ($product['cost_price'] ?? 0);
             $product['stocks'] = $stockMap[$product['id']] ?? [];
             return $product;
@@ -3724,6 +3897,7 @@ class SalesController extends BaseController
 
             $resolvedPrice = $this->resolveProductPrice($companyId, $productId, $priceListId, $promotions);
             $unitPrice = array_key_exists('unit_price', $item) && $item['unit_price'] !== '' ? (float) $item['unit_price'] : $resolvedPrice['unit_price'];
+            if ($resolvedPrice['has_promotional_price'] ?? false) $unitPrice = $resolvedPrice['unit_price'];
             $discountRate = (float) ($item['discount_rate'] ?? 0);
             if ($discountRate <= 0 && $resolvedPrice['promotion_discount_rate'] > 0) {
                 $discountRate = $resolvedPrice['promotion_discount_rate'];
@@ -4194,7 +4368,8 @@ class SalesController extends BaseController
         }
 
         $paidTotal = \App\Libraries\PaymentIntegrityService::paid($this->salePayments($saleId));
-        $paymentStatus = $paidTotal <= 0 ? 'pending' : ($paidTotal < (float) $sale['total'] ? 'partial' : 'paid');
+        $net = (new SalesIntegrityService())->netReceivableTotal($sale, $this->saleItems($saleId));
+        $paymentStatus = $paidTotal >= $net ? 'paid' : ($paidTotal > 0 ? 'partial' : 'pending');
 
         (new SaleModel())->update($saleId, [
             'paid_total' => $paidTotal,
@@ -4411,6 +4586,9 @@ class SalesController extends BaseController
             }
 
             $category = (string) ($documentType['category'] ?? 'invoice');
+        if ($category === 'delivery_note') {
+            [$sale, $items] = (new \App\Libraries\DeliveryNotePricing())->refresh($companyId, $sale, $items);
+        }
             $impactsStock = (int) ($documentType['impacts_stock'] ?? 0) === 1;
 
             if (!$warehouseId && $impactsStock) {
@@ -4967,6 +5145,40 @@ class SalesController extends BaseController
             'expiration_date' => $payload['expiration_date'] ?? null,
             'notes' => $payload['notes'] ?? null,
         ]);
+    }
+
+    public function commercialDocument(string $kind, string $source, string $id)
+    {
+        $context = $this->salesContext('view');
+        if ($context instanceof RedirectResponse) return $context;
+        $map = [
+            'presupuesto'=>['sales_quotes','sales_quote_items','sales_quote_id','quote_number','quote_date','Presupuesto'],
+            'pedido'=>['sales_orders','sales_order_items','sales_order_id','order_number','order_date','Pedido'],
+            'remito'=>['sales_delivery_notes','sales_delivery_note_items','sales_delivery_note_id','delivery_number','delivery_date','Remito'],
+        ];
+        if (!isset($map[$kind]) || !in_array($source,['sale','cycle'],true)) return $this->response->setStatusCode(404)->setBody('Documento no disponible.');
+        [$table,$itemsTable,$foreignKey,$number,$date,$title] = $map[$kind];
+        $db = db_connect();
+        if ($source === 'sale') {
+            $document = $this->ownedSale($context['company']['id'],$id);
+            if (!$document) return $this->response->setStatusCode(404)->setBody('Documento no disponible.');
+            $type = $db->table('sales_document_types')->where('company_id',$context['company']['id'])->where('id',$document['document_type_id'])->get()->getRowArray();
+            $category = $type['category'] ?? '';
+            $allowed = ['presupuesto'=>'quote','pedido'=>'order','remito'=>'delivery_note'];
+            if ($category !== $allowed[$kind]) return $this->response->setStatusCode(404)->setBody('Documento no disponible.');
+            $items = $this->saleItems($id);
+            $document['number'] = $document['sale_number']; $document['date'] = $document['issue_date'];
+        } else {
+            $document = $db->table($table)->where('company_id',$context['company']['id'])->where('id',$id)->get()->getRowArray();
+            if (!$document) return $this->response->setStatusCode(404)->setBody('Documento no disponible.');
+            $items = $db->table($itemsTable)->where($foreignKey,$id)->orderBy('sort_order')->get()->getResultArray();
+            $document['number'] = $document[$number]; $document['date'] = $document[$date];
+        }
+        $data = ['document'=>$document,'items'=>$items,'company'=>$context['company'],'title'=>$title,'unpriced'=>$kind==='remito'];
+        $this->response->setHeader('Cache-Control','private, no-store');
+        $filename = $kind.'-'.preg_replace('/[^a-zA-Z0-9_-]/','-', $document['number']).'.pdf';
+        $disposition = $this->request->getGet('download') === '1' ? 'attachment' : 'inline';
+        return $this->renderPdf('sales/pdf/commercial',$data,$filename)->setHeader('Content-Disposition',$disposition.'; filename="'.$filename.'"');
     }
 
     private function renderPdf(string $view, array $data, string $filename)

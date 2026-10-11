@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <testsuites>
-  <testsuite name="PosTicketDesignTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\PosTicketDesignTest.php" tests="5" assertions="18" errors="0" warnings="0" failures="0" skipped="0" time="0.146515">
-    <testcase name="testVisibilityAndEscapingPreserveSaleTotal" class="PosTicketDesignTest" classname="PosTicketDesignTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\PosTicketDesignTest.php" line="8" assertions="5" time="0.113237"/>
-    <testcase name="testRealDocumentWithoutAuthorizationDoesNotInventFiscalData" class="PosTicketDesignTest" classname="PosTicketDesignTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\PosTicketDesignTest.php" line="21" assertions="4" time="0.011732"/>
-    <testcase name="testHiddenPaymentDoesNotAppearAndTotalIsUnchanged" class="PosTicketDesignTest" classname="PosTicketDesignTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\PosTicketDesignTest.php" line="35" assertions="3" time="0.008066"/>
-    <testcase name="testQrCanBeEmbeddedOfflineInPdf" class="PosTicketDesignTest" classname="PosTicketDesignTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\PosTicketDesignTest.php" line="46" assertions="2" time="0.005536"/>
-    <testcase name="testAuthorizedReceiptAlwaysShowsFiscalSection" class="PosTicketDesignTest" classname="PosTicketDesignTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\unit\PosTicketDesignTest.php" line="53" assertions="4" time="0.007943"/>
+  <testsuite name="" tests="5" assertions="87" errors="0" warnings="0" failures="0" skipped="0" time="0.327945">
+    <testsuite name="App" tests="5" assertions="87" errors="0" warnings="0" failures="0" skipped="0" time="0.327945">
+      <testsuite name="SalesCollectionTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\database\SalesCollectionTest.php" tests="5" assertions="87" errors="0" warnings="0" failures="0" skipped="0" time="0.327945">
+        <testcase name="testMixedReceiptAndReversalPreservePaymentsAndReverseLedger" class="SalesCollectionTest" classname="SalesCollectionTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\database\SalesCollectionTest.php" line="72" assertions="24" time="0.227037"/>
+        <testcase name="testTransferDoesNotApplyBeforeExplicitConfirmationAndRetryIsSafe" class="SalesCollectionTest" classname="SalesCollectionTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\database\SalesCollectionTest.php" line="113" assertions="9" time="0.020806"/>
+        <testcase name="testAccountingFailureRollsBackMovementsAndBalances" class="SalesCollectionTest" classname="SalesCollectionTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\database\SalesCollectionTest.php" line="158" assertions="22" time="0.050069"/>
+        <testcase name="testGroupedPartialCollectionKeepsCorrectBalances" class="SalesCollectionTest" classname="SalesCollectionTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\database\SalesCollectionTest.php" line="210" assertions="17" time="0.015640"/>
+        <testcase name="testSaleTransferConfirmationUpdatesBalanceExactlyOnce" class="SalesCollectionTest" classname="SalesCollectionTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\database\SalesCollectionTest.php" line="269" assertions="15" time="0.014393"/>
+      </testsuite>
+    </testsuite>
   </testsuite>
 </testsuites>

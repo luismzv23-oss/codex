@@ -361,14 +361,65 @@ class SalesController extends BaseApiController
         );
     }
 
+    public function refundAdvance(string $id)
+    {
+        $context = $this->salesContext('manage');
+        if (isset($context['error'])) return $this->fail($context['error'], $context['status']);
+        try {
+            $payload = $this->payload();
+            (new \App\Libraries\SalesCollectionService(null, new CashService(($this->apiUser()['role_slug'] ?? '') === 'vendedor' ? (string) $this->apiUser()['id'] : null)))->refundAdvance($context['company']['id'], $id, $this->apiUser()['id'], $payload);
+            return $this->success(['ok' => true]);
+        } catch (\Throwable $e) { return $this->fail($e->getMessage(), 422); }
+    }
+
+    public function applyAdvance(string $id)
+    {
+        $context = $this->salesContext('manage');
+        if (isset($context['error'])) return $this->fail($context['error'], $context['status']);
+        try {
+            $payload = $this->payload();
+
+            $service = new \App\Libraries\SalesCollectionService();
+            $service->applyAdvance($context['company']['id'], $id, $this->apiUser()['id'], $payload);
+            return $this->success(['ok' => true]);
+        } catch (\Throwable $e) { return $this->fail($e->getMessage(), 422); }
+    }
+
+    public function settleReceiptPayment(string $id, string $paymentId)
+    {
+        $context = $this->salesContext('manage');
+        if (isset($context['error'])) return $this->fail($context['error'], $context['status']);
+        try {
+            $payload = $this->payload();
+
+            $service = new \App\Libraries\SalesCollectionService();
+            $service->settleReceiptPayment($context['company']['id'], $id, $paymentId, $this->apiUser()['id'], trim((string) ($payload['evidence'] ?? '')));
+            return $this->success(['ok' => true]);
+        } catch (\Throwable $e) { return $this->fail($e->getMessage(), 422); }
+    }
+
+    public function settleSalePayment(string $saleId, string $paymentId)
+    {
+        $context = $this->salesContext('manage');
+        if (isset($context['error'])) return $this->fail($context['error'], $context['status']);
+        try {
+            $payload = $this->payload();
+
+            $service = new \App\Libraries\SalesCollectionService();
+            $service->settleSalePayment($context['company']['id'], $saleId, $paymentId, $this->apiUser()['id'], trim((string) ($payload['evidence'] ?? '')));
+            return $this->success(['ok' => true]);
+        } catch (\Throwable $e) { return $this->fail($e->getMessage(), 422); }
+    }
+
     public function confirmReceipt(string $id)
     {
         $context = $this->salesContext('manage');
         if (isset($context['error'])) { return $this->fail($context['error'], $context['status']); }
         try {
             $payload = $this->payload();
-            $applied = (new \App\Libraries\SalesCollectionService(null, new CashService(($this->apiUser()['role_slug'] ?? '') === 'vendedor' ? (string) ($this->apiUser()['id'] ?? '') : null)))->confirm($context['company']['id'], $id, $this->apiUser()['id'], trim((string) ($payload['confirmation_note'] ?? '')));
-            if ($applied) { $receipt = (new SalesReceiptModel())->find($id); \App\Libraries\EventBus::emit('sale.payment_received', ['company_id' => $context['company']['id'], 'payment' => ['amount' => $receipt['total_amount']], 'receipt_id' => $id]); }
+            $before = (new SalesReceiptModel())->where('company_id', $context['company']['id'])->find($id);
+            $applied = (new \App\Libraries\SalesCollectionService(null, new CashService(($this->apiUser()['role_slug'] ?? '') === 'vendedor' ? (string) ($this->apiUser()['id'] ?? '') : null)))->confirm($context['company']['id'], $id, $this->apiUser()['id'], trim((string) ($payload['confirmation_note'] ?? '')), trim((string) ($payload['payment_id'] ?? '')) ?: null);
+            if ($applied) { $receipt = (new SalesReceiptModel())->find($id); \App\Libraries\EventBus::emit('sale.payment_received', ['company_id' => $context['company']['id'], 'payment' => ['amount' => (float) $receipt['received_amount'] - (float) ($before['received_amount'] ?? 0)], 'receipt_id' => $id]); }
             return $this->success(['receipt_id' => $id, 'ok' => true]);
         } catch (\Throwable $e) { return $this->fail($e->getMessage(), 422); }
     }
@@ -405,7 +456,7 @@ class SalesController extends BaseApiController
 
             $receipt = (new \App\Libraries\SalesCollectionService(null, new CashService(($this->apiUser()['role_slug'] ?? '') === 'vendedor' ? (string) ($this->apiUser()['id'] ?? '') : null)))->create($companyId, $this->apiUser()['id'], $payload,
                 fn() => $this->nextSequenceNumber($companyId, 'RECIBO', 'REC'));
-            if ($receipt['status'] === 'applied') { \App\Libraries\EventBus::emit('sale.payment_received', ['company_id' => $companyId, 'payment' => ['amount' => $receipt['total_amount']], 'receipt_id' => $receipt['id']]); }
+            if (empty($receipt['_replayed']) && (float) $receipt['received_amount'] > 0) { \App\Libraries\EventBus::emit('sale.payment_received', ['company_id' => $companyId, 'payment' => ['amount' => $receipt['received_amount']], 'receipt_id' => $receipt['id']]); }
             return $this->success($receipt, 201);
         } catch (\Throwable $e) { return $this->fail($e->getMessage(), 422); }
     }
@@ -905,6 +956,8 @@ class SalesController extends BaseApiController
             return $this->fail('Venta no disponible.', 404);
         }
 
+        (new \App\Libraries\SalesCollectionService())->assertSaleCanCancel($context['company']['id'], $id);
+
         if (in_array($sale['status'], ['cancelled', 'returned_total'], true)) {
             return $this->fail('La venta ya no puede cancelarse.', 422);
         }
@@ -934,7 +987,7 @@ class SalesController extends BaseApiController
 
         $this->syncReceivableForSale($id);
         $this->syncSaleCommission($context['company']['id'], $id);
-        (new AccountingService())->syncSale($context['company']['id'], $id, $this->apiUser()['id']);
+        (new AccountingService())->reverseCancelledSale($context['company']['id'], $id, $this->apiUser()['id']);
         if ($db->transStatus()) {
             $this->logAudit($context['company']['id'], 'sales', 'sale', $id, 'cancel', $sale, (new SaleModel())->find($id));
             $this->logDocumentEvent($context['company']['id'], 'sales', 'sale', $id, 'cancelled', ['sale_id' => $id]);
@@ -1020,7 +1073,9 @@ class SalesController extends BaseApiController
         $this->syncSaleReturnStatus($id);
         $this->syncReceivableForSale($id);
         $this->syncSaleCommission($context['company']['id'], $id);
-        (new AccountingService())->syncSaleReturn($context['company']['id'], (string) $returnId, $this->apiUser()['id']);
+        $returnAccounting = (new AccountingService())->syncSaleReturn($context['company']['id'], (string) $returnId, $this->apiUser()['id']);
+        if (empty($returnAccounting['ok'])) throw new \RuntimeException($returnAccounting['error'] ?? 'No se pudo contabilizar la devolucion.');
+        (new \App\Libraries\SalesCollectionService())->creditSaleReturn($context['company']['id'], $id, (string) $returnId, $this->apiUser()['id']);
 
         if ($db->transStatus()) {
             $this->logAudit($context['company']['id'], 'sales', 'sale_return', (string) $returnId, 'create', null, (new SaleReturnModel())->find($returnId));
@@ -1548,6 +1603,7 @@ class SalesController extends BaseApiController
             if (! $product) { continue; }
             $resolved = $this->resolveProductPrice($productId, $priceListId, $promotions, (float) ($product['sale_price'] ?? 0));
             $unitPrice = array_key_exists('unit_price', $item) && $item['unit_price'] !== '' ? (float) $item['unit_price'] : $resolved['unit_price'];
+            if ($resolved['has_promotional_price'] ?? false) $unitPrice = $resolved['unit_price'];
             $discountRate = (float) ($item['discount_rate'] ?? 0);
             if ($discountRate <= 0 && $resolved['promotion_discount_rate'] > 0) { $discountRate = $resolved['promotion_discount_rate']; }
             $discountAmount = round(($quantity * $unitPrice) * ($discountRate / 100), 2);
@@ -1657,7 +1713,8 @@ class SalesController extends BaseApiController
         }
 
         $paidTotal = \App\Libraries\PaymentIntegrityService::paid($this->salePayments($saleId));
-        $paymentStatus = $paidTotal <= 0 ? 'pending' : ($paidTotal < (float) $sale['total'] ? 'partial' : 'paid');
+        $net = (new SalesIntegrityService())->netReceivableTotal($sale, $this->saleItems($saleId));
+        $paymentStatus = $paidTotal >= $net ? 'paid' : ($paidTotal > 0 ? 'partial' : 'pending');
 
         (new SaleModel())->update($saleId, [
             'paid_total' => $paidTotal,
@@ -1676,13 +1733,15 @@ class SalesController extends BaseApiController
             if ($listPrice) { $price = (float) $listPrice['price']; }
         }
         $discountRate = 0.0;
+        $promotionalPrice = null;
         foreach (($promotionMap['promotions'] ?? []) as $promotion) {
             if (($promotion['scope'] ?? 'selected') === 'all' || in_array($promotion['id'], $promotionMap['product_map'][$productId] ?? [], true)) {
+                if (($promotion['promotion_type'] ?? '') === 'price') $promotionalPrice = (float)$promotion['value'];
                 if (($promotion['promotion_type'] ?? 'percent') === 'percent') { $discountRate = max($discountRate, (float) ($promotion['value'] ?? 0)); }
                 if (($promotion['promotion_type'] ?? '') === 'fixed') { $price = max(0, $price - (float) ($promotion['value'] ?? 0)); }
             }
         }
-        return ['unit_price' => $price, 'promotion_discount_rate' => $discountRate];
+        return ['unit_price' => $promotionalPrice ?? $price, 'promotion_discount_rate' => $promotionalPrice !== null ? 0 : $discountRate, 'has_promotional_price'=>$promotionalPrice !== null];
     }
 
     private function inventorySettings(string $companyId): array { return (new InventorySettingModel())->where('company_id', $companyId)->first() ?? []; }
@@ -1738,6 +1797,9 @@ class SalesController extends BaseApiController
         $db = db_connect();
 
         $category = (string) ($documentType['category'] ?? 'invoice');
+        if ($category === 'delivery_note') {
+            [$sale, $items] = (new \App\Libraries\DeliveryNotePricing())->refresh($companyId, $sale, $items);
+        }
         if ($category === 'order') {
             $result = $this->reserveStockForSale($companyId, $sale, $items);
             if ($result !== true) { return $result; }
@@ -1900,13 +1962,18 @@ class SalesController extends BaseApiController
 
     private function receiptRows(string $companyId): array
     {
-        return db_connect()->table('sales_receipts sr')
+        $rows = db_connect()->table('sales_receipts sr')
             ->select('sr.*, c.name AS customer_name')
             ->join('customers c', 'c.id = sr.customer_id')
             ->where('sr.company_id', $companyId)
             ->orderBy('sr.issue_date', 'DESC')
             ->get()
             ->getResultArray();
+        $applied = db_connect()->table('sales_receipt_items i')->select('i.sales_receipt_id, SUM(i.settled_amount) AS amount', false)->join('sales_receipts r', 'r.id=i.sales_receipt_id')->where('r.company_id', $companyId)->groupBy('i.sales_receipt_id')->get()->getResultArray();
+        $totals = array_column($applied, 'amount', 'sales_receipt_id');
+        foreach ($rows as &$row) $row['available_amount'] = in_array($row['receipt_kind'] ?? '', ['advance', 'return_credit'], true) && $row['status'] !== 'voided' ? max(0, round((float) $row['received_amount'] - (float) ($row['refunded_amount'] ?? 0) - (float) ($totals[$row['id']] ?? 0), 2)) : 0;
+        unset($row);
+        return $rows;
     }
 
 

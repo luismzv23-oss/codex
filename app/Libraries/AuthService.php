@@ -12,6 +12,7 @@ class AuthService
     private UserModel $users;
     private PasswordResetTokenModel $passwordResets;
     private RolePermissionModel $rolePermissions;
+    private ?array $requestUser = null;
 
     public function __construct()
     {
@@ -73,9 +74,29 @@ class AuthService
 
     public function user(): ?array
     {
+        if ($this->requestUser !== null) {
+            return $this->requestUser;
+        }
         $user = session()->get('auth_user');
 
         return is_array($user) ? $user : null;
+    }
+
+    /** Resolve current permissions for a bearer request without creating a web login. */
+    public function authenticateRequest(string $userId): bool
+    {
+        $this->requestUser = null;
+        $user = $this->users->findForAuthById($userId);
+        if (!$user || (int) $user['active'] !== 1) {
+            return false;
+        }
+        $this->requestUser = array_intersect_key($user, array_flip([
+            'id', 'company_id', 'branch_id', 'branch_name', 'branch_code',
+            'role_id', 'role_slug', 'role_name', 'name', 'username', 'email',
+            'company_name', 'must_change_password',
+        ]));
+        $this->requestUser['permissions'] = $this->permissionsForRole($user['role_id']);
+        return true;
     }
 
     public function check(): bool

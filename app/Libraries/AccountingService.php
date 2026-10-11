@@ -250,19 +250,28 @@ class AccountingService
             return ['ok' => false, 'error' => 'Sale not found or not confirmed'];
         }
 
-        // Check if already synced
-        $existing = $db->table('journal_entries')
-            ->where('company_id', $companyId)->where('reference_type', 'sale')->where('reference_id', $saleId)
-            ->countAllResults();
-        if ($existing > 0) return ['ok' => true, 'already_synced' => true];
-
-        $map = $this->getAccountMapping($companyId);
-        if (empty($map)) {
-            throw new \RuntimeException("Falta configuracion de mapeo de cuentas contables para la empresa.");
+        if (!$db->transBegin()) {
+            throw new \RuntimeException('No se pudo iniciar la contabilidad de la venta.');
         }
-
-        $sale['user_id'] = $userId;
-        return $this->journalFromSale($companyId, $sale, $map);
+        try {
+            $map = $this->getAccountMapping($companyId);
+            if (empty($map)) throw new \RuntimeException('Falta configurar las cuentas contables de la empresa.');
+            $sale['user_id'] = $userId;
+            $result = $this->journalFromSale($companyId, $sale, $map);
+            if (empty($result['ok'])) throw new \RuntimeException($result['error'] ?? 'No se pudo contabilizar la venta.');
+            // Separate the sale invoice from its settled, directly associated collections.
+            $payments=$db->table('sale_payments')->where('sale_id',$saleId)->where('sales_receipt_id',null)->get()->getResultArray();
+            foreach ($payments as $payment) {
+                if (!PaymentIntegrityService::settled($payment)) continue;
+                $collection=$this->syncSalePayment($companyId,$payment['id'],$userId);
+                if (empty($collection['ok'])) throw new \RuntimeException($collection['error'] ?? 'No se pudo contabilizar el cobro.');
+            }
+            if (!$db->transStatus() || !$db->transCommit()) throw new \RuntimeException('No se pudo confirmar la contabilidad de venta y cobranza.');
+            return $result;
+        } catch (\Throwable $e) {
+            $db->transRollback();
+            throw $e;
+        }
     }
 
     /**
@@ -285,16 +294,10 @@ class AccountingService
         $lines = [];
         $amount = (float)($receipt['total_amount'] ?? 0);
 
-        // Debit: Cash or Bank
-        $cashAccount = $map['cash'] ?? $map['bank'] ?? null;
-        if ($cashAccount) $lines[] = ['account_id' => $cashAccount, 'debit' => $amount, 'credit' => 0, 'description' => 'Cobro recibo #' . ($receipt['receipt_number'] ?? '')];
-
-        // Credit: Accounts Receivable
-        if (!empty($map['receivable'])) $lines[] = ['account_id' => $map['receivable'], 'debit' => 0, 'credit' => $amount, 'description' => 'Cobranza cliente'];
-
-        if (! $cashAccount || empty($map['receivable']) || $amount <= 0) {
-            throw new \RuntimeException("Falta configurar la cuenta de caja/banco o de clientes (receivable) para registrar el recibo de venta.");
-        }
+        if (($receipt['status'] ?? '') !== 'applied') throw new \RuntimeException('Solo se contabilizan recibos aplicados.');
+        $payments = json_decode($receipt['payment_details'] ?? '[]', true, 512, JSON_THROW_ON_ERROR);
+        if (!$payments) $payments = [['payment_method'=>$receipt['payment_method'],'amount'=>$amount]];
+        $lines = $this->collectionLines($map, $payments, $amount);
 
         return $this->createJournalEntry($companyId, [
             'description' => 'Cobro recibo #' . ($receipt['receipt_number'] ?? ''),
@@ -304,13 +307,39 @@ class AccountingService
         ], $lines);
     }
 
+    private function collectionLines(array $map, array $payments, float $total): array
+    {
+        if (empty($map['receivable']) || $total <= 0) throw new \RuntimeException('Falta la cuenta de clientes o el importe del cobro es invalido.');
+        $lines=[];$sum=0;
+        foreach ($payments as $payment) {
+            $key=CollectionAccountingService::paymentAccount((string) ($payment['payment_method'] ?? ''));
+            if (empty($map[$key])) throw new \RuntimeException('Falta configurar la cuenta contable '.$key.' para este medio de cobro.');
+            $amount=(new PaymentIntegrityService())->cents($payment['amount'] ?? 0);$sum+=$amount;
+            if ($amount>0) $lines[]=['account_id'=>$map[$key],'debit'=>$amount/100,'credit'=>0,'description'=>'Cobro por '.$payment['payment_method']];
+        }
+        if ($sum !== (int)round($total*100)) throw new \RuntimeException('El desglose contable del cobro no coincide con su total.');
+        $lines[]=['account_id'=>$map['receivable'],'debit'=>0,'credit'=>$total,'description'=>'Cobranza cliente'];
+        return $lines;
+    }
+
+    public function syncSalePayment(string $companyId, string $paymentId, string $userId): array
+    {
+        $db=db_connect();
+        $payment=$db->table('sale_payments p')->select('p.*')->join('sales s','s.id=p.sale_id')->where('s.company_id',$companyId)->where('p.id',$paymentId)->get()->getRowArray();
+        if (!$payment || !PaymentIntegrityService::settled($payment) || !empty($payment['sales_receipt_id'])) throw new \RuntimeException('Pago no disponible para contabilizar.');
+        if ($db->table('journal_entries')->where('company_id',$companyId)->where('reference_type','sale_payment')->where('reference_id',$paymentId)->countAllResults()) return ['ok'=>true,'already_synced'=>true];
+        (new CollectionAccountingService())->post($companyId, 'sale_payment', $paymentId, $userId,
+            CollectionAccountingService::paymentAccount($payment['payment_method']), 'receivable', (float) $payment['amount'], 'Cobro de venta');
+        return ['ok' => true];
+    }
+
     public function reverseSalesReceipt(string $companyId, string $receiptId, string $userId, string $reason): array
     {
         $db = db_connect();
         if ($db->table('journal_entries')->where('company_id', $companyId)->where('reference_type', 'receipt_reversal')->where('reference_id', $receiptId)->countAllResults()) {
             return ['ok' => true, 'already_synced' => true];
         }
-        $entries = $db->table('journal_entries')->where('company_id', $companyId)->where('reference_type', 'sales_receipt')->where('reference_id', $receiptId)->get()->getResultArray();
+        $entries = $db->table('journal_entries')->where('company_id', $companyId)->whereIn('reference_type', ['sales_receipt', 'receipt_line', 'advance_application', 'receipt_settlement'])->where('reference_id', $receiptId)->get()->getResultArray();
         $lines = [];
         foreach ($entries as $entry) {
             if ($entry['status'] !== 'posted') { throw new \RuntimeException('El asiento original requiere revisión antes del reverso.'); }
@@ -323,13 +352,35 @@ class AccountingService
             'reference_type' => 'receipt_reversal', 'reference_id' => $receiptId, 'status' => 'posted', 'user_id' => $userId], $lines);
     }
 
+    /** Reverse the unpaid sale balance, including already posted returns. Caller holds the sale lock. */
+    public function reverseCancelledSale(string $companyId, string $saleId, string $userId): void
+    {
+        $db = db_connect();
+        if (!$db->table('sales')->where('company_id', $companyId)->where('id', $saleId)->where('status', 'cancelled')->countAllResults()) throw new \RuntimeException('Venta no cancelada.');
+        if ($db->table('journal_entries')->where('company_id', $companyId)->where('reference_type', 'sale_cancellation')->where('reference_id', $saleId)->countAllResults()) return;
+        $returns = $db->table('sale_returns')->select('id')->where('sale_id', $saleId);
+        $entries = $db->table('journal_entries')->where('company_id', $companyId)->where('status', 'posted')->groupStart()
+            ->groupStart()->where('reference_type', 'sale')->where('reference_id', $saleId)->groupEnd()
+            ->orGroupStart()->where('reference_type', 'sale_return')->whereIn('reference_id', $returns)->groupEnd()->groupEnd()->get()->getResultArray();
+        if (!$entries) return;
+        $lines = [];
+        foreach ($entries as $entry) {
+            foreach ($db->table('journal_entry_lines')->where('journal_entry_id', $entry['id'])->get()->getResultArray() as $line) {
+                $lines[] = ['account_id' => $line['account_id'], 'debit' => (float) $line['credit'], 'credit' => (float) $line['debit'], 'description' => 'Cancelacion de venta'];
+            }
+        }
+        $result = $this->createJournalEntry($companyId, ['reference_type' => 'sale_cancellation', 'reference_id' => $saleId, 'status' => 'posted', 'user_id' => $userId, 'description' => 'Cancelacion de venta'], $lines);
+        if (empty($result['ok'])) throw new \RuntimeException($result['error'] ?? 'No se pudo revertir la venta.');
+    }
+
     /**
      * Sync accounting for a sale return (NC).
      */
     public function syncSaleReturn(string $companyId, string $returnId, string $userId): array
     {
         $db = db_connect();
-        $ret = $db->table('sale_returns')->where('id', $returnId)->get()->getRowArray();
+        $ret = $db->table('sale_returns r')->select('r.*')->join('sales s', 's.id=r.sale_id')->where('r.id', $returnId)->where('s.company_id', $companyId)->where('r.status', 'confirmed')->get()->getRowArray();
+        if ($db->table('journal_entries')->where('company_id', $companyId)->where('reference_type', 'sale_return')->where('reference_id', $returnId)->countAllResults()) return ['ok' => true, 'already_synced' => true];
         if (!$ret) return ['ok' => false, 'error' => 'Return not found'];
 
         $map = $this->getAccountMapping($companyId);
@@ -339,7 +390,13 @@ class AccountingService
 
         $lines = [];
         $total = (float)($ret['total'] ?? 0);
-        $tax   = (float)($ret['tax_total'] ?? 0);
+        $tax = 0.0;
+        $returnItems = $db->table('sale_return_items r')->select('r.line_total, i.tax_rate')->join('sale_items i', 'i.id=r.sale_item_id')->where('r.sale_return_id', $returnId)->get()->getResultArray();
+        foreach ($returnItems as $item) {
+            $rate = max(0, (float) ($item['tax_rate'] ?? 0));
+            $tax += (float) $item['line_total'] * $rate / (100 + $rate);
+        }
+        $tax = round($tax, 2);
         $sub   = $total - $tax;
 
         // Reverse the sale entry
@@ -597,6 +654,9 @@ class AccountingService
             ['code' => '1.1.06','name' => 'IVA Credito Fiscal',            'account_type' => 'asset',     'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
             ['code' => '1.1.07','name' => 'Anticipos a Proveedores',       'account_type' => 'asset',     'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
             ['code' => '1.1.08','name' => 'Bienes de Cambio',              'account_type' => 'asset',     'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '1.1.09','name' => 'Tarjetas por Acreditar',          'account_type' => 'asset', 'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '1.1.10','name' => 'Cheques en Cartera',              'account_type' => 'asset', 'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
+            ['code' => '1.1.11','name' => 'Billeteras por Acreditar',        'account_type' => 'asset', 'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
             ['code' => '1.2',   'name' => 'Activo No Corriente',           'account_type' => 'asset',     'is_group' => 1, 'level' => 2, 'accepts_entries' => 0, 'parent_id' => null],
             ['code' => '1.2.01','name' => 'Rodados',                       'account_type' => 'asset',     'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
             ['code' => '1.2.02','name' => 'Muebles y Utiles',             'account_type' => 'asset',     'is_group' => 0, 'level' => 3, 'accepts_entries' => 1, 'parent_id' => null],
@@ -704,6 +764,10 @@ class AccountingService
             'cash'            => 'Caja',
             'bank'            => 'Banco Cuenta Corriente',
             'receivable'      => 'Deudores por Ventas',
+            'customer_advances' => 'Anticipos de Clientes',
+            'card_clearing' => 'Tarjetas por Acreditar',
+            'check_clearing' => 'Cheques en Cartera',
+            'qr_clearing' => 'Billeteras por Acreditar',
             'payable'         => 'Proveedores',
             'revenue'         => 'Ventas',
             'expense'         => 'Costo Mercaderias Vendidas',

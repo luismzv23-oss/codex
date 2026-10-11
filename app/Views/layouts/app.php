@@ -397,6 +397,12 @@ if (auth_check() && !$isPopup) {
                         return;
                     }
 
+                    if (frame.dataset.pdf === 'true') {
+                        const headHeight = overlay.querySelector('.popup-head')?.offsetHeight ?? 72;
+                        frame.style.height = `${Math.max(260, Math.floor(window.innerHeight * 0.9) - headHeight)}px`;
+                        return;
+                    }
+
                     try {
                         const doc = frame.contentWindow?.document;
 
@@ -419,6 +425,7 @@ if (auth_check() && !$isPopup) {
                 const openPopup = (link) => {
                     const url = new URL(link.href, window.location.origin);
                     url.searchParams.set('popup', '1');
+                    frame.dataset.pdf = link.dataset.popupPdf || 'false';
                     frame.src = url.toString();
                     title.textContent = link.dataset.popupTitle || link.textContent.trim() || 'Formulario';
                     subtitle.textContent = link.dataset.popupSubtitle || 'Gestion del registro actual.';
@@ -428,6 +435,7 @@ if (auth_check() && !$isPopup) {
                         card.style.width = '';
                     }
                     overlay.classList.add('is-open');
+                    if (frame.dataset.pdf === 'true') resizePopup();
                 };
 
                 const closePopup = () => {

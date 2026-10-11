@@ -19,7 +19,7 @@ class ApiAuthFilter implements FilterInterface
             $jwt   = new JwtService();
             $data  = $jwt->validateToken($token);
 
-            if (! $data) {
+            if (! $data || empty($data['user_id']) || ! \Config\Services::auth()->authenticateRequest((string) $data['user_id'])) {
                 return service('response')
                     ->setStatusCode(401)
                     ->setJSON([

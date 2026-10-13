@@ -171,7 +171,7 @@
                 </div>
 
                 <?php if (!empty($sessionVendors)): ?>
-                <form method="get" action="<?= site_url('caja') ?>" class="d-flex align-items-center gap-2 mb-3">
+                <form id="sessions-vendor-form" method="get" action="<?= site_url('caja') ?>" class="d-flex align-items-center gap-2 mb-3">
                     <input type="hidden" name="company_id" value="<?= esc($selectedCompanyId ?? '') ?>">
                     <input type="hidden" name="cash_register_id" value="<?= esc($selectedRegisterId ?? '') ?>">
                     <select name="vendor_id" class="form-select form-select-sm" style="max-width: 220px;">
@@ -868,6 +868,100 @@ document.addEventListener('DOMContentLoaded', () => {
             reloadCashData();
         }
     });
+
+    // Vendor filter — AJAX, updates only the sessions card
+    async function filterSessionsByVendor(vendorId) {
+        const form = document.getElementById('sessions-vendor-form');
+        if (!form) return;
+
+        const url = new URL(form.action);
+        url.searchParams.set('company_id', form.querySelector('input[name="company_id"]')?.value || '');
+        url.searchParams.set('cash_register_id', form.querySelector('input[name="cash_register_id"]')?.value || '');
+        if (vendorId) {
+            url.searchParams.set('vendor_id', vendorId);
+        } else {
+            url.searchParams.delete('vendor_id');
+        }
+        // Preserve active date range from current URL
+        const cur = new URLSearchParams(window.location.search);
+        if (cur.get('from')) url.searchParams.set('from', cur.get('from'));
+        if (cur.get('to'))   url.searchParams.set('to',   cur.get('to'));
+
+        const submitBtn = form.querySelector('button[type="submit"]');
+        if (submitBtn) submitBtn.disabled = true;
+
+        try {
+            const response = await fetch(url.toString(), {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                cache: 'no-store'
+            });
+            if (!response.ok) throw new Error('Network error');
+
+            const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
+
+            // Swap sessions tbody
+            const newTbody = doc.getElementById('sessions-table')?.querySelector('tbody');
+            const curTbody = document.getElementById('sessions-table')?.querySelector('tbody');
+            if (newTbody && curTbody) curTbody.innerHTML = newTbody.innerHTML;
+
+            // Update count tag
+            const newPanel  = doc.getElementById('sessions-table')?.closest('.insight-panel');
+            const curPanel  = document.getElementById('sessions-table')?.closest('.insight-panel');
+            if (newPanel && curPanel) {
+                const nTag = newPanel.querySelector('.insight-panel-heading .insight-tag');
+                const cTag = curPanel.querySelector('.insight-panel-heading .insight-tag');
+                if (nTag && cTag) cTag.textContent = nTag.textContent;
+            }
+
+            // Sync the "Limpiar" link (show/hide and correct href)
+            const newClear = doc.getElementById('sessions-vendor-form')?.querySelector('a.btn-outline-danger');
+            const curClear = form.querySelector('a.btn-outline-danger');
+            if (newClear && !curClear) {
+                form.appendChild(newClear.cloneNode(true));
+                // Re-bind the newly inserted clear link
+                bindVendorClearLink();
+            } else if (!newClear && curClear) {
+                curClear.remove();
+            } else if (newClear && curClear) {
+                curClear.href = newClear.href;
+            }
+
+            // Refresh sessions PaginatedTable
+            const sessionsTable = window.codexCashTables?.find(t => t.table?.id === 'sessions-table');
+            if (sessionsTable) sessionsTable.refreshRows();
+
+            // Update browser URL so refresh/back preserves the filter
+            history.replaceState(null, '', url.toString());
+        } catch (err) {
+            console.error('Error al filtrar sesiones por vendedor:', err);
+        } finally {
+            if (submitBtn) submitBtn.disabled = false;
+        }
+    }
+
+    function bindVendorClearLink() {
+        const form = document.getElementById('sessions-vendor-form');
+        if (!form) return;
+        const clearLink = form.querySelector('a.btn-outline-danger');
+        if (!clearLink || clearLink.dataset.ajaxBound) return;
+        clearLink.dataset.ajaxBound = '1';
+        clearLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            const sel = form.querySelector('select[name="vendor_id"]');
+            if (sel) sel.value = '';
+            filterSessionsByVendor('');
+        });
+    }
+
+    const vendorForm = document.getElementById('sessions-vendor-form');
+    if (vendorForm) {
+        vendorForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const sel = vendorForm.querySelector('select[name="vendor_id"]');
+            filterSessionsByVendor(sel?.value || '');
+        });
+        bindVendorClearLink();
+    }
 
     // Manual refresh button
     document.addEventListener('click', (e) => {

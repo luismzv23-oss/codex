@@ -37,8 +37,10 @@ $movTypeLabels = [
     </div>
 </div>
 
-<!-- Session info card -->
-<div class="card border-0 shadow-sm rounded-4 mb-4">
+<!-- Session info + Totales row -->
+<div class="row g-4 mb-4">
+<div class="col-lg-7">
+<div class="card border-0 shadow-sm rounded-4 h-100">
     <div class="card-body p-4">
         <div class="row g-3">
             <div class="col-md-3">
@@ -96,17 +98,19 @@ $movTypeLabels = [
             <?php endif; ?>
         </div>
     </div>
-</div>
+</div><!-- /card -->
+</div><!-- /col-lg-7 -->
 
 <!-- Totals by payment method -->
 <?php if (!empty($paymentMethods)): ?>
-<div class="card border-0 shadow-sm rounded-4 mb-4">
+<div class="col-lg-5">
+<div class="card border-0 shadow-sm rounded-4 h-100">
     <div class="card-body p-4">
         <h2 class="h5 mb-3">Totales por medio de pago</h2>
         <div class="row g-3">
             <?php foreach ($paymentMethods as $pm): ?>
                 <?php $pmName = $pm['payment_method'] ?: 'Sin medio'; ?>
-                <div class="col-md-3 col-6">
+                <div class="col-6">
                     <div class="bg-light rounded-3 p-3 text-center">
                         <div class="text-secondary small mb-1"><?= esc($pmLabels[strtolower($pmName)] ?? ucfirst($pmName)) ?></div>
                         <div class="fw-semibold <?= (float) $pm['total'] >= 0 ? '' : 'text-danger' ?>">$<?= number_format((float) $pm['total'], 2, ',', '.') ?></div>
@@ -115,8 +119,10 @@ $movTypeLabels = [
             <?php endforeach; ?>
         </div>
     </div>
-</div>
+</div><!-- /card -->
+</div><!-- /col-lg-5 -->
 <?php endif; ?>
+</div><!-- /row -->
 
 <!-- Sales -->
 <div class="card border-0 shadow-sm rounded-4 mb-4">
@@ -126,7 +132,7 @@ $movTypeLabels = [
             <p class="text-secondary mb-0">No se registraron ventas en este turno.</p>
         <?php else: ?>
         <div class="table-responsive">
-            <table class="table align-middle mb-0" data-codex-pagination="15">
+            <table class="table align-middle mb-0" data-codex-pagination="5">
                 <thead><tr><th>Fecha</th><th>Comprobante</th><th>Cliente</th><th>Medio</th><th class="text-end">Total</th></tr></thead>
                 <tbody>
                 <?php foreach ($sales as $sale): ?>
@@ -159,7 +165,7 @@ $movTypeLabels = [
             <p class="text-secondary mb-0">No se registraron movimientos en este turno.</p>
         <?php else: ?>
         <div class="table-responsive">
-            <table class="table align-middle mb-0" data-codex-pagination="15">
+            <table class="table align-middle mb-0" data-codex-pagination="5">
                 <thead><tr><th>Fecha</th><th>Tipo</th><th>Medio</th><th>Referencia</th><th class="text-end">Monto</th></tr></thead>
                 <tbody>
                 <?php foreach ($movements as $mov): ?>

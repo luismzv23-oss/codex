@@ -1,7 +1,7 @@
-Pos Ticket Design
- [x] Visibility and escaping preserve sale total
- [x] Real document without authorization does not invent fiscal data
- [x] Hidden payment does not appear and total is unchanged
- [x] Qr can be embedded offline in pdf
- [x] Authorized receipt always shows fiscal section
+Sales Collection
+ [x] Mixed receipt and reversal preserve payments and reverse ledger
+ [x] Transfer does not apply before explicit confirmation and retry is safe
+ [x] Accounting failure rolls back movements and balances
+ [x] Grouped partial collection keeps correct balances
+ [x] Sale transfer confirmation updates balance exactly once
 

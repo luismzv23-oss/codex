@@ -10,6 +10,10 @@ class ApiPermissionFilter implements FilterInterface
 {
     public function before(RequestInterface $request, $arguments = null)
     {
+        $authentication = (new ApiAuthFilter())->before($request);
+        if ($authentication instanceof ResponseInterface) {
+            return $authentication;
+        }
         $auth = \Config\Services::auth();
 
         if (! $auth->check()) {

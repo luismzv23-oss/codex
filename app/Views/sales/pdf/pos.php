@@ -1,5 +1,6 @@
 <?php
 $cfg = $ticketSettings ?? [];
+$isDeliveryNote = ($documentType['category'] ?? '') === 'delivery_note' || in_array(strtoupper($documentType['code'] ?? $sale['document_code'] ?? ''), ['REMITO','RTO','RM'], true);
 if (empty($preview) && !empty($fiscal['cae'])) {
     $cfg['ticket_show_qr'] = 1;
     $cfg['ticket_show_authorization'] = 1;
@@ -45,15 +46,15 @@ $fontSize = ['small'=>9,'medium'=>11,'large'=>13][$value('font_size','medium')] 
     <p <?= $flag('show_user') ?>><b>Vendedor:</b> <?= esc($creatorName ?? '-') ?></p>
 </div>
 <div class="items-region"><table class="items"><thead><tr>
-<th <?= $flag('show_sku') ?>>SKU</th><th>Descripción</th><th <?= $flag('show_quantity') ?>>Cantidad</th><th <?= $flag('show_unit_price') ?>>Precio unitario</th><th>Importe</th><th <?= $flag('show_item_tax') ?>>IVA %</th><th <?= $flag('show_item_discount') ?>>Desc. %</th>
+<th <?= $flag('show_sku') ?>>SKU</th><th>Descripción</th><th <?= $flag('show_quantity') ?>>Cantidad</th><?php if (!$isDeliveryNote): ?><th <?= $flag('show_unit_price') ?>>Precio unitario</th><th>Importe</th><th <?= $flag('show_item_tax') ?>>IVA %</th><th <?= $flag('show_item_discount') ?>>Desc. %</th><?php endif; ?>
 </tr></thead><tbody>
 <?php foreach ($items as $item): ?><tr>
 <td <?= $flag('show_sku') ?>><?= esc($item['sku'] ?? '') ?></td>
-<td><?= esc($item['product_name']) ?><div <?= $flag('show_brand') ?> class="muted"><?= esc($item['brand'] ?? '') ?></div><div <?= $flag('show_item_breakdown') ?> class="muted"><?= $money($item['quantity']) ?> x <?= $money($item['unit_price']) ?></div></td>
-<td <?= $flag('show_quantity') ?>><?= $money($item['quantity']) ?></td><td <?= $flag('show_unit_price') ?>><?= $money($item['unit_price']) ?></td><td><?= $money($item['line_total']) ?></td><td <?= $flag('show_item_tax') ?>><?= $money($item['tax_rate'] ?? 0) ?></td><td <?= $flag('show_item_discount') ?>><?= $money($item['discount_rate'] ?? 0) ?></td>
+<td><?= esc($item['product_name']) ?><div <?= $flag('show_brand') ?> class="muted"><?= esc($item['brand'] ?? '') ?></div><?php if (!$isDeliveryNote): ?><div <?= $flag('show_item_breakdown') ?> class="muted"><?= $money($item['quantity']) ?> x <?= $money($item['unit_price']) ?></div><?php endif; ?></td>
+<td <?= $flag('show_quantity') ?>><?= $money($item['quantity']) ?></td><?php if (!$isDeliveryNote): ?><td <?= $flag('show_unit_price') ?>><?= $money($item['unit_price']) ?></td><td><?= $money($item['line_total']) ?></td><td <?= $flag('show_item_tax') ?>><?= $money($item['tax_rate'] ?? 0) ?></td><td <?= $flag('show_item_discount') ?>><?= $money($item['discount_rate'] ?? 0) ?></td><?php endif; ?>
 </tr><?php endforeach; ?>
 </tbody></table></div>
-<div class="bottom"><table><tr><td class="fiscal">
+<?php if (!$isDeliveryNote): ?><div class="bottom"><table><tr><td class="fiscal">
     <div <?= $flag('show_qr') ?>><?php if (!empty($qrDataUri)): ?><img class="qr" src="<?= esc($qrDataUri,'attr') ?>" alt="QR fiscal"><?php else: ?><p class="muted">QR no disponible: requiere autorización y datos fiscales completos.</p><?php endif; ?></div>
     <div <?= $flag('show_authorization') ?>><?php if (!empty($fiscal['cae'])): ?><p><b>CAE:</b> <?= esc($fiscal['cae']) ?></p><p><b>Vencimiento CAE:</b> <?= $date($fiscal['caeDueDate'] ?? null) ?></p><?php if (!empty($fiscal['testEnvironment'])): ?><p>HOMOLOGACIÓN · SIN VALIDEZ FISCAL</p><?php endif; ?><?php else: ?><p>SIN AUTORIZACIÓN FISCAL DISPONIBLE</p><?php endif; ?></div>
 </td><td><table class="totals">
@@ -64,6 +65,7 @@ $fontSize = ['small'=>9,'medium'=>11,'large'=>13][$value('font_size','medium')] 
     <tr class="grand"><td>Importe total</td><td class="right"><?= $money($sale['total']) ?></td></tr>
 </table><p <?= $flag('show_currency') ?> class="right">Moneda: <?= esc($sale['currency_code']) ?></p></td></tr></table></div>
 <?php if ($visiblePayments): ?><div <?= $flag('show_payments') ?>><table class="payments"><tr><td><b>Medio de pago</b></td><td class="right"><b>Importe</b></td></tr><?php foreach ($visiblePayments as $payment): ?><tr><td><?= esc($payment['payment_method_code'] ?? $payment['payment_method'] ?? '') ?><?= ($payment['status'] ?? '') === 'pending' ? ' (pendiente)' : '' ?></td><td class="right"><?= $money($payment['amount']) ?></td></tr><?php endforeach; ?></table></div><?php endif; ?>
+<?php endif; ?>
 <div <?= $flag('show_notes') ?>><div class="foot notes"><b>Observaciones:</b> <?= esc($sale['notes'] ?? '') ?></div></div>
 <div <?= $flag('show_footer') ?>><div class="foot" data-pos-text="footer_notes"><?= esc($value('footer_notes')) ?></div></div>
 <div <?= $flag('show_custom_footer') ?>><div class="foot"><table><tr><td data-pos-text="custom_text_bottom_left"><?= esc($value('custom_text_bottom_left')) ?></td><td class="right" data-pos-text="custom_text_bottom_right"><?= esc($value('custom_text_bottom_right')) ?></td></tr></table></div></div>

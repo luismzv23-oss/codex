@@ -51,13 +51,13 @@
         </style>
     </head>
     <body>
-        <h2>Pos Ticket Design</h2>
+        <h2>Sales Collection</h2>
         <ul>
-            <li class="success">Visibility and escaping preserve sale total</li>
-            <li class="success">Real document without authorization does not invent fiscal data</li>
-            <li class="success">Hidden payment does not appear and total is unchanged</li>
-            <li class="success">Qr can be embedded offline in pdf</li>
-            <li class="success">Authorized receipt always shows fiscal section</li>
+            <li class="success">Mixed receipt and reversal preserve payments and reverse ledger</li>
+            <li class="success">Transfer does not apply before explicit confirmation and retry is safe</li>
+            <li class="success">Accounting failure rolls back movements and balances</li>
+            <li class="success">Grouped partial collection keeps correct balances</li>
+            <li class="success">Sale transfer confirmation updates balance exactly once</li>
         </ul>
     </body>
 </html>

@@ -17,6 +17,9 @@ class SalesIntegrityService
             throw new RuntimeException('No se pudo iniciar la transaccion.');
         }
         try {
+            $companySql = 'SELECT id FROM ' . $db->protectIdentifiers($db->prefixTable('companies')) . ' WHERE id = ?';
+            if ($db->DBDriver !== 'SQLite3') $companySql .= ' FOR UPDATE';
+            if (!$db->query($companySql, [$companyId])->getRowArray()) throw new RuntimeException('Empresa no disponible.');
             $sql = 'SELECT * FROM ' . $db->protectIdentifiers($db->prefixTable($table)) . ' WHERE company_id = ? AND id = ?';
             if ($db->DBDriver !== 'SQLite3') {
                 $sql .= ' FOR UPDATE';

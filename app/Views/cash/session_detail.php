@@ -4,6 +4,7 @@
 
 <?php
 $pmLabels = [
+    'qr'       => 'QR',
     'cash'     => 'Efectivo',
     'card'     => 'Tarjeta',
     'check'    => 'Cheque',
@@ -19,6 +20,7 @@ $movTypeLabels = [
     'check_deposit'    => 'Depósito cheque',
     'check_rejection'  => 'Rechazo cheque',
     'sale'             => 'Venta',
+    'sale_income'      => 'Cobro de venta',
 ];
 ?>
 
@@ -132,23 +134,23 @@ $movTypeLabels = [
             <p class="text-secondary mb-0">No se registraron ventas en este turno.</p>
         <?php else: ?>
         <div class="table-responsive">
-            <table class="table align-middle mb-0" data-codex-pagination="5">
+            <table class="table align-middle mb-0" data-codex-pagination="5" data-pagination-always="true">
                 <thead><tr><th>Fecha</th><th>Comprobante</th><th>Cliente</th><th>Medio</th><th class="text-end">Total</th></tr></thead>
                 <tbody>
                 <?php foreach ($sales as $sale): ?>
                     <tr>
                         <td class="small"><?= esc(date('d/m/Y H:i', strtotime($sale['created_at']))) ?></td>
-                        <td><?= esc($sale['document_name'] ?? '-') ?><div class="small text-secondary"><?= esc($sale['document_number'] ?? '') ?></div></td>
+                        <td><?= esc($sale['document_name'] ?? '-') ?><div class="small text-secondary"><?= esc($sale['sale_number'] ?? '') ?></div></td>
                         <td><?= esc($sale['customer_name'] ?? '-') ?></td>
-                        <td class="small"><?= esc($pmLabels[strtolower($sale['payment_method'] ?? '')] ?? ucfirst($sale['payment_method'] ?? '-')) ?></td>
-                        <td class="text-end">$<?= number_format((float) ($sale['total_amount'] ?? 0), 2, ',', '.') ?></td>
+                        <td class="small"><?= esc($sale['payment_methods_label'] ?? '-') ?></td>
+                        <td class="text-end">$<?= number_format((float) ($sale['total'] ?? 0), 2, ',', '.') ?></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
                 <tfoot>
                     <tr class="fw-semibold">
                         <td colspan="4" class="text-end">Total facturado:</td>
-                        <td class="text-end">$<?= number_format(array_sum(array_column($sales, 'total_amount')), 2, ',', '.') ?></td>
+                        <td class="text-end">$<?= number_format(array_sum(array_column($sales, 'total')), 2, ',', '.') ?></td>
                     </tr>
                 </tfoot>
             </table>
@@ -161,11 +163,12 @@ $movTypeLabels = [
 <div class="card border-0 shadow-sm rounded-4 mb-4">
     <div class="card-body p-4">
         <h2 class="h5 mb-3">Movimientos del turno</h2>
+        <p class="text-secondary small">Los pagos mixtos se desglosan por medio de pago; pueden compartir el mismo comprobante.</p>
         <?php if (empty($movements)): ?>
             <p class="text-secondary mb-0">No se registraron movimientos en este turno.</p>
         <?php else: ?>
         <div class="table-responsive">
-            <table class="table align-middle mb-0" data-codex-pagination="5">
+            <table class="table align-middle mb-0" data-codex-pagination="5" data-pagination-always="true">
                 <thead><tr><th>Fecha</th><th>Tipo</th><th>Medio</th><th>Referencia</th><th class="text-end">Monto</th></tr></thead>
                 <tbody>
                 <?php foreach ($movements as $mov): ?>

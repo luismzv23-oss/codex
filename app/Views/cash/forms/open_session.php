@@ -27,7 +27,11 @@
             </div>
             <div class="col-12 d-flex gap-2">
                 <button class="btn btn-dark icon-btn" title="Abrir caja" aria-label="Abrir caja"><i class="bi bi-check-lg"></i></button>
-                <a href="<?= site_url('caja' . (! empty($companyId) ? '?company_id=' . $companyId : '')) ?>" class="btn btn-outline-dark icon-btn" title="Cancelar" aria-label="Cancelar"><i class="bi bi-x-lg"></i></a>
+                <?php if ($isPopup): ?>
+                    <button type="button" class="btn btn-outline-dark icon-btn" title="Cancelar" aria-label="Cancelar" onclick="window.parent.postMessage({ type: 'codex-popup-close' }, window.location.origin)"><i class="bi bi-x-lg"></i></button>
+                <?php else: ?>
+                    <a href="<?= site_url('caja' . (! empty($companyId) ? '?company_id=' . $companyId : '')) ?>" class="btn btn-outline-dark icon-btn" title="Cancelar" aria-label="Cancelar"><i class="bi bi-x-lg"></i></a>
+                <?php endif; ?>
             </div>
         </form>
     </div>

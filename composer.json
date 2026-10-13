@@ -35,6 +35,9 @@
         }
     },
     "config": {
+        "platform": {
+            "php": "8.0.30"
+        },
         "optimize-autoloader": true,
         "preferred-install": "dist",
         "sort-packages": true,

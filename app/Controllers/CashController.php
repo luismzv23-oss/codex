@@ -760,14 +760,7 @@ class CashController extends BaseController
         $closedBy = $session['closed_by'] ? $userModel->find($session['closed_by']) : null;
 
         // Query sales linked to this session
-        $sales = db_connect()->table('sales s')
-            ->select('s.*, c.name AS customer_name, dt.name AS document_name')
-            ->join('customers c', 'c.id = s.customer_id', 'left')
-            ->join('sales_document_types dt', 'dt.id = s.document_type_id', 'left')
-            ->where('s.cash_session_id', $sessionId)
-            ->whereIn('s.status', ['confirmed', 'returned_partial', 'returned_total'])
-            ->orderBy('s.created_at', 'ASC')
-            ->get()->getResultArray();
+        $sales = $this->cashService()->sessionSales($context['company']['id'], $sessionId);
 
         // Summary of cash movements for this session
         $paymentMethods = db_connect()->table('cash_movements')
@@ -796,8 +789,7 @@ class CashController extends BaseController
             return $context;
         }
 
-        $sessionModel = new CashSessionModel();
-        $session = $sessionModel->where('company_id', $context['company']['id'])->find($sessionId);
+        $session = $this->cashService()->ownedSession($context['company']['id'], $sessionId);
         if (!$session) {
             return redirect()->to($this->cashRoute('caja', $context['company']['id']))->with('error', 'La sesión de caja no existe.');
         }
@@ -809,14 +801,7 @@ class CashController extends BaseController
         $openedBy = $userModel->find($session['opened_by']);
         $closedBy = $session['closed_by'] ? $userModel->find($session['closed_by']) : null;
 
-        $sales = db_connect()->table('sales s')
-            ->select('s.*, c.name AS customer_name, dt.name AS document_name')
-            ->join('customers c', 'c.id = s.customer_id', 'left')
-            ->join('sales_document_types dt', 'dt.id = s.document_type_id', 'left')
-            ->where('s.cash_session_id', $sessionId)
-            ->whereIn('s.status', ['confirmed', 'returned_partial', 'returned_total'])
-            ->orderBy('s.created_at', 'ASC')
-            ->get()->getResultArray();
+        $sales = $this->cashService()->sessionSales($context['company']['id'], $sessionId);
 
         $movements = db_connect()->table('cash_movements cm')
             ->select('cm.*, g.name AS gateway_name, sp.sale_id')

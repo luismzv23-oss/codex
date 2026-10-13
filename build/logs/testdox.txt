@@ -1,7 +1,3 @@
-Sales Collection
- [x] Mixed receipt and reversal preserve payments and reverse ledger
- [x] Transfer does not apply before explicit confirmation and retry is safe
- [x] Accounting failure rolls back movements and balances
- [x] Grouped partial collection keeps correct balances
- [x] Sale transfer confirmation updates balance exactly once
+Cash Session Sales
+ [x] Mixed payments produce one invoice with its real total
 

@@ -101,6 +101,35 @@ class CashService
             ->getResultArray();
     }
 
+    /** One row per invoice; payment lines must not multiply invoice totals. */
+    public function sessionSales(string $companyId, string $sessionId): array
+    {
+        if (!$this->ownedSession($companyId, $sessionId)) return [];
+        $db = db_connect();
+        $sales = $db->table('sales s')
+            ->select('s.*, c.name AS customer_name, dt.name AS document_name')
+            ->join('customers c', 'c.id = s.customer_id', 'left')
+            ->join('sales_document_types dt', 'dt.id = s.document_type_id', 'left')
+            ->where('s.company_id', $companyId)->where('s.cash_session_id', $sessionId)
+            ->whereIn('s.status', ['confirmed', 'returned_partial', 'returned_total'])
+            ->orderBy('s.created_at', 'ASC')->get()->getResultArray();
+        if (!$sales) return [];
+        $payments = $db->table('sale_payments')->whereIn('sale_id', array_column($sales, 'id'))
+            ->orderBy('payment_method', 'ASC')->get()->getResultArray();
+        $labels = ['cash'=>'Efectivo', 'card'=>'Tarjeta', 'qr'=>'QR', 'transfer'=>'Transferencia', 'check'=>'Cheque', 'wallet'=>'Billetera'];
+        $methods = [];
+        foreach ($payments as $payment) {
+            if (!PaymentIntegrityService::settled($payment)) continue;
+            $method = (string) ($payment['payment_method'] ?? '');
+            if ($method !== '') $methods[$payment['sale_id']][$method] = $labels[$method] ?? $method;
+        }
+        foreach ($sales as &$sale) {
+            $sale['payment_methods_label'] = implode(' + ', $methods[$sale['id']] ?? []) ?: '-';
+        }
+        unset($sale);
+        return $sales;
+    }
+
     public function recentSessions(string $companyId, int $limit = 100, $cashRegisterId = null, ?string $userId = null): array
     {
         $query = db_connect()->table('cash_sessions cs')

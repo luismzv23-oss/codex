@@ -770,16 +770,22 @@ document.addEventListener('DOMContentLoaded', () => {
             refreshBtn.disabled = true;
         }
 
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
         try {
-            const response = await fetch(window.location.href, {
+            const refreshUrl = new URL(window.location.href);
+            refreshUrl.searchParams.delete('cash_dashboard');
+            const response = await fetch(refreshUrl, {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
-                cache: 'no-store'
+                cache: 'no-store',
+                signal: controller.signal
             });
             if (!response.ok) throw new Error('Network error');
             
             const text = await response.text();
             const parser = new DOMParser();
             const doc = parser.parseFromString(text, 'text/html');
+            if (!doc.getElementById('registers-table')) throw new Error('Invalid cash response');
 
             // 1. Update Cash Dashboard Panel (KPIs + Breakdown)
             const newPanel = doc.getElementById('cash-dashboard-panel');
@@ -847,6 +853,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) {
             console.error('Error al actualizar datos de caja:', err);
         } finally {
+            clearTimeout(timeout);
             isCashReloading = false;
             if (refreshBtn) {
                 refreshBtn.classList.remove('is-loading');
@@ -963,14 +970,7 @@ document.addEventListener('DOMContentLoaded', () => {
         bindVendorClearLink();
     }
 
-    // Manual refresh button
-    document.addEventListener('click', (e) => {
-        const btn = e.target.closest('#cash-dashboard-refresh');
-        if (btn) {
-            e.preventDefault();
-            reloadCashData();
-        }
-    });
+    // Manual refresh and return-to-tab refresh share cash-dashboard.js.
 });
 </script>
 <?= $this->endSection() ?>

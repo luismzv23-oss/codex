@@ -199,41 +199,27 @@
         </tbody>
     </table>
 
-    <div class="section-title">Facturas y Ventas Emitidas (Jornada)</div>
-    <table class="data-table">
-        <thead>
+    <?php
+    $invoiceCount = count($sales);
+    $invoiceTotal = array_sum(array_column($sales, 'total'));
+    ?>
+    <div style="page-break-inside: avoid;">
+        <div class="section-title">RESUMEN DE FACTURACI&Oacute;N DEL TURNO</div>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 12px;">
             <tr>
-                <th>Fecha/Hora</th>
-                <th>Comprobante</th>
-                <th>Cliente</th>
-                <th>Pago</th>
-                <th class="text-right">Total</th>
+                <td style="width: 35%; background: #eef1f8; padding: 18px; border: 1px solid #dce1ed; text-align: center;">
+                    <div style="font-size: 9px; color: #52617b;">COMPROBANTES EMITIDOS</div>
+                    <div style="font-size: 28px; font-weight: bold; color: #222e50;"><?= $invoiceCount ?></div>
+                </td>
+                <td style="background: #222e50; color: #ffffff; padding: 18px; text-align: center;">
+                    <div style="font-size: 9px;">TOTAL FACTURADO</div>
+                    <div style="font-size: 24px; font-weight: bold;">$<?= number_format($invoiceTotal, 2, ',', '.') ?></div>
+                </td>
             </tr>
-        </thead>
-        <tbody>
-            <?php $totalSalesSum = 0; ?>
-            <?php foreach ($sales as $sale): ?>
-                <?php $totalSalesSum += (float)$sale['total']; ?>
-                <tr>
-                    <td><?= esc(date('d/m/Y H:i', strtotime($sale['created_at']))) ?></td>
-                    <td><?= esc($sale['sale_number']) ?> <div class="small text-secondary" style="font-size: 8px; color: #777;"><?= esc($sale['document_name']) ?></div></td>
-                    <td><?= esc($sale['customer_name'] ?: 'Consumidor Final') ?></td>
-                    <td><?= esc(ucfirst($sale['payment_method'] ?? 'Efectivo')) ?></td>
-                    <td class="text-right">$<?= number_format((float)$sale['total'], 2, ',', '.') ?></td>
-                </tr>
-            <?php endforeach; ?>
-            <?php if (empty($sales)): ?>
-                <tr>
-                    <td colspan="5" class="text-center text-muted" style="padding: 15px;">No se emitieron comprobantes durante este turno.</td>
-                </tr>
-            <?php else: ?>
-                <tr style="font-weight: bold; background-color: #f2f2f2;">
-                    <td colspan="4" class="text-right">Total Facturado</td>
-                    <td class="text-right">$<?= number_format($totalSalesSum, 2, ',', '.') ?></td>
-                </tr>
-            <?php endif; ?>
-        </tbody>
-    </table>
+        </table>
+        <p style="font-size: 9px; color: #666;">Cada comprobante se cuenta una sola vez, incluso cuando tiene varios medios de pago.</p>
+        <?php if ($invoiceCount === 0): ?><p>No se emitieron comprobantes durante este turno.</p><?php endif; ?>
+    </div>
 
     <?php if (!empty($session['notes'])): ?>
         <div style="margin-top: 15px;">

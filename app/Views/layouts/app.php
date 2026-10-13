@@ -577,7 +577,7 @@ if (auth_check() && !$isPopup) {
                     const rows = Array.from(tbody.querySelectorAll(':scope > tr'));
                     const validRows = rows.filter((row) => row.children.length > 1 || !row.querySelector('[colspan]'));
 
-                    if (validRows.length <= pageSize) {
+                    if (!validRows.length || (validRows.length <= pageSize && table.dataset.paginationAlways !== 'true')) {
                         return;
                     }
 

@@ -1,14 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <testsuites>
-  <testsuite name="" tests="5" assertions="87" errors="0" warnings="0" failures="0" skipped="0" time="0.327945">
-    <testsuite name="App" tests="5" assertions="87" errors="0" warnings="0" failures="0" skipped="0" time="0.327945">
-      <testsuite name="SalesCollectionTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\database\SalesCollectionTest.php" tests="5" assertions="87" errors="0" warnings="0" failures="0" skipped="0" time="0.327945">
-        <testcase name="testMixedReceiptAndReversalPreservePaymentsAndReverseLedger" class="SalesCollectionTest" classname="SalesCollectionTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\database\SalesCollectionTest.php" line="72" assertions="24" time="0.227037"/>
-        <testcase name="testTransferDoesNotApplyBeforeExplicitConfirmationAndRetryIsSafe" class="SalesCollectionTest" classname="SalesCollectionTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\database\SalesCollectionTest.php" line="113" assertions="9" time="0.020806"/>
-        <testcase name="testAccountingFailureRollsBackMovementsAndBalances" class="SalesCollectionTest" classname="SalesCollectionTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\database\SalesCollectionTest.php" line="158" assertions="22" time="0.050069"/>
-        <testcase name="testGroupedPartialCollectionKeepsCorrectBalances" class="SalesCollectionTest" classname="SalesCollectionTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\database\SalesCollectionTest.php" line="210" assertions="17" time="0.015640"/>
-        <testcase name="testSaleTransferConfirmationUpdatesBalanceExactlyOnce" class="SalesCollectionTest" classname="SalesCollectionTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\database\SalesCollectionTest.php" line="269" assertions="15" time="0.014393"/>
-      </testsuite>
-    </testsuite>
+  <testsuite name="CashSessionSalesTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\database\CashSessionSalesTest.php" tests="1" assertions="9" errors="0" warnings="0" failures="0" skipped="0" time="0.236695">
+    <testcase name="testMixedPaymentsProduceOneInvoiceWithItsRealTotal" class="CashSessionSalesTest" classname="CashSessionSalesTest" file="C:\Users\luism\.gemini\antigravity\scratch\codex\tests\database\CashSessionSalesTest.php" line="41" assertions="9" time="0.236695"/>
   </testsuite>
 </testsuites>

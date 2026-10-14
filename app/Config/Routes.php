@@ -13,6 +13,7 @@ $routes->post('forgot-password', 'AuthController::sendResetLink', ['filter' => '
 $routes->get('reset-password/(:segment)/(:segment)', 'AuthController::resetPassword/$1/$2', ['filter' => 'guest']);
 $routes->post('reset-password/(:segment)/(:segment)', 'AuthController::updatePassword/$1/$2', ['filter' => 'guest']);
 $routes->get('logout', 'AuthController::logout', ['filter' => 'auth']);
+$routes->get('auth/cash-status', 'AuthController::cashStatus', ['filter' => 'auth']);
 
 $routes->group('', ['filter' => 'auth'], static function (RouteCollection $routes): void {
     $routes->get('dashboard', 'DashboardController::index', ['filter' => 'permission:dashboard.view']);

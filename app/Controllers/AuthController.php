@@ -90,6 +90,16 @@ class AuthController extends BaseController
         return redirect()->to('/login')->with('message', 'Contrasena actualizada correctamente.');
     }
 
+    public function cashStatus()
+    {
+        $user = auth()->user();
+        $open = db_connect()->table('cash_sessions')
+            ->where('company_id', (string) ($user['company_id'] ?? ''))
+            ->where('opened_by', (string) ($user['id'] ?? ''))
+            ->where('status', 'open')->countAllResults() > 0;
+        return $this->response->setHeader('Cache-Control', 'no-store')->setJSON(['open' => $open]);
+    }
+
     public function logout()
     {
         $user = auth()->user();

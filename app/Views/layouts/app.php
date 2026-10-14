@@ -325,11 +325,7 @@ if (auth_check() && !$isPopup) {
                             <div class="fw-semibold"><?= esc(auth_user()['name'] ?? '') ?></div>
                             <div class="text-secondary"><?= esc(auth_user()['role_name'] ?? '') ?></div>
                         </div>
-                        <?php if (!empty($hasOpenCashSession)): ?>
-                            <button type="button" class="btn btn-outline-dark btn-sm" data-bs-toggle="modal" data-bs-target="#openCashModal">Salir</button>
-                        <?php else: ?>
-                            <a href="<?= site_url('logout') ?>" class="btn btn-outline-dark btn-sm">Salir</a>
-                        <?php endif; ?>
+                        <button type="button" id="logout-cash-check" class="btn btn-outline-dark btn-sm" data-status-url="<?= site_url('auth/cash-status') ?>" data-logout-url="<?= site_url('logout') ?>">Salir</button>
                     </div>
                 </div>
             </div>
@@ -667,7 +663,7 @@ if (auth_check() && !$isPopup) {
         <script src="<?= base_url('assets/js/codex-assist-widget.js') ?>" defer></script>
     <?php endif; ?>
 
-    <?php if (!$isPopup && !empty($hasOpenCashSession)): ?>
+    <?php if (!$isPopup && auth_check()): ?>
     <div class="modal fade" id="openCashModal" tabindex="-1" aria-labelledby="openCashModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content rounded-4 border-0 shadow-lg">
@@ -692,5 +688,6 @@ if (auth_check() && !$isPopup) {
         </div>
     </div>
     <?php endif; ?>
+<script src="<?= base_url('assets/js/logout-cash-check.js') ?>" defer></script>
 </body>
 </html>

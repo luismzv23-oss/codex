@@ -867,6 +867,10 @@ class SalesController extends BaseApiController
             return $this->fail('El comprobante destino no esta disponible.', 404);
         }
 
+        $sourceDoc = (new SalesDocumentTypeModel())->find($sourceSale['document_type_id']);
+        if ($sourceDoc && \App\Libraries\DeliveryNoteService::isDelivery($sourceDoc) && ($targetDocument['category'] ?? '') === 'invoice') {
+            return $this->fail('Utiliza la facturación parcial o total desde el remito.', 409);
+        }
         if (! $this->canConvertDocument($sourceSale, $targetDocument)) {
             return $this->fail('La conversion solicitada no es valida para este documento.', 422);
         }
@@ -956,6 +960,11 @@ class SalesController extends BaseApiController
             return $this->fail('Venta no disponible.', 404);
         }
 
+        $doc = !empty($sale['document_type_id']) ? (new SalesDocumentTypeModel())->find($sale['document_type_id']) : null;
+        if ($doc && \App\Libraries\DeliveryNoteService::isDelivery($doc)) {
+            throw new \RuntimeException('Anula el remito desde su popup de anulación para validar facturas y retorno físico.');
+        }
+        (new \App\Libraries\DeliveryNoteInvoicingService())->assertInvoiceCanCancel($context['company']['id'], $sale);
         (new \App\Libraries\SalesCollectionService())->assertSaleCanCancel($context['company']['id'], $id);
 
         if (in_array($sale['status'], ['cancelled', 'returned_total'], true)) {
@@ -985,6 +994,7 @@ class SalesController extends BaseApiController
             'cancellation_reason' => trim((string) ($payload['cancellation_reason'] ?? '')) ?: 'Cancelacion manual',
         ]);
 
+        (new \App\Libraries\DeliveryNoteInvoicingService())->syncOrder($context['company']['id'], $id);
         $this->syncReceivableForSale($id);
         $this->syncSaleCommission($context['company']['id'], $id);
         (new AccountingService())->reverseCancelledSale($context['company']['id'], $id, $this->apiUser()['id']);
@@ -1797,6 +1807,7 @@ class SalesController extends BaseApiController
         $db = db_connect();
 
         $category = (string) ($documentType['category'] ?? 'invoice');
+        (new \App\Libraries\DeliveryNoteInvoicingService())->validateConfirmation($companyId, $sale, $items);
         if ($category === 'delivery_note') {
             [$sale, $items] = (new \App\Libraries\DeliveryNotePricing())->refresh($companyId, $sale, $items);
         }
@@ -1810,10 +1821,12 @@ class SalesController extends BaseApiController
         $update = ['status' => 'confirmed', 'confirmed_by' => $this->apiUser()['id'], 'confirmed_at' => date('Y-m-d H:i:s')];
         if ($category === 'delivery_note') { $update['delivered_by'] = $this->apiUser()['id']; $update['delivered_at'] = date('Y-m-d H:i:s'); }
         (new SaleModel())->update($saleId, $update);
+        (new \App\Libraries\DeliveryNoteInvoicingService())->syncOrder($companyId, $saleId);
         $this->syncReceivableForSale($saleId);
         $this->syncCashMovementsForSale($companyId, $saleId);
         $this->syncSaleCommission($companyId, $saleId);
-        (new AccountingService())->syncSale($companyId, $saleId, $this->apiUser()['id']);
+        $accounting = (new AccountingService())->syncSale($companyId, $saleId, $this->apiUser()['id']);
+        if (empty($accounting['ok'])) throw new \RuntimeException($accounting['error'] ?? 'No se pudo contabilizar la venta.');
 
         return $db->transStatus() ? true : 'No se pudo confirmar la venta.';
     }
@@ -1869,6 +1882,7 @@ class SalesController extends BaseApiController
 
       private function deliverSaleStock(string $companyId, array $sale, array $items, bool $allowNegative, string $reason)
       {
+        if ((new \App\Libraries\DeliveryNoteService())->link($companyId, $sale['id'])) return true;
           $warehouseId = $sale['warehouse_id'] ?: null;
           if (! $warehouseId) { return 'La venta debe tener deposito origen.'; }
           $sourceSale = ! empty($sale['source_sale_id']) ? $this->ownedSale($companyId, (string) $sale['source_sale_id']) : null;
@@ -1894,6 +1908,7 @@ class SalesController extends BaseApiController
 
     private function restockDeliveredSale(string $companyId, array $sale, array $items, string $reason): void
     {
+        if ((new \App\Libraries\DeliveryNoteService())->link($companyId, $sale['id'])) return;
         $items = (new SalesIntegrityService())->remainingItems($items);
         $sourceSale = ! empty($sale['source_sale_id']) ? $this->ownedSale($companyId, (string) $sale['source_sale_id']) : null;
         $sourceDocumentType = (! empty($sourceSale['document_type_id'])) ? (new SalesDocumentTypeModel())->find($sourceSale['document_type_id']) : null;

@@ -1825,6 +1825,13 @@ class SalesController extends BaseController
             return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('error', 'Venta no disponible.');
         }
 
+        $deliveryLink = (new \App\Libraries\DeliveryNoteService())->link($context['company']['id'], $id);
+        if ($deliveryLink) {
+            $origin = $deliveryLink['source_sale_id'] ? 'sale' : 'cycle';
+            $sourceId = $deliveryLink['source_sale_id'] ?: $deliveryLink['delivery_note_id'];
+            $url = $this->salesRoute('ventas/remitos/' . $origin . '/' . $sourceId . '/facturar', $context['company']['id']);
+            return redirect()->to($url . (strpos($url, '?') === false ? '?' : '&') . http_build_query(['draft' => $id, 'popup' => $this->isPopupRequest() ? '1' : '0']));
+        }
         if (($sale['status'] ?? 'draft') !== 'draft') {
             return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('error', 'Solo los borradores pueden editarse.');
         }
@@ -1884,6 +1891,10 @@ class SalesController extends BaseController
             return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('error', 'El comprobante destino no esta disponible.');
         }
 
+        $sourceDoc = (new SalesDocumentTypeModel())->find($sourceSale['document_type_id']);
+        if ($sourceDoc && \App\Libraries\DeliveryNoteService::isDelivery($sourceDoc) && ($targetDocument['category'] ?? '') === 'invoice') {
+            return redirect()->to(site_url('ventas/remitos/sale/' . $id . '/facturar') . '?' . http_build_query(['company_id' => $context['company']['id'], 'mode' => 'total', 'popup' => $this->isPopupRequest() ? '1' : '0']));
+        }
         if (!$this->canConvertDocument($sourceSale, $targetDocument)) {
             return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('error', 'La conversion solicitada no es valida para este documento.');
         }
@@ -1910,6 +1921,9 @@ class SalesController extends BaseController
             return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('error', 'Solo los borradores pueden editarse.');
         }
 
+        if ((new \App\Libraries\DeliveryNoteService())->link($context['company']['id'], $id)) {
+            return redirect()->back()->with('error', 'Modifica esta factura desde el popup del remito para conservar sus vínculos.');
+        }
         $payload = $this->salePayload($context['company']['id'], [], $context['access_level'] ?? 'manage');
         if ($payload instanceof RedirectResponse) {
             return $payload;
@@ -1978,6 +1992,11 @@ class SalesController extends BaseController
             return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('error', 'Venta no disponible.');
         }
 
+        $doc = !empty($sale['document_type_id']) ? (new SalesDocumentTypeModel())->find($sale['document_type_id']) : null;
+        if ($doc && \App\Libraries\DeliveryNoteService::isDelivery($doc)) {
+            return $this->cancelDeliveryNote('sale', $id);
+        }
+        (new \App\Libraries\DeliveryNoteInvoicingService())->assertInvoiceCanCancel($context['company']['id'], $sale);
         (new \App\Libraries\SalesCollectionService())->assertSaleCanCancel($context['company']['id'], $id);
 
         if (in_array($sale['status'], ['cancelled', 'returned_total'], true)) {
@@ -2012,6 +2031,7 @@ class SalesController extends BaseController
             return redirect()->to($this->salesRoute('ventas', $context['company']['id']))->with('error', 'No se pudo cancelar la venta.');
         }
 
+        (new \App\Libraries\DeliveryNoteInvoicingService())->syncOrder($context['company']['id'], $id);
         $this->syncReceivableForSale($id);
         $this->syncSaleCommission($context['company']['id'], $id);
         (new AccountingService())->reverseCancelledSale($context['company']['id'], $id, $this->currentUser()['id']);
@@ -3183,6 +3203,11 @@ class SalesController extends BaseController
 
         $merged = array_merge($cycleNotes, $directSalesNotes);
         usort($merged, static fn($a, $b) => strcmp((string)($b['created_at'] ?? ''), (string)($a['created_at'] ?? '')));
+        foreach ($merged as &$note) {
+            try { $note = array_merge($note, (new \App\Libraries\DeliveryNoteService())->summary($companyId, $note['source_type'], $note['id'])); }
+            catch (\Throwable $e) { $note['billing_status'] = 'Requiere revisión'; $note['invoice_reason'] = $e->getMessage(); $note['cancel_reason'] = $e->getMessage(); }
+        }
+        unset($note);
         return $merged;
     }
 
@@ -4586,9 +4611,10 @@ class SalesController extends BaseController
             }
 
             $category = (string) ($documentType['category'] ?? 'invoice');
-        if ($category === 'delivery_note') {
-            [$sale, $items] = (new \App\Libraries\DeliveryNotePricing())->refresh($companyId, $sale, $items);
-        }
+            (new \App\Libraries\DeliveryNoteInvoicingService())->validateConfirmation($companyId, $sale, $items);
+            if ($category === 'delivery_note') {
+                [$sale, $items] = (new \App\Libraries\DeliveryNotePricing())->refresh($companyId, $sale, $items);
+            }
             $impactsStock = (int) ($documentType['impacts_stock'] ?? 0) === 1;
 
             if (!$warehouseId && $impactsStock) {
@@ -4691,7 +4717,8 @@ class SalesController extends BaseController
             (new SaleModel())->update($saleId, $updateData);
 
             $this->refreshSalePaymentStatus($saleId);
-            $this->syncReceivableForSale($saleId);
+            (new \App\Libraries\DeliveryNoteInvoicingService())->syncOrder($companyId, $saleId);
+        $this->syncReceivableForSale($saleId);
             $this->syncCashMovementsForSale($companyId, $saleId);
             $this->syncSaleCommission($companyId, $saleId);
             $accounting = (new AccountingService())->syncSale($companyId, $saleId, $this->currentUser()['id']);
@@ -4768,6 +4795,7 @@ class SalesController extends BaseController
 
     private function deliverSaleStock(string $companyId, array $sale, array $items, bool $allowNegative, string $reason)
     {
+        if ((new \App\Libraries\DeliveryNoteService())->link($companyId, $sale['id'])) return true;
         $warehouseId = $sale['warehouse_id'] ?: null;
         if (!$warehouseId) {
             return 'La venta debe tener deposito origen.';
@@ -4858,6 +4886,7 @@ class SalesController extends BaseController
 
     private function restockDeliveredSale(string $companyId, array $sale, array $items, string $reason): void
     {
+        if ((new \App\Libraries\DeliveryNoteService())->link($companyId, $sale['id'])) return;
         $items = (new SalesIntegrityService())->remainingItems($items);
         $sourceSale = !empty($sale['source_sale_id']) ? $this->ownedSale($companyId, (string) $sale['source_sale_id']) : null;
         $sourceDocumentType = (!empty($sourceSale['document_type_id'])) ? (new SalesDocumentTypeModel())->find($sourceSale['document_type_id']) : null;
@@ -5548,6 +5577,10 @@ class SalesController extends BaseController
         $order = db_connect()->table('sales_orders')->where('id', $orderId)->where('company_id', $context['company']['id'])->get()->getRowArray();
         if (!$order) return redirect()->to(site_url('ventas'))->with('error', 'Pedido no encontrado.');
 
+        if (db_connect()->table('sales_delivery_notes')->where('company_id', $companyId)->where('sales_order_id', $orderId)->where('status !=', 'cancelled')->countAllResults()) {
+            return redirect()->to($this->salesRoute('ventas/diarios', $companyId))->with('error', 'El pedido tiene remitos vigentes. Utiliza los botones de facturación de sus remitos.');
+        }
+
         // Redirect to sale creation form with from_order param
         return redirect()->to(site_url('ventas/nueva?from_order=' . $orderId));
     }
@@ -5650,6 +5683,104 @@ class SalesController extends BaseController
         }
 
         return $this->popupOrRedirect($this->salesRoute('ventas', $companyId), 'Remito ' . $deliveryNumber . ' creado.');
+    }
+
+
+    public function invoiceDeliveryNote(string $origin, string $id)
+    {
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+        $companyId = $context['company']['id'];
+        $input = $this->request->getMethod() === 'post' ? (array) $this->request->getPost() : (array) $this->request->getGet();
+        $error = null;
+        try {
+            $service = new \App\Libraries\DeliveryNoteService();
+            $note = $service->summary($companyId, $origin, $id);
+            if ($this->request->getMethod() === 'post') {
+                $action = $input['operation'] ?? '';
+                if (!in_array($action, ['draft', 'confirm'], true)) throw new \RuntimeException('Selecciona guardar borrador o confirmar factura.');
+                $result = $service->lock($companyId, $origin, $id, function () use ($companyId, $origin, $id, $input, $action) {
+                    $result = (new \App\Libraries\DeliveryNoteInvoicingService())->save($companyId, $origin, $id, $this->currentUser()['id'], $input);
+                    if ($action === 'confirm' && !$result['already_confirmed']) {
+                        $confirmed = $this->confirmSaleTransaction($companyId, $result['invoice_id']);
+                        if ($confirmed !== true) throw new \RuntimeException($confirmed);
+                    }
+                    if (!$result['already_confirmed']) {
+                        $this->logAudit($companyId, 'sales', 'sale', $result['invoice_id'], $action === 'confirm' ? 'invoice_delivery_confirmed' : 'invoice_delivery_draft', null, ['origin' => $origin, 'delivery_id' => $id]);
+                        $this->logDocumentEvent($companyId, 'sales', 'sale', $result['invoice_id'], 'delivery_invoiced', ['origin' => $origin, 'delivery_id' => $id, 'mode' => $input['mode'], 'operation' => $action]);
+                    }
+                    return $result;
+                });
+                $message = $action === 'confirm' || $result['already_confirmed'] ? 'Factura registrada. Se actualizaron las cantidades pendientes del remito.' : 'Borrador guardado. Las cantidades del remito todavía no se consumieron.';
+                if ($action === 'confirm' && !$result['already_confirmed']) {
+                    try {
+                        $fiscal = $this->processArcaAfterConfirmation($companyId, $result['invoice_id']);
+                        if ($fiscal && empty($fiscal['cae'])) $message .= ' Revisa el estado fiscal en el comprobante.';
+                    } catch (\Throwable $e) {
+                        log_message('error', 'Facturación de remito: error fiscal posterior a confirmación: ' . $e->getMessage());
+                        $message .= ' La factura quedó confirmada; revisa su autorización fiscal antes de reintentar.';
+                    }
+                }
+                return $this->popupOrRedirect($this->salesRoute('ventas/diarios', $companyId), $message);
+            }
+        } catch (\Throwable $e) { $error = $e->getMessage(); }
+        if (!isset($note)) return redirect()->to($this->salesRoute('ventas/diarios', $companyId))->with('error', $error ?: 'Remito no disponible.');
+        // Refresh after any rolled-back POST; retain the entered quantities and operation key.
+        $note = $service->summary($companyId, $origin, $id);
+        $draft = null;
+        if (!empty($input['draft'])) {
+            $link = $service->link($companyId, (string) $input['draft']);
+            if (!$link || ($link[$origin === 'sale' ? 'source_sale_id' : 'delivery_note_id'] ?? '') !== $id) return redirect()->back()->with('error', 'Borrador ajeno al remito.');
+            $draft = $this->ownedSale($companyId, $link['invoice_id']);
+            if (($draft['status'] ?? '') !== 'draft') return redirect()->back()->with('error', 'El comprobante ya no es borrador.');
+            if ($this->request->getMethod() !== 'post') {
+                $input['request_key'] = $link['request_key']; $input['mode'] = $link['mode'];
+                $input['document_type_id'] = $draft['document_type_id']; $input['point_of_sale_id'] = $draft['point_of_sale_id'];
+                $input['price_list_id'] = $draft['price_list_id'];
+                foreach (db_connect()->table('sales_delivery_invoice_items')->where('delivery_invoice_id', $link['id'])->get()->getResultArray() as $line) $input['quantities'][$line[$origin === 'sale' ? 'source_sale_item_id' : 'delivery_note_item_id']] = $line['quantity'];
+                $first = db_connect()->table('sale_items')->where('sale_id', $draft['id'])->get()->getRowArray();
+                $input['tax_id'] = $first['tax_id'] ?? null;
+            }
+        }
+        try {
+            $note = (new \App\Libraries\DeliveryNoteInvoicingService())->prices($companyId, $note, $input['price_list_id'] ?? null, $input['tax_id'] ?? null);
+            (new \App\Libraries\DeliveryNoteInvoicingService())->assertSourceFinancials($companyId, $note);
+        } catch (\Throwable $e) { $error = $error ?: $e->getMessage(); }
+        return view('sales/forms/delivery_invoice', [
+            'pageTitle' => 'Facturar remito', 'companyId' => $companyId, 'context' => $context,
+            'note' => $note, 'input' => $input, 'error' => $error, 'draft' => $draft,
+            'mode' => in_array($input['mode'] ?? '', ['parcial', 'total'], true) ? $input['mode'] : 'parcial',
+            'documentTypes' => db_connect()->table('sales_document_types')->where('company_id', $companyId)->where('active', 1)->where('category', 'invoice')->orderBy('sort_order')->get()->getResultArray(),
+            'pointsOfSale' => $this->pointOfSaleOptions($companyId), 'priceLists' => $this->priceListOptions($companyId), 'taxes' => $this->taxOptions($companyId),
+            'formAction' => $this->salesRoute('ventas/remitos/' . $origin . '/' . $id . '/facturar', $companyId), 'isPopup' => $this->isPopupRequest(), 'popupWide' => true,
+        ]);
+    }
+
+    public function cancelDeliveryNote(string $origin, string $id)
+    {
+        $context = $this->salesContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+        $companyId = $context['company']['id']; $error = null;
+        $input = (array) $this->request->getPost();
+        try {
+            $notes = new \App\Libraries\DeliveryNoteService();
+            $note = $notes->summary($companyId, $origin, $id);
+            if ($this->request->getMethod() === 'post') {
+                $notes->lock($companyId, $origin, $id, function () use ($companyId, $origin, $id, $input) {
+                    $before = (new \App\Libraries\DeliveryNoteCancellationService())->cancel($companyId, $origin, $id, $this->currentUser()['id'], (string) ($input['cancellation_reason'] ?? ''), ($input['return_confirmed'] ?? '') === '1');
+                    if ($before['status'] !== 'cancelled') {
+                        if ($origin === 'sale') { $this->syncReceivableForSale($id); $this->syncSaleCommission($companyId, $id); }
+                        $this->logAudit($companyId, 'sales', $origin === 'sale' ? 'sale' : 'delivery_note', $id, 'cancel', $before, ['reason' => $input['cancellation_reason'], 'return_confirmed' => $input['return_confirmed'] ?? '0']);
+                        $this->logDocumentEvent($companyId, 'sales', $origin === 'sale' ? 'sale' : 'delivery_note', $id, 'cancelled', ['reason' => $input['cancellation_reason']]);
+                    }
+                });
+                return $this->popupOrRedirect($this->salesRoute('ventas/diarios', $companyId), 'Remito anulado correctamente.');
+            }
+        } catch (\Throwable $e) { $error = $e->getMessage(); }
+        if (!isset($note)) return redirect()->to($this->salesRoute('ventas/diarios', $companyId))->with('error', $error ?: 'Remito no disponible.');
+        return view('sales/forms/delivery_cancel', ['pageTitle' => 'Anular remito', 'companyId' => $companyId, 'context' => $context,
+            'note' => $notes->summary($companyId, $origin, $id), 'error' => $error, 'input' => $input, 'isPopup' => $this->isPopupRequest(), 'popupWide' => true,
+            'formAction' => $this->salesRoute('ventas/remitos/' . $origin . '/' . $id . '/anular', $companyId)]);
     }
 
     public function dispatchDeliveryNote(string $noteId)

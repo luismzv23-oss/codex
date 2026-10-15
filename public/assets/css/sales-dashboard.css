@@ -74,3 +74,6 @@
 .sales-custom-pills .nav-link.active{background:linear-gradient(110deg,#131e37 0%,#252d50 100%)!important;color:#ffffff!important;border-color:#313d66;box-shadow:0 4px 12px rgba(19,30,55,0.22)}
 .sales-custom-pills .nav-link.active .tab-badge{background:rgba(255,255,255,0.2);color:#ffffff}
 .sales-custom-pills .nav-link:focus-visible{outline:2px solid #7165ec;outline-offset:2px}
+
+.delivery-invoice-form .table-responsive{overflow-x:auto}
+.delivery-invoice-form table{min-width:800px}

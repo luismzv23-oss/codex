@@ -14,6 +14,12 @@ class AutomationService
     {
         $actions = [];
 
+        $sale = $data['sale'] ?? [];
+        if (!empty($sale['document_type_id']) && !empty($data['company_id'])) {
+            $document = db_connect()->table('sales_document_types')->where('company_id', $data['company_id'])->where('id', $sale['document_type_id'])->get()->getRowArray();
+            if ($document && DeliveryNoteService::isDelivery($document)) return [];
+        }
+
         // 1. Auto-generate accounting entry
         if (!empty($data['sale']) && !empty($data['company_id'])) {
             $mapping = self::getAccountMapping($data['company_id']);

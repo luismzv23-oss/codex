@@ -366,7 +366,7 @@
                 </div>
                 <div class="table-responsive">
                     <table data-sales-table class="table align-middle mb-0">
-                        <thead><tr><th>Nro Remito</th><th>Cliente</th><th>Depósito</th><th>Pedido Origen</th><th>Estado</th><th>Transportista / Guía</th><th>Fecha</th><th></th></tr></thead>
+                        <thead><tr><th>Nro Remito</th><th>Cliente</th><th>Depósito</th><th>Pedido Origen</th><th>Estado operativo</th><th>Facturación</th><th>Transportista / Guía</th><th>Fecha</th><th></th></tr></thead>
                         <tbody>
                             <?php foreach ($deliveryNotes ?? [] as $dn): ?>
                                 <tr>
@@ -387,9 +387,10 @@
                                             <span class="badge bg-success">Entregado</span>
                                             <?php if (!empty($dn['delivered_at'])): ?><div class="small text-secondary"><?= esc(date('d/m/Y H:i', strtotime($dn['delivered_at']))) ?></div><?php endif; ?>
                                         <?php else: ?>
-                                            <span class="badge bg-secondary"><?= esc($dn['status']) ?></span>
+                                            <span class="badge bg-secondary"><?= esc(['confirmed' => 'Confirmado', 'draft' => 'Borrador', 'cancelled' => 'Anulado'][$dn['status']] ?? $dn['status']) ?></span>
                                         <?php endif; ?>
                                     </td>
+                                    <td><span class="badge <?= ($dn['billing_status'] ?? '') === 'Facturado totalmente' ? 'bg-success' : (($dn['billing_status'] ?? '') === 'Facturado parcialmente' ? 'bg-info text-dark' : 'bg-light text-dark') ?>"><?= esc($dn['billing_status'] ?? 'Sin facturar') ?></span></td>
                                     <td>
                                         <?= esc($dn['carrier'] ?: '-') ?>
                                         <?php if (!empty($dn['tracking_number'])): ?><div class="small text-secondary">Guía: <?= esc($dn['tracking_number']) ?></div><?php endif; ?>
@@ -397,6 +398,23 @@
                                     <td><?= esc(date('d/m/Y', strtotime($dn['delivery_date']))) ?></td>
                                     <td class="text-end">
                                         <?= view('sales/document_actions', ['row'=>$dn, 'kind'=>'remito', 'companyId'=>$selectedCompanyId]) ?>
+                                        <?php if ($context['canManage']): ?>
+                                            <?php $remitoBase = site_url('ventas/remitos/' . $dn['source_type'] . '/' . $dn['id']); ?>
+                                            <?php foreach (['parcial' => 'Facturar parcialmente', 'total' => 'Facturar totalmente', 'anular' => 'Anular'] as $action => $label):
+                                                $icon = ['parcial' => 'bi-receipt-cutoff', 'total' => 'bi-receipt', 'anular' => 'bi-x-circle'][$action];
+                                                $reason = $action === 'anular' ? ($dn['cancel_reason'] ?? '') : ($dn['invoice_reason'] ?? '');
+                                                $url = $remitoBase . ($action === 'anular' ? '/anular' : '/facturar') . '?' . http_build_query(['company_id' => $selectedCompanyId, 'mode' => $action]);
+                                            ?>
+                                                <?php if ($reason): ?><span class="d-inline-block" tabindex="0" title="<?= esc($reason) ?>"><button type="button" class="btn btn-sm btn-outline-secondary icon-btn" title="<?= esc($label . ': ' . $reason) ?>" aria-label="<?= esc($label) ?>" disabled><i class="bi <?= esc($icon) ?>" aria-hidden="true"></i></button></span>
+                                                <?php else: ?><a href="<?= esc($url) ?>" class="btn btn-sm icon-btn <?= $action === 'anular' ? 'btn-outline-danger' : 'btn-outline-primary' ?>" data-popup="true" data-popup-title="<?= esc($label) ?>" title="<?= esc($label) ?>" aria-label="<?= esc($label) ?>"><i class="bi <?= esc($icon) ?>" aria-hidden="true"></i></a><?php endif; ?>
+                                            <?php endforeach; ?>
+                                            <?php if (!empty($dn['invoices']) || !empty($dn['legacy'])): ?>
+                                                <a href="<?= esc($remitoBase . '/facturar?' . http_build_query(['company_id' => $selectedCompanyId, 'mode' => 'total'])) ?>" class="btn btn-sm btn-outline-dark icon-btn" data-popup="true" data-popup-title="Facturación del remito" title="Ver facturación" aria-label="Ver facturación"><i class="bi bi-clock-history" aria-hidden="true"></i></a>
+                                            <?php endif; ?>
+                                            <?php foreach ($dn['invoices'] ?? [] as $linkedInvoice): if ($linkedInvoice['status'] !== 'draft') continue; ?>
+                                                <a href="<?= esc($remitoBase . '/facturar?' . http_build_query(['company_id' => $selectedCompanyId, 'draft' => $linkedInvoice['invoice_id']])) ?>" class="btn btn-sm btn-outline-dark icon-btn" data-popup="true" data-popup-title="Continuar factura" title="Continuar borrador <?= esc($linkedInvoice['sale_number']) ?>" aria-label="Continuar borrador <?= esc($linkedInvoice['sale_number']) ?>"><i class="bi bi-pencil-square" aria-hidden="true"></i></a>
+                                            <?php endforeach; ?>
+                                        <?php endif; ?>
                                         <?php if ($dn['status'] === 'pending' && $context['canManage']): ?>
                                             <form method="post" action="<?= site_url('ventas/remitos/' . $dn['id'] . '/despachar' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="d-inline">
                                                 <?= csrf_field() ?>
@@ -411,7 +429,7 @@
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
-                            <?php if (empty($deliveryNotes)): ?><tr><td colspan="8" class="text-secondary">No hay remitos registrados para los filtros seleccionados.</td></tr><?php endif; ?>
+                            <?php if (empty($deliveryNotes)): ?><tr><td colspan="9" class="text-secondary">No hay remitos registrados para los filtros seleccionados.</td></tr><?php endif; ?>
                         </tbody>
                     </table>
                 </div>

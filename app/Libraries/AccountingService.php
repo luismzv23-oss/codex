@@ -250,6 +250,9 @@ class AccountingService
             return ['ok' => false, 'error' => 'Sale not found or not confirmed'];
         }
 
+        $document = !empty($sale['document_type_id']) ? $db->table('sales_document_types')->where('company_id', $companyId)->where('id', $sale['document_type_id'])->get()->getRowArray() : null;
+        if ($document && DeliveryNoteService::isDelivery($document)) return ['ok' => true, 'delivery_note' => true];
+
         if (!$db->transBegin()) {
             throw new \RuntimeException('No se pudo iniciar la contabilidad de la venta.');
         }

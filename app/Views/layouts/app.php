@@ -1,6 +1,6 @@
 <?php
 $request = service('request');
-$isPopup = $request->getGet('popup') === '1';
+$isPopup = !empty($isPopup) || $request->getGet('popup') === '1' || $request->getPost('popup') === '1';
 
 // Fetch accessible systems for quick switcher
 $switcherSystems = [];
@@ -97,6 +97,10 @@ if (auth_check() && !$isPopup) {
             max-width: 760px;
             margin: 0 auto;
             padding: 18px 12px 22px;
+        }
+        .popup-shell.popup-shell-wide {
+            max-width: 1180px;
+            width: 100%;
         }
         .popup-overlay {
             position: fixed;
@@ -332,7 +336,7 @@ if (auth_check() && !$isPopup) {
         </nav>
     <?php endif; ?>
 
-    <main class="<?= $isPopup ? 'popup-shell' : 'container py-4' ?>">
+    <main class="<?= $isPopup ? 'popup-shell' . (!empty($popupWide) ? ' popup-shell-wide' : '') : 'container py-4' ?>">
         <?php if (session()->getFlashdata('message')): ?>
             <div class="alert alert-success"><?= esc(session()->getFlashdata('message')) ?></div>
         <?php endif; ?>

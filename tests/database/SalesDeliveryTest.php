@@ -13,6 +13,7 @@ final class SalesDeliveryTest extends CIUnitTestCase
         helper(['app', 'url']);
         $this->db = db_connect('tests');
         $schemas = [
+            'companies' => 'id TEXT PRIMARY KEY',
             'sales_quotes' => 'id TEXT PRIMARY KEY, company_id TEXT, status TEXT, approved_by TEXT, approved_at TEXT',
             'sales_orders' => 'id TEXT PRIMARY KEY, company_id TEXT, status TEXT, approved_by TEXT, approved_at TEXT',
             'sales_delivery_notes' => 'id TEXT PRIMARY KEY, company_id TEXT, status TEXT, warehouse_id TEXT, delivery_number TEXT, dispatched_at TEXT, delivered_at TEXT, updated_at TEXT',
@@ -28,6 +29,7 @@ final class SalesDeliveryTest extends CIUnitTestCase
             $this->db->query('CREATE TABLE ' . $this->db->prefixTable($table) . ' (' . $columns . ')');
             $this->tables[] = $table;
         }
+        $this->db->table('companies')->insert(['id' => 'a']);
         $this->db->table('sales_delivery_notes')->insert(['id' => 'note', 'company_id' => 'a', 'status' => 'pending', 'warehouse_id' => 'warehouse', 'delivery_number' => 'RM-1']);
         $this->db->table('sales_delivery_note_items')->insert(['id' => 'line', 'sales_delivery_note_id' => 'note', 'product_id' => 'product', 'quantity' => 3, 'warehouse_id' => 'warehouse']);
         $this->db->table('inventory_products')->insert(['id' => 'product', 'company_id' => 'a', 'product_type' => 'simple']);

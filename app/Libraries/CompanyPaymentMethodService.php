@@ -23,6 +23,12 @@ class CompanyPaymentMethodService
             } elseif (!$id) {
                 $data['show_on_receipt'] = 1;
             }
+            foreach (['allow_collections'=>1, 'allow_supplier_payments'=>0] as $flag=>$default) {
+                if (array_key_exists($flag,$input)) {
+                    if (!in_array($input[$flag],['0','1',0,1],true)) throw new RuntimeException('Habilitación inválida: '.$flag);
+                    $data[$flag]=(int)$input[$flag];
+                } elseif (!$id) $data[$flag]=$default;
+            }
             $percentage = $input['percentage'] ?? '0.00';
             if ((! is_string($percentage) && ! is_int($percentage) && ! is_float($percentage))
                 || ! preg_match('/^\d+(?:\.\d{1,2})?$/D', (string) $percentage)

@@ -27,7 +27,7 @@ Los remitos que tienen precios conservan sus importes originales; los descuentos
 
 ## Consistencia
 
-El formulario conserva el modo popup tanto por GET como por POST y no muestra el menú ni el asistente. El punto de venta se filtra por tipo de factura y canal; si queda uno solo compatible, se selecciona automáticamente. Los canales compartidos se admiten conservando el vínculo del comprobante. Para Factura B estándar, la configuración local usa Punto de Venta Principal; el punto de Kiosco está vinculado a Ticket Consumidor Final.
+El formulario conserva el modo popup tanto por GET como por POST y no muestra el menú ni el asistente. El selector muestra todos los puntos activos registrados en Configuración de Ventas de la empresa, con código, nombre y número fiscal cuando está cargado. Los incompatibles con el tipo de factura y canal quedan visibles y deshabilitados; si hay uno solo compatible, se selecciona automáticamente. Los canales compartidos se admiten conservando el vínculo del comprobante. Para Factura B estándar, la configuración local usa Punto de Venta Principal; el punto de Kiosco está vinculado a Ticket Consumidor Final.
 
 - Los borradores no consumen cantidades. Dos borradores pueden contener el mismo pendiente; al confirmar, únicamente se admite el saldo aún disponible.
 - La clave única de operación impide duplicar una confirmación reenviada. La empresa y el documento se bloquean durante las operaciones.

@@ -261,6 +261,7 @@ class SalesController extends BaseApiController
         }
 
         return $this->success([
+            'payment_methods' => (new \App\Libraries\SalesPaymentService())->catalog($context['company']['id']),
             'customers' => $this->customerOptions($context['company']['id']),
             'warehouses' => $this->salesWarehouses($context['company']['id']),
             'products' => $this->salesProductCatalog($context['company']['id']),
@@ -453,6 +454,7 @@ class SalesController extends BaseApiController
         $companyId = $context['company']['id'];
         try {
             $payload = $this->payload();
+            $payload['branch_id'] = $this->apiUser()['branch_id'] ?? null;
 
             $receipt = (new \App\Libraries\SalesCollectionService(null, new CashService(($this->apiUser()['role_slug'] ?? '') === 'vendedor' ? (string) ($this->apiUser()['id'] ?? '') : null)))->create($companyId, $this->apiUser()['id'], $payload,
                 fn() => $this->nextSequenceNumber($companyId, 'RECIBO', 'REC'));
@@ -1106,7 +1108,7 @@ class SalesController extends BaseApiController
             $this->request->setGlobal('post', $overridePayload);
         }
 
-        $payload = $this->salePayload($context['company']['id'], $overridePayload ?? []);
+        $payload = $this->salePayload($context['company']['id'], $overridePayload ?? [], $posMode);
         if (isset($payload['error'])) {
             return $this->fail($payload['error'], 422);
         }
@@ -1494,7 +1496,7 @@ class SalesController extends BaseApiController
         return array_map(static function (array $product) use ($stockMap): array { $product['sale_price'] = (float) ($product['sale_price'] ?? 0); $product['stocks'] = $stockMap[$product['id']] ?? []; return $product; }, $products);
     }
 
-    private function salePayload(string $companyId, array $overrides = []): array
+    private function salePayload(string $companyId, array $overrides = [], bool $strictPayments = false): array
     {
         $payload = array_replace_recursive($this->payload(), $overrides);
         $channel = (string) ($payload['pos_mode'] ?? '') === '1' ? 'kiosk' : 'standard';
@@ -1504,11 +1506,20 @@ class SalesController extends BaseApiController
         $items = $this->parseSaleItems($companyId, (array) ($payload['items'] ?? []), $priceListId);
         if ($items === []) { return ['error' => 'Debes agregar al menos un producto.']; }
         try {
-            $payments = $this->parsePayments((array) ($payload['payments'] ?? []));
+            $service = new \App\Libraries\SalesPaymentService();
+            $paymentContext = $service->context($companyId, trim((string) ($payload['currency_code'] ?? 'ARS')), $this->apiUser()['branch_id'] ?? null, $documentContext['pointOfSale']['id']);
+            $payments = $service->prepare($companyId, (array) ($payload['company_payments'] ?? $payload['kiosk_payments'] ?? $payload['payments'] ?? []), $paymentContext);
             (new \App\Libraries\PaymentIntegrityService())->validateReferences($companyId, $payments);
         } catch (\Throwable $e) { return ['error' => $e->getMessage()]; }
         $priceList = $priceListId ? (new SalesPriceListModel())->find($priceListId) : null;
         $totals = $this->calculateTotals($items, (float) ($payload['global_discount_total'] ?? 0), $payments);
+        if ($strictPayments) {
+            try { \App\Libraries\KioskPayments::assertAllocated($payments, $totals['total']); }
+            catch (\RuntimeException $e) { return ['error'=>$e->getMessage()]; }
+        }
+        $surcharge = round(array_sum(array_column($payments, 'surcharge_amount')), 2);
+        $totals['total'] = round($totals['total'] + $surcharge, 2);
+        $totals['payment_status'] = $totals['paid_total'] <= 0 ? 'pending' : ($totals['paid_total'] < $totals['total'] ? 'partial' : 'paid');
         if (round(array_sum(array_column($payments, 'amount')), 2) > $totals['total']) {
             return ['error' => 'Los importes aplicados no pueden superar el total de la venta; separa el vuelto.'];
         }
@@ -1575,6 +1586,10 @@ class SalesController extends BaseApiController
                 'tax_total' => $totals['tax_total'],
                 'total' => $totals['total'],
                 'paid_total' => $totals['paid_total'],
+                'payment_surcharge_amount' => $surcharge,
+                'payment_surcharge_rate' => count($payments) === 1 ? ($payments[0]['surcharge_rate'] ?? 0) : 0,
+                'payment_method_id' => count($payments) === 1 ? ($payments[0]['payment_method_id'] ?? null) : null,
+                'payment_method_code' => count($payments) === 1 ? ($payments[0]['payment_method_code'] ?? null) : null,
                 'margin_total' => round(array_sum(array_map(static fn(array $item): float => ((float) ($item['line_total'] ?? 0)) - (((float) ($item['unit_cost'] ?? 0)) * ((float) ($item['quantity'] ?? 0))), $items)), 2),
                 'notes' => trim((string) ($payload['notes'] ?? '')),
             ],
@@ -1799,6 +1814,7 @@ class SalesController extends BaseApiController
         if (! $sale) { return 'Venta no disponible.'; }
         $items = $this->saleItems($saleId);
         if ($items === []) { return 'La venta debe tener productos.'; }
+        (new \App\Libraries\SalesPaymentService())->validatePersisted($companyId,$sale,$this->salePayments($saleId));
         $warehouseId = $sale['warehouse_id'] ?: null;
         if (! $warehouseId) { return 'La venta debe tener deposito origen.'; }
         $documentType = ! empty($sale['document_type_id']) ? (new SalesDocumentTypeModel())->find($sale['document_type_id']) : null;
@@ -2069,7 +2085,8 @@ class SalesController extends BaseApiController
         $service = new CashService(($this->apiUser()['role_slug'] ?? '') === 'vendedor' ? (string) ($this->apiUser()['id'] ?? '') : null);
         foreach ($this->salePayments($saleId) as $payment) {
             if (! \App\Libraries\PaymentIntegrityService::settled($payment)) { continue; }
-            $service->registerMovement([
+            $service->registerMovement(\App\Libraries\TreasuryPaymentService::metadata($payment)+[
+                'currency_code'=>$sale['currency_code'], 'exchange_rate'=>$sale['exchange_rate'] ?? 1,
                 'company_id' => $companyId,
                 'cash_register_id' => $sale['cash_register_id'],
                 'cash_session_id' => $sale['cash_session_id'],

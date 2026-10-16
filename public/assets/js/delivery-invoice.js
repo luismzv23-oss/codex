@@ -18,12 +18,14 @@
             const pointChannel = option.dataset.channel || 'standard';
             const supported = ['standard', 'kiosk', 'both'].includes(channel) && ['standard', 'kiosk', 'both'].includes(pointChannel);
             const matches = Boolean(documentId && supported && (!option.dataset.document || option.dataset.document === documentId) && (pointChannel === 'both' || channel === 'both' || pointChannel === channel));
-            option.hidden = !matches; option.disabled = !matches;
+            option.hidden = false; option.disabled = !matches;
+            if (!option.dataset.label) option.dataset.label = option.textContent || option.value;
+            option.textContent = option.dataset.label + (documentId && !matches ? ' — No compatible con esta factura' : '');
             if (matches) valid.push(option);
         });
         if (!valid.some(option => option.value === pointSelect.value)) pointSelect.value = valid.length === 1 ? valid[0].value : '';
-        pointSelect.disabled = valid.length === 0;
-        if (pointHint) pointHint.textContent = !documentId ? 'Primero selecciona el tipo de factura.' : (!valid.length ? 'No hay un punto de venta activo compatible. Revisa la configuración de puntos de venta.' : '');
+        pointSelect.disabled = ![...pointSelect.options].some(option => option.value);
+        if (pointHint) pointHint.textContent = !documentId ? 'Primero selecciona el tipo de factura.' : (!valid.length ? 'No hay un punto de venta activo compatible. Revisa la configuración de puntos de venta.' : 'Puntos activos registrados en Configuración de Ventas. Los incompatibles se muestran deshabilitados.');
         actionButtons.forEach(button => {button.disabled = originalDisabled.get(button) || !pointSelect.value;});
     }
     documentSelect?.addEventListener('change', filterPoints);

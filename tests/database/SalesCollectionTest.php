@@ -38,6 +38,13 @@ final class SalesCollectionTest extends CIUnitTestCase
             $this->db->query('CREATE TABLE ' . $this->db->prefixTable($table) . ' (' . implode(',', $columns) . ')');
             $this->tables[] = $table;
         }
+        $this->db->query('CREATE TABLE ' . $this->db->prefixTable('company_payment_methods') . ' (id TEXT PRIMARY KEY, company_id TEXT, code TEXT, name TEXT, type TEXT, active INTEGER, percentage REAL, currency_ids TEXT, branch_ids TEXT, point_of_sale_ids TEXT, required_fields TEXT, requires_confirmation INTEGER, deleted_at TEXT)');
+        $this->tables[] = 'company_payment_methods';
+        $this->db->query('CREATE TABLE ' . $this->db->prefixTable('currencies') . ' (id TEXT PRIMARY KEY, company_id TEXT, code TEXT, active INTEGER)'); $this->tables[] = 'currencies';
+        $this->db->table('currencies')->insert(['id'=>'ars','company_id'=>'a','code'=>'ARS','active'=>1]);
+        foreach (['cash','card','check','transfer','qr'] as $type) $this->db->table('company_payment_methods')->insert(['id'=>$type,'company_id'=>'a','code'=>strtoupper($type),'name'=>strtoupper($type),'type'=>$type==='qr'?'wallet':$type,'active'=>1,'percentage'=>0]);
+        foreach (['payment_method_id','payment_method_code','payment_method_name','payment_method_snapshot','payment_data','base_amount','surcharge_rate','surcharge_amount','received_amount','change_amount'] as $field) $this->db->query('ALTER TABLE '.$this->db->prefixTable('sale_payments').' ADD COLUMN '.$field.' TEXT');
+        foreach (array_merge(\App\Libraries\TreasuryPaymentService::METADATA,['currency_code','exchange_rate']) as $field) $this->db->query('ALTER TABLE '.$this->db->prefixTable('cash_movements').' ADD COLUMN '.$field.' TEXT');
         require_once APPPATH . 'Database/Migrations/2026-10-10-120000_ExtendCollections.php';
         $migration = new \App\Database\Migrations\ExtendCollections(\Config\Database::forge('tests'));
         $migration->up();
@@ -68,7 +75,8 @@ final class SalesCollectionTest extends CIUnitTestCase
     }
     private function payload(array $payments = [], array $items = []): array
     {
-        return ['request_key'=>app_uuid(), 'payments'=>$payments ?: [['payment_method'=>'cash','amount'=>100]], 'items'=>$items ?: [['receivable_id'=>'one','applied_amount'=>100]]];
+        $payments = array_map(static fn($payment) => $payment + ['payment_method_id'=>$payment['payment_method'],'base_amount'=>$payment['amount']], $payments ?: [['payment_method'=>'cash','amount'=>100]]);
+        return ['request_key'=>app_uuid(), 'payments'=>$payments, 'items'=>$items ?: [['receivable_id'=>'one','applied_amount'=>100]]];
     }
     public function testMixedReceiptAndReversalPreservePaymentsAndReverseLedger(): void
     {
@@ -178,7 +186,7 @@ final class SalesCollectionTest extends CIUnitTestCase
             ['request_key'=>app_uuid(),'receipt_kind'=>'advance','customer_id'=>'foreign','payments'=>[['payment_method'=>'cash','amount'=>10]]],
             array_merge($this->payload(),['currency_code'=>'USD']),
             $this->payload([['payment_method'=>'cash','amount'=>'-10']]),
-            $this->payload([['payment_method'=>'transfer','amount'=>100]]),
+            ['request_key'=>app_uuid(),'payments'=>[['payment_method'=>'transfer','amount'=>100]],'items'=>[['receivable_id'=>'one','applied_amount'=>100]]],
         ] as $invalid) {
             try {$this->service()->create('a','user',$invalid,fn()=>'BAD');$this->fail('Must reject');} catch(RuntimeException $e) {$this->assertNotEmpty($e->getMessage());}
         }
@@ -210,7 +218,7 @@ final class SalesCollectionTest extends CIUnitTestCase
     }
     public function testGroupedPartialCollectionKeepsCorrectBalances(): void
     {
-        $payload=['request_key'=>app_uuid(),'receipt_kind'=>'advance','customer_id'=>'customer','payments'=>[['payment_method'=>'cash','amount'=>100]]];
+        $payload=['request_key'=>app_uuid(),'receipt_kind'=>'advance','customer_id'=>'customer','payments'=>[['payment_method_id'=>'cash','base_amount'=>100]]];
         $receipt=$this->service()->create('a','user',$payload,fn()=>'ADV-1');
         $retry=$this->service()->create('a','user',$payload,fn()=>'MUST-NOT-BE-USED');
         $this->assertSame($receipt['id'],$retry['id']);
@@ -338,4 +346,28 @@ final class SalesCollectionTest extends CIUnitTestCase
         $this->assertSame('applied',$this->db->table('sales_receipts')->where('id',$r['id'])->get()->getRowArray()['status']);
         $this->assertSame(1,$this->db->table('sale_payments')->where('status','confirmed')->countAllResults());
     }
+    public function testConfiguredCardRequiringConfirmationDoesNotCollectUntilVerified(): void
+    {
+        $this->db->table('company_payment_methods')->where('id','card')->update(['requires_confirmation'=>1,'name'=>'Tarjeta Naranja','percentage'=>7]);
+        $receipt=$this->service()->create('a','user',$this->payload([['payment_method'=>'card','amount'=>100]]),fn()=>'REC-CARD');
+        $this->assertSame('pending',$receipt['status']);$this->assertEquals(100,$receipt['total_amount']);
+        $this->assertSame(0,$this->db->table('cash_movements')->countAllResults());$this->assertSame(0,$this->db->table('sale_payments')->countAllResults());
+        $line=json_decode($receipt['payment_details'],true)[0];$this->assertSame('Tarjeta Naranja',$line['payment_method_name']);
+        $this->db->table('company_payment_methods')->where('id','card')->update(['name'=>'Otro nombre','percentage'=>20]);
+        $this->service()->confirm('a',$receipt['id'],'verifier','Verificado con comprobante',$line['id']);
+        $this->service()->confirm('a',$receipt['id'],'verifier','Reintento',$line['id']);
+        $this->assertSame(1,$this->db->table('cash_movements')->countAllResults());
+        $paid=$this->db->table('sale_payments')->get()->getRowArray();$this->assertEquals(100,$paid['amount']);$this->assertSame('Tarjeta Naranja',$paid['payment_method_name']);
+        $this->assertEquals(0,$this->db->table('sales_receivables')->where('id','one')->get()->getRowArray()['balance_amount']);
+    }
+    public function testConfiguredAdvanceRetainsItsMethodAndNeverCreatesASale(): void
+    {
+        $payload=['request_key'=>app_uuid(),'receipt_kind'=>'advance','customer_id'=>'customer','payments'=>[['payment_method_id'=>'card','base_amount'=>50]]];
+        $receipt=$this->service()->create('a','user',$payload,fn()=>'ADV-CARD');
+        $this->assertEquals(50,$this->service()->availableAdvance($receipt));
+        $this->assertSame(2,$this->db->table('sales')->countAllResults());$this->assertSame(0,$this->db->table('sale_payments')->countAllResults());
+        $this->assertSame('card',json_decode($receipt['payment_details'],true)[0]['payment_method_id']);
+        $this->assertSame(1,$this->db->table('cash_movements')->countAllResults());
+    }
+
 }

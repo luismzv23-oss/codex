@@ -111,41 +111,29 @@ class CashController extends BaseApiController
 
     public function storeMovement()
     {
-        $context = $this->cashContext('manage');
-        if (isset($context['error'])) {
-            return $this->fail($context['error'], $context['status']);
-        }
+        $context=$this->cashContext('manage');
+        if (isset($context['error'])) return $this->fail($context['error'],$context['status']);
+        try {
+            $id=(new \App\Libraries\TreasuryPaymentService())->manual($this->cashService(),$context['company']['id'],$this->payload(),$this->apiUser()['id']);
+            return $this->success(['movement_id'=>$id],201);
+        } catch (\Throwable $e) { return $this->fail($e->getMessage(),422); }
+    }
 
-        $payload = (array) ($this->request->getJSON(true) ?: $this->request->getPost());
-        $sessionId = trim((string) ($payload['cash_session_id'] ?? ''));
-        $userId = null;
-        $session = $this->cashService()->ownedSession($context['company']['id'], $sessionId, $userId);
-        if (! $session) {
-            return $this->fail('Debes seleccionar una sesion abierta valida o que te pertenezca.', 422);
-        }
+    public function confirmMovement(string $id)
+    {
+        $context=$this->cashContext('manage');
+        if (isset($context['error'])) return $this->fail($context['error'],$context['status']);
+        try {
+            (new \App\Libraries\TreasuryPaymentService())->confirmManual($this->cashService(),$context['company']['id'],$id,$this->apiUser()['id'],(string)($this->payload()['evidence'] ?? ''));
+            return $this->success(['movement_id'=>$id,'status'=>'posted']);
+        } catch (\Throwable $e) { return $this->fail($e->getMessage(),422); }
+    }
 
-        $movementType = trim((string) ($payload['movement_type'] ?? 'manual_income')) ?: 'manual_income';
-        $amount = (float) ($payload['amount'] ?? 0);
-        if ($amount <= 0) {
-            return $this->fail('El monto debe ser mayor a cero.', 422);
-        }
-
-        $signedAmount = in_array($movementType, ['manual_expense', 'withdrawal'], true) ? -1 * $amount : $amount;
-        $movementId = $this->cashService()->registerMovement([
-            'company_id' => $context['company']['id'],
-            'cash_register_id' => $session['cash_register_id'],
-            'cash_session_id' => $session['id'],
-            'movement_type' => $movementType,
-            'payment_method' => trim((string) ($payload['payment_method'] ?? '')) ?: null,
-            'amount' => $signedAmount,
-            'reference_type' => 'cash_manual',
-            'reference_number' => trim((string) ($payload['reference_number'] ?? '')),
-            'occurred_at' => trim((string) ($payload['occurred_at'] ?? '')) ?: date('Y-m-d H:i:s'),
-            'notes' => trim((string) ($payload['notes'] ?? '')),
-            'created_by' => $this->apiUser()['id'],
-        ]);
-
-        return $movementId ? $this->success(['movement_id' => $movementId], 201) : $this->fail('No se pudo registrar el movimiento.', 500);
+    public function paymentMethods()
+    {
+        $context=$this->cashContext('view');
+        if (isset($context['error'])) return $this->fail($context['error'],$context['status']);
+        return $this->success((new \App\Libraries\SalesPaymentService())->catalog($context['company']['id']));
     }
 
     public function gateways()
@@ -213,31 +201,21 @@ class CashController extends BaseApiController
 
     public function storeReconciliation()
     {
-        $context = $this->cashContext('manage');
-        if (isset($context['error'])) {
-            return $this->fail($context['error'], $context['status']);
-        }
+        $context=$this->cashContext('manage');
+        if (isset($context['error'])) return $this->fail($context['error'],$context['status']);
+        try {
+            $id=$this->cashService()->createReconciliation(array_merge($this->payload(),['company_id'=>$context['company']['id'],'created_by'=>$this->apiUser()['id']]));
+            return $this->success(['reconciliation_id'=>$id],201);
+        } catch (\Throwable $e) { return $this->fail($e->getMessage(),422); }
+    }
 
-        $payload = $this->payload();
-        $sessionId = trim((string) ($payload['cash_session_id'] ?? ''));
-        $paymentMethod = trim((string) ($payload['payment_method'] ?? ''));
-        if ($sessionId === '' || $paymentMethod === '') {
-            return $this->fail('Debes seleccionar una sesion y un medio.', 422);
-        }
-
-        $ownedSession = $this->cashService()->ownedSession($context['company']['id'], $sessionId);
-        if (!$ownedSession || $ownedSession['status'] !== 'open') return $this->fail('Debes seleccionar una sesion abierta propia.', 403);
-        $id = $this->cashService()->createReconciliation([
-            'company_id' => $context['company']['id'],
-            'cash_session_id' => $sessionId,
-            'payment_method' => $paymentMethod,
-            'expected_amount' => (float) ($payload['expected_amount'] ?? 0),
-            'actual_amount' => (float) ($payload['actual_amount'] ?? 0),
-            'notes' => trim((string) ($payload['notes'] ?? '')),
-            'created_by' => $this->apiUser()['id'] ?? null,
-        ]);
-
-        return $id ? $this->success(['reconciliation_id' => $id], 201) : $this->fail('No se pudo registrar la conciliacion.', 500);
+    public function reconciliationPreview()
+    {
+        $context=$this->cashContext('manage');
+        if (isset($context['error'])) return $this->fail($context['error'],$context['status']);
+        try {
+            return $this->success($this->cashService()->reconciliationBalances($context['company']['id'],(string)$this->request->getGet('cash_session_id')));
+        } catch (\Throwable $e) { return $this->fail($e->getMessage(),422); }
     }
 
     private function cashContext(string $requiredAccess = 'view'): array

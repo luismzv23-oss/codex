@@ -38,7 +38,7 @@
                 <div class="border rounded-4 p-3 bg-light-subtle">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h3 class="h6 mb-0">Items a entregar</h3>
-                        <button type="button" class="btn btn-dark btn-sm" onclick="addDnLine()"><i class="bi bi-plus-lg"></i> Agregar</button>
+                        <button type="button" class="btn btn-dark btn-sm" onclick="addDnLine()"><i class="bi bi-plus-lg"></i> </button>
                     </div>
                     <table class="table table-sm align-middle mb-0">
                         <thead><tr><th>Producto</th><th>Cantidad pedida</th><th>Cantidad a entregar</th><th>Lote</th><th>Serie</th><th></th></tr></thead>
@@ -47,7 +47,7 @@
                 </div>
             </div>
             <div class="col-12"><label class="form-label">Observaciones</label><textarea name="notes" class="form-control" rows="2"></textarea></div>
-            <div class="col-12 text-end"><button class="btn btn-dark"><i class="bi bi-save"></i> Guardar Remito</button></div>
+            <div class="col-12 text-end"><button class="btn btn-dark"><i class="bi bi-save"></i></button></div>
         </form>
     </div>
 </div>

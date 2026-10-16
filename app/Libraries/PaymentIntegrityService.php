@@ -56,6 +56,11 @@ class PaymentIntegrityService
         }
     }
 
+    public static function label(array $payment): string
+    {
+        return (string) (($payment['payment_method_name'] ?? '') ?: (($payment['payment_method_code'] ?? '') ?: (['cash'=>'Efectivo','card'=>'Tarjeta','transfer'=>'Transferencia','check'=>'Cheque','qr'=>'Billetera'][$payment['payment_method'] ?? ''] ?? ($payment['payment_method'] ?? 'Sin medio'))));
+    }
+
     public static function settled(array $payment): bool
     {
         return in_array($payment['status'] ?? 'registered', ['registered', 'confirmed'], true);

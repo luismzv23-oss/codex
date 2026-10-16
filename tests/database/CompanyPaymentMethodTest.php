@@ -14,7 +14,7 @@ final class CompanyPaymentMethodTest extends CIUnitTestCase
         helper('app');
         $db = db_connect('tests');
         foreach (['companies' => 'id', 'currencies' => 'id,company_id', 'branches' => 'id,company_id', 'sales_points_of_sale' => 'id,company_id',
-            'company_payment_methods' => 'id,company_id,code,name,type,active,currency_ids,funds_destination,required_fields,allows_installments,requires_confirmation,branch_ids,point_of_sale_ids,percentage,show_on_receipt,created_at,updated_at,deleted_at'] as $table => $fields) {
+            'company_payment_methods' => 'id,company_id,code,name,type,active,currency_ids,funds_destination,required_fields,allows_installments,requires_confirmation,branch_ids,point_of_sale_ids,percentage,show_on_receipt,allow_collections,allow_supplier_payments,created_at,updated_at,deleted_at'] as $table => $fields) {
             $columns = array_map(static fn($field) => '"' . $field . '" TEXT' . ($field === 'id' ? ' PRIMARY KEY' : ''), explode(',', $fields));
             $db->query('CREATE TABLE ' . $db->prefixTable($table) . ' (' . implode(',', $columns) . ')');
             $this->tables[] = $table;
@@ -38,6 +38,15 @@ final class CompanyPaymentMethodTest extends CIUnitTestCase
         return ['code' => 'transfer', 'name' => 'Transferencia', 'type' => 'transfer', 'active' => '1',
             'funds_destination' => 'bank', 'currency_ids' => ['a'], 'branch_ids' => ['a'], 'point_of_sale_ids' => ['a'],
             'required_fields' => ['referencia', 'entidad'], 'allows_installments' => '0', 'requires_confirmation' => '1'];
+    }
+
+    public function testOperationPermissionsDefaultToCollectionsOnlyAndAreExplicitlyEditable(): void
+    {
+        $service=new CompanyPaymentMethodService();
+        $row=$service->save('a',$this->input());
+        $this->assertEquals(1,$row['allow_collections']);$this->assertEquals(0,$row['allow_supplier_payments']);
+        $row=$service->save('a',$this->input()+['allow_collections'=>'0','allow_supplier_payments'=>'1'],$row['id']);
+        $this->assertEquals(0,$row['allow_collections']);$this->assertEquals(1,$row['allow_supplier_payments']);
     }
 
     public function testReceiptVisibilityDefaultsAndPersists(): void

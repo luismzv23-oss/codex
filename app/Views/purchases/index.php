@@ -233,5 +233,6 @@
     </div>
 </div>
 
+<?= view('purchases/payment_history',get_defined_vars()) ?>
 <?= view('purchases/end') ?>
 <?= $this->endSection() ?>

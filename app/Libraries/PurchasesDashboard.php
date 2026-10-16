@@ -27,6 +27,15 @@ final class PurchasesDashboard
                 return $day >= $filters['from'] && $day <= $filters['to'];
             }));
         }
+        if (isset($data['supplierPayments'])) {
+            $data['supplierPayments']=array_values(array_filter($data['supplierPayments'],static function($row) use($filters) {
+                if ($filters['supplier_id']!=='' && $row['supplier_id']!==$filters['supplier_id']) return false;
+                // Pending instructions stay visible even if their creation date is outside the report period.
+                if (($row['status'] ?? '')==='pending') return true;
+                $day=substr((string)($row['paid_at'] ?? ''),0,10);
+                return $day >= $filters['from'] && $day <= $filters['to'];
+            }));
+        }
         $count = static fn($rows,$status) => count(array_filter($rows,static fn($row)=>in_array($row['status'] ?? '',$status,true)));
         $pending = array_filter($data['payables'],static fn($row)=>in_array($row['status'] ?? '',['pending','partial'],true) && (float)$row['balance_amount'] > 0);
         $balances = [];

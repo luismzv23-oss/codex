@@ -357,7 +357,7 @@
                                     <strong><?= esc($row['register_name']) ?></strong>
                                     <small class="text-muted text-nowrap"><?= esc(! empty($row['opened_at']) ? date('d/m/Y H:i', strtotime($row['opened_at'])) : '-') ?></small>
                                 </td>
-                                <td><span class="insight-tag"><?= esc($row['payment_method']) ?></span></td>
+                                <td><span class="insight-tag"><?= esc(\App\Libraries\PaymentIntegrityService::label($row).' · '.($row['currency_code'] ?? '')) ?></span></td>
                                 <td class="text-nowrap">$<?= number_format((float) ($row['expected_amount'] ?? 0), 2, ',', '.') ?></td>
                                 <td class="text-nowrap">$<?= number_format((float) ($row['actual_amount'] ?? 0), 2, ',', '.') ?></td>
                                 <td class="text-end text-nowrap <?= (float) ($row['difference_amount'] ?? 0) === 0.0 ? 'text-muted' : ((float) ($row['difference_amount'] ?? 0) > 0 ? 'text-success font-monospace' : 'text-danger font-monospace') ?>">
@@ -438,7 +438,13 @@
                                 <td><code><?= esc($movement['reference_number'] ?: '-') ?></code></td>
                                 <td>
                                     <span class="insight-tag">
-                                        <?= esc($movement['gateway_name'] ?: ($movement['check_number'] ? 'Cheque ' . $movement['check_number'] : ($movement['payment_method'] ?: '-'))) ?>
+                                        <?= esc(\App\Libraries\PaymentIntegrityService::label($movement).' · '.($movement['currency_code'] ?? '')) ?>
+                                        <?php if (($movement['status'] ?? 'posted')==='pending'): ?>
+                                            <span class="badge bg-warning text-dark">Pendiente</span>
+                                            <?php if (($movement['reference_type'] ?? '')==='cash_manual' && !empty($context['canManage'])): ?>
+                                            <a class="btn btn-outline-dark icon-btn" href="<?= site_url('caja/movimientos/'.$movement['id'].'/confirmar?company_id='.$selectedCompanyId.'&popup=1') ?>" data-popup="true" data-popup-title="Confirmar movimiento" title="Confirmar movimiento" aria-label="Confirmar movimiento"><i class="bi bi-check2-square"></i></a>
+                                            <?php endif; ?>
+                                        <?php endif; ?>
                                     </span>
                                 </td>
                                 <td class="text-end">

@@ -174,11 +174,10 @@
             </tr>
         </thead>
         <tbody>
-            <?php $totalMovements = 0; ?>
+            <?php $totalMovements=(float)$session['expected_closing_amount']-(float)$session['opening_amount']; ?>
             <?php foreach ($paymentMethods as $pm): ?>
-                <?php $totalMovements += (float)$pm['total']; ?>
                 <?php
-                $methodName = $pm['payment_method'] ?: 'Otros';
+                $methodName = \App\Libraries\PaymentIntegrityService::label($pm).' · '.($pm['currency_code'] ?? '');
                 if (strtolower($methodName) === 'cash') {
                     $displayName = 'Efectivo';
                 } elseif (strtolower($methodName) === 'card') {
@@ -193,7 +192,7 @@
                 </tr>
             <?php endforeach; ?>
             <tr style="font-weight: bold; background-color: #f2f2f2;">
-                <td>Total Recaudado en Turno</td>
+                <td>Movimiento neto en moneda base</td>
                 <td class="text-right">$<?= number_format($totalMovements, 2, ',', '.') ?></td>
             </tr>
         </tbody>

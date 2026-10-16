@@ -102,7 +102,9 @@ class SalesCollectionService
             if ($kind === 'advance' && array_filter((array) ($payload['items'] ?? []), static fn($item) => (float) ($item['applied_amount'] ?? 0) != 0)) throw new RuntimeException('El anticipo se aplica a facturas despues de registrarlo.');
             $total = round(array_sum(array_column($rows, 'applied_amount')), 2);
             $validator = new PaymentIntegrityService();
-            $payments = $validator->parse((array) ($payload['payments'] ?? [array_merge($payload, ['amount' => $total])]));
+            $paymentService = new SalesPaymentService();
+            $paymentContext = $paymentService->context($companyId, $currency, $payload['branch_id'] ?? null, $payload['point_of_sale_id'] ?? null);
+            $payments = $paymentService->prepare($companyId, (array) ($payload['payments'] ?? []), $paymentContext, null, true);
             $validator->validateReferences($companyId, $payments);
             if (!$payments) throw new RuntimeException('Indica un importe de cobro.');
             if ($kind === 'advance') $total = round(array_sum(array_column($payments, 'amount')), 2);
@@ -131,7 +133,7 @@ class SalesCollectionService
 
     public function confirm(string $companyId, string $id, string $userId, string $note, ?string $paymentId = null): bool
     {
-        if (trim($note) === '') { throw new RuntimeException('Indica la evidencia de verificación de la transferencia.'); }
+        if (trim($note) === '') { throw new RuntimeException('Indica la evidencia de verificación del pago.'); }
         return $this->transaction($companyId, function () use ($companyId, $id, $userId, $note, $paymentId) { return $this->apply($companyId, $id, $userId, $note, true, $paymentId); });
     }
 
@@ -153,7 +155,11 @@ class SalesCollectionService
 
     private function movement(array $session, array $payment, string $type, string $referenceId, string $userId, float $sign = 1): void
     {
-        $result = $this->cash->registerMovement(['company_id' => $session['company_id'], 'cash_session_id' => $session['id'], 'cash_register_id' => $session['cash_register_id'],
+        $extra=TreasuryPaymentService::metadata($payment);
+        $extra['currency_code']=$payment['currency_code'] ?? (db_connect()->table('companies')->where('id',$session['company_id'])->get()->getRowArray()['currency_code'] ?? 'ARS');
+        $extra['exchange_rate']=$payment['exchange_rate'] ?? 1;
+        foreach (['currency_code','exchange_rate'] as $field) if (isset($payment[$field])) $extra[$field]=$payment[$field];
+        $result = $this->cash->registerMovement($extra+['company_id' => $session['company_id'], 'cash_session_id' => $session['id'], 'cash_register_id' => $session['cash_register_id'],
             'movement_type' => $sign > 0 ? 'customer_receipt' : ($type === 'advance_refund' ? 'customer_refund' : 'receipt_reversal'), 'payment_method' => $payment['payment_method'],
             'gateway_id' => $payment['gateway_id'] ?? null, 'cash_check_id' => $payment['cash_check_id'] ?? null,
             'external_reference' => isset($payment['external_reference']) ? mb_substr($payment['external_reference'], 0, 120) : null, 'amount' => $sign * (float) $payment['amount'],
@@ -276,6 +282,7 @@ class SalesCollectionService
     private function insertAppliedPayment(array $receipt, array $row, string $method, float $amount, array $metadata = []): void
     {
         unset($metadata['id']);
+        if (isset($metadata['base_amount'])) { $metadata['base_amount'] = $amount; $metadata['received_amount'] = $amount; $metadata['surcharge_amount'] = 0; $metadata['change_amount'] = 0; }
         $data = array_merge($metadata, [
             'sale_id' => $row['sale_id'], 'sales_receipt_id' => $receipt['id'], 'payment_method' => $method,
             'amount' => $amount, 'status' => 'confirmed', 'reference' => $receipt['receipt_number'], 'paid_at' => date('Y-m-d H:i:s'),
@@ -483,7 +490,7 @@ class SalesCollectionService
 
     public function confirmSalePayment(string $companyId, string $saleId, string $paymentId, string $userId, string $evidence): void
     {
-        if (trim($evidence) === '') { throw new RuntimeException('Indica la evidencia de la transferencia.'); }
+        if (trim($evidence) === '') { throw new RuntimeException('Indica la evidencia de verificación del pago.'); }
         $this->transaction($companyId, function () use ($companyId, $saleId, $paymentId, $userId, $evidence) {
             $sale = $this->lock('sales', $saleId, $companyId);
             if (! in_array($sale['status'], ['confirmed', 'returned_partial'], true)) { throw new RuntimeException('Confirma primero la venta.'); }
@@ -492,7 +499,7 @@ class SalesCollectionService
             $payment = db_connect()->table('sale_payments')->where('id', $paymentId)->where('sale_id', $saleId)->get()->getRowArray();
             if (! $payment || ! empty($payment['sales_receipt_id'])) { throw new RuntimeException('Pago no disponible.'); }
             if ($payment['status'] === 'confirmed') { return; }
-            if ($payment['status'] !== 'pending' || $payment['payment_method'] !== 'transfer') { throw new RuntimeException('El pago no está pendiente.'); }
+            if ($payment['status'] !== 'pending') { throw new RuntimeException('El pago no está pendiente.'); }
             $paid = PaymentIntegrityService::paid((new SalePaymentModel())->where('sale_id', $saleId)->findAll());
             $items = db_connect()->table('sale_items')->where('sale_id', $saleId)->get()->getResultArray();
             $net = (new SalesIntegrityService())->netReceivableTotal($sale, $items);

@@ -10,6 +10,11 @@ final class CashOwnershipTest extends CIUnitTestCase
     {
         parent::setUp(); helper('app');
         $schemas = [
+            'users'=>'id TEXT PRIMARY KEY, name TEXT',
+            'companies'=>'id TEXT PRIMARY KEY, currency_code TEXT',
+            'sales'=>'id TEXT PRIMARY KEY, company_id TEXT, customer_id TEXT, created_by TEXT',
+            'sale_payments'=>'id TEXT PRIMARY KEY, sale_id TEXT',
+            'customers'=>'id TEXT PRIMARY KEY, name TEXT',
             'cash_registers'=>'id TEXT PRIMARY KEY, company_id TEXT, name TEXT, code TEXT, register_type TEXT, active INTEGER',
             'cash_sessions'=>'id TEXT PRIMARY KEY, company_id TEXT, cash_register_id TEXT, status TEXT, opened_by TEXT, opened_at TEXT, opening_amount REAL, expected_closing_amount REAL, actual_closing_amount REAL, difference_amount REAL, closed_by TEXT, closed_at TEXT, notes TEXT, created_at TEXT, updated_at TEXT',
             'cash_movements'=>'id TEXT PRIMARY KEY, company_id TEXT, cash_register_id TEXT, cash_session_id TEXT, gateway_id TEXT, cash_check_id TEXT, occurred_at TEXT, amount REAL, payment_method TEXT, reconciliation_status TEXT, movement_type TEXT, reference_type TEXT, reference_id TEXT, created_by TEXT, notes TEXT, created_at TEXT, updated_at TEXT',
@@ -21,6 +26,7 @@ final class CashOwnershipTest extends CIUnitTestCase
         ];
         $db=db_connect();
         foreach($schemas as $table=>$schema){$db->query('CREATE TABLE '.$db->prefixTable($table).' ('.$schema.')');$this->tables[]=$table;}
+        $db->table('companies')->insert(['id'=>'demo','currency_code'=>'ARS']);
         foreach(['r1','r2','free'] as $id) $db->table('cash_registers')->insert(['id'=>$id,'company_id'=>'demo','name'=>$id,'code'=>$id,'register_type'=>'general','active'=>1]);
         foreach([['mine','r1','seller','open'],['old-other','r1','other','closed'],['other','r2','other','open']] as [$id,$register,$owner,$status]) {
             $db->table('cash_sessions')->insert(['id'=>$id,'company_id'=>'demo','cash_register_id'=>$register,'opened_by'=>$owner,'status'=>$status,'opened_at'=>$id==='old-other'?'2026-09-30':'2026-10-04','opening_amount'=>0]);

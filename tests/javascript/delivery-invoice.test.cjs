@@ -25,7 +25,8 @@ function formHarness(selectedDocument = 'invoice', selectedPoint = 'kiosk', bloc
 test('Factura B replaces an incompatible kiosk point with the principal point', () => {
     const ui = formHarness();
     assert.equal(ui.point.value, 'principal');
-    assert.equal(ui.options[2].hidden, true);
+    assert.equal(ui.options[2].hidden, false);
+    assert.match(ui.options[2].textContent, /No compatible/);
     assert.equal(ui.options[2].disabled, true);
     assert.equal(ui.buttons[0].disabled, false);
 });
@@ -37,7 +38,8 @@ test('Changing the invoice refreshes available points and selection', () => {
 });
 test('No compatible point blocks saving with a recoverable explanation', () => {
     const ui = formHarness(); ui.changeDocument('missing');
-    assert.equal(ui.point.value, ''); assert.equal(ui.point.disabled, true);
+    assert.equal(ui.point.value, ''); assert.equal(ui.point.disabled, false);
+    assert.equal(ui.options.filter(option => option.value && !option.hidden).length, 2);
     assert.equal(ui.buttons[1].disabled, true);
     assert.match(ui.hint.textContent, /No hay un punto de venta activo compatible/);
     ui.changeDocument('invoice');

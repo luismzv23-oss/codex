@@ -1,5 +1,6 @@
 <?= $this->extend('layouts/app') ?>
 <?= $this->section('content') ?>
+<link rel="stylesheet" href="<?= base_url('assets/css/company-payments.css') ?>">
 <?php $salesLive = false; ?>
 <?= view('sales/ui_start', get_defined_vars()) ?>
 <?php
@@ -144,9 +145,9 @@ $productCatalog = array_values(array_map(static function (array $product): array
                             </div>
 
                             <div class="mt-3">
-                                <h3 class="h6 mb-2">Medios de pago</h3>
+                                <h3 class="h5 mb-3">Medios de pago</h3>
                                 <div id="kiosk-payment-balance" class="border rounded-3 bg-light p-3 mb-3" role="status" aria-live="polite"></div>
-                                <div id="kiosk-payments" class="overflow-auto"></div>
+                                <div id="kiosk-payments" class="company-payments"></div>
                                 <p class="small text-secondary mb-2">Elige un medio e indica cuánto cubre. Si queda saldo, pulsa + para completar el resto con otro medio.</p>
                             </div>
 
@@ -957,13 +958,15 @@ $productCatalog = array_values(array_map(static function (array $product): array
             showToast('Ticket cancelado', 'slash-circle');
         });
 
+        document.getElementById('kiosk-currency')?.addEventListener('change',()=>paymentRows?.refresh());
+
         // ── Customer Search Logic ────────────────────────────
         const resolveCustomerSearchModal = () => {
             if (!window.bootstrap || !window.bootstrap.Modal) return null;
             return window.bootstrap.Modal.getOrCreateInstance(customerSearchModalEl);
         };
 
-        paymentRows = window.createKioskPayments(document.getElementById('kiosk-payments'), <?= json_encode($paymentMethods, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, surchargeBase, updatePaymentSummary);
+        paymentRows = window.createKioskPayments(document.getElementById('kiosk-payments'), <?= json_encode($paymentMethods, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, surchargeBase, updatePaymentSummary, {compact:true, gateways:<?= json_encode($paymentGateways ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, checks:<?= json_encode($paymentChecks ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, context:()=>({currency_code:document.querySelector('[name="currency_code"]')?.value || <?= json_encode($currencyCode ?? 'ARS') ?>, branch_id:<?= json_encode($paymentBranchId ?? null) ?>, point_of_sale_id:document.querySelector('[name="point_of_sale_id"]')?.value || <?= json_encode($paymentPointId ?? null) ?>})});
 
         const matchingCustomers = (term) => {
             const normalized = term.trim().toLowerCase();

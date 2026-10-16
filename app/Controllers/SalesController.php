@@ -149,7 +149,10 @@ class SalesController extends BaseController
         return view('sales/forms/sale', [
             'pageTitle' => 'POS Ventas',
             'useConfiguredPayments' => true,
-            'paymentMethods' => (new \App\Models\CompanyPaymentMethodModel())->where('company_id', $companyId)->where('active', 1)->orderBy('name', 'ASC')->findAll(),
+            'paymentBranchId' => $this->currentUser()['branch_id'] ?? null,
+            'paymentMethods' => (new \App\Libraries\SalesPaymentService())->catalog($companyId),
+            'paymentGateways' => (new CashPaymentGatewayModel())->where('company_id', $companyId)->where('active', 1)->orderBy('name')->findAll(),
+            'paymentChecks' => (new CashCheckModel())->where('company_id', $companyId)->whereIn('status', ['portfolio', 'received', 'cartera'])->orderBy('check_number')->findAll(),
             'paymentDiscounts' => (new SalesDiscountPolicyModel())->where('company_id', $companyId)->where('policy_type', 'payment_method_discount')->where('active', 1)->orderBy('discount_rate', 'DESC')->findAll(),
             'context' => $context,
             'sale' => null,
@@ -383,6 +386,9 @@ class SalesController extends BaseController
         }
 
         return view('sales/forms/receipt', [
+            'paymentMethods' => (new \App\Libraries\SalesPaymentService())->catalog($context['company']['id']),
+            'pointsOfSale' => $this->pointOfSaleOptions($context['company']['id']),
+            'paymentBranchId' => $this->currentUser()['branch_id'] ?? null,
             'pageTitle' => 'Nuevo recibo',
             'customers' => $this->customerOptions($context['company']['id']),
             'companyId' => $context['company']['id'],
@@ -489,7 +495,7 @@ class SalesController extends BaseController
         try {
             $payload = (array) $this->request->getPost();
             (new \App\Libraries\SalesCollectionService(null, new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null)))->confirmSalePayment($context['company']['id'], $saleId, $paymentId, $this->currentUser()['id'], trim((string) ($payload['confirmation_note'] ?? '')));
-            return redirect()->to($this->salesRoute('ventas/cobranzas', $context['company']['id']))->with('message', 'Transferencia verificada.');
+            return redirect()->to($this->salesRoute('ventas/cobranzas', $context['company']['id']))->with('message', 'Pago verificado.');
         } catch (\Throwable $e) { return redirect()->back()->withInput()->with('error', $e->getMessage()); }
     }
 
@@ -500,6 +506,7 @@ class SalesController extends BaseController
         $companyId = $context['company']['id'];
         try {
             $payload = (array) $this->request->getPost();
+            $payload['branch_id'] = $this->currentUser()['branch_id'] ?? null;
             $payload['items'] = [];
             foreach ((array) ($payload['items_receivable_id'] ?? []) as $i => $id) {
                 $payload['items'][] = ['receivable_id' => $id, 'applied_amount' => $payload['items_applied_amount'][$i] ?? 0];
@@ -507,7 +514,7 @@ class SalesController extends BaseController
             $receipt = (new \App\Libraries\SalesCollectionService(null, new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null)))->create($companyId, $this->currentUser()['id'], $payload,
                 fn() => $this->nextSequenceNumber($companyId, 'RECIBO', 'REC'));
             if (empty($receipt['_replayed']) && (float) $receipt['received_amount'] > 0) { \App\Libraries\EventBus::emit('sale.payment_received', ['company_id' => $companyId, 'payment' => ['amount' => $receipt['received_amount']], 'receipt_id' => $receipt['id']]); }
-            return $this->popupOrRedirect($this->salesRoute('ventas/cobranzas', $companyId), in_array($receipt['status'], ['pending', 'partial'], true) ? 'Medios recibidos aplicados. Quedan transferencias pendientes de verificar.' : 'Cobro registrado correctamente.');
+            return $this->popupOrRedirect($this->salesRoute('ventas/cobranzas', $companyId), in_array($receipt['status'], ['pending', 'partial'], true) ? 'Medios recibidos aplicados. Quedan medios pendientes de verificar.' : 'Cobro registrado correctamente.');
         } catch (\Throwable $e) { return redirect()->back()->withInput()->with('error', $e->getMessage()); }
     }
 
@@ -1068,7 +1075,11 @@ class SalesController extends BaseController
             'context' => $context,
             'pageTitle' => 'Ticket Kiosco',
             'paymentDiscounts' => (new SalesDiscountPolicyModel())->where('company_id', $companyId)->where('policy_type', 'payment_method_discount')->where('active', 1)->orderBy('discount_rate', 'DESC')->findAll(),
-            'paymentMethods' => (new \App\Models\CompanyPaymentMethodModel())->where('company_id', $companyId)->where('active', 1)->orderBy('name', 'ASC')->findAll(),
+            'paymentPointId' => $this->defaultPointOfSale($companyId, 'kiosk')['id'] ?? null,
+            'paymentBranchId' => $this->currentUser()['branch_id'] ?? ($this->defaultPointOfSale($companyId, 'kiosk')['branch_id'] ?? null),
+            'paymentMethods' => (new \App\Libraries\SalesPaymentService())->catalog($companyId),
+            'paymentGateways' => (new CashPaymentGatewayModel())->where('company_id', $companyId)->where('active', 1)->orderBy('name')->findAll(),
+            'paymentChecks' => (new CashCheckModel())->where('company_id', $companyId)->whereIn('status', ['portfolio', 'received', 'cartera'])->orderBy('check_number')->findAll(),
             'company' => $context['company'],
             'products' => $this->salesProductCatalog($companyId),
             'customers' => $this->customerOptions($companyId),
@@ -1728,6 +1739,12 @@ class SalesController extends BaseController
         }
 
         return view('sales/forms/sale', [
+            'useConfiguredPayments' => true, 'configuredPaymentsDraft' => true,
+            'paymentMethods' => (new \App\Libraries\SalesPaymentService())->catalog($companyId),
+            'paymentGateways' => (new CashPaymentGatewayModel())->where('company_id', $companyId)->where('active', 1)->orderBy('name')->findAll(),
+            'paymentChecks' => (new CashCheckModel())->where('company_id', $companyId)->whereIn('status', ['portfolio', 'received', 'cartera'])->orderBy('check_number')->findAll(),
+            'paymentBranchId' => $this->currentUser()['branch_id'] ?? null,
+            'paymentDiscounts' => (new SalesDiscountPolicyModel())->where('company_id', $companyId)->where('policy_type', 'payment_method_discount')->where('active', 1)->findAll(),
             'pageTitle' => 'Nueva venta',
             'context' => $context,
             'companies' => $this->salesCompanies(),
@@ -1837,6 +1854,12 @@ class SalesController extends BaseController
         }
 
         return view('sales/forms/sale', [
+            'useConfiguredPayments' => true, 'configuredPaymentsDraft' => true,
+            'paymentMethods' => (new \App\Libraries\SalesPaymentService())->catalog($context['company']['id']),
+            'paymentGateways' => (new CashPaymentGatewayModel())->where('company_id', $context['company']['id'])->where('active', 1)->orderBy('name')->findAll(),
+            'paymentChecks' => (new CashCheckModel())->where('company_id', $context['company']['id'])->whereIn('status', ['portfolio', 'received', 'cartera'])->orderBy('check_number')->findAll(),
+            'paymentBranchId' => $this->currentUser()['branch_id'] ?? null,
+            'paymentDiscounts' => (new SalesDiscountPolicyModel())->where('company_id', $context['company']['id'])->where('policy_type', 'payment_method_discount')->where('active', 1)->findAll(),
             'pageTitle' => 'Editar venta',
             'context' => $context,
             'companies' => $this->salesCompanies(),
@@ -1924,15 +1947,20 @@ class SalesController extends BaseController
         if ((new \App\Libraries\DeliveryNoteService())->link($context['company']['id'], $id)) {
             return redirect()->back()->with('error', 'Modifica esta factura desde el popup del remito para conservar sus vínculos.');
         }
-        $payload = $this->salePayload($context['company']['id'], [], $context['access_level'] ?? 'manage');
-        if ($payload instanceof RedirectResponse) {
-            return $payload;
-        }
+        try {
+            (new SalesIntegrityService())->locked(db_connect(), 'sales', $context['company']['id'], $id, ['draft'], function (array $sale) use ($id, $context) {
+                $payload = $this->salePayload($context['company']['id'], [], $context['access_level'] ?? 'manage', false, $id);
+                if ($payload instanceof RedirectResponse) throw new \RuntimeException(session()->getFlashdata('error') ?: 'Revisa los datos del borrador.');
 
-        (new SaleModel())->update($id, $payload['sale']);
-        $this->replaceSaleChildren($id, $payload['items'], $payload['payments']);
-        $this->logAudit($context['company']['id'], 'sales', 'sale', $id, 'update_draft', $sale, (new SaleModel())->find($id));
-        $this->logDocumentEvent($context['company']['id'], 'sales', 'sale', $id, 'draft_updated', ['sale_number' => $sale['sale_number'] ?? null]);
+                if (!(new SaleModel())->update($id, $payload['sale'])) throw new \RuntimeException('No se pudo actualizar el borrador.');
+                (new SaleItemModel())->where('sale_id', $id)->delete();
+                foreach ($payload['items'] as $item) (new SaleItemModel())->insert($item + ['sale_id'=>$id]);
+                (new \App\Libraries\SalesPaymentService())->replaceDraft($context['company']['id'], $id, $payload['payments']);
+                $this->logAudit($context['company']['id'], 'sales', 'sale', $id, 'update_draft', $sale, (new SaleModel())->find($id));
+                $this->logDocumentEvent($context['company']['id'], 'sales', 'sale', $id, 'draft_updated', ['sale_number' => $sale['sale_number'] ?? null]);
+
+            });
+        } catch (\Throwable $e) { return redirect()->back()->withInput()->with('error', $e->getMessage()); }
 
         return $this->popupOrRedirect($this->salesRoute('ventas', $context['company']['id']), 'Venta actualizada correctamente.');
     }
@@ -2292,7 +2320,7 @@ class SalesController extends BaseController
         $payments = [];
         foreach ($paymentLines as $line) {
             if (($line['status'] ?? '') === 'reversed') { continue; }
-            $payments[] = ['code'=>$line['payment_method_code'] ?: $line['payment_method'],
+            $payments[] = ['code'=>\App\Libraries\PaymentIntegrityService::label($line),
                 'type'=>$line['payment_method'], 'status'=>$line['status'], 'total'=>(float)$line['amount'],
                 'rate'=>(float)($line['surcharge_rate'] ?? 0), 'surcharge'=>(float)($line['surcharge_amount'] ?? 0),
                 'show_on_receipt'=>(int)($line['show_on_receipt'] ?? 1)];
@@ -3709,14 +3737,15 @@ class SalesController extends BaseController
         }, $products);
     }
 
-    private function salePayload(string $companyId, array $overrides = [], string $accessLevel = 'manage', bool $configuredPayments = false)
+    private function salePayload(string $companyId, array $overrides = [], string $accessLevel = 'manage', bool $configuredPayments = false, ?string $editingSaleId = null)
     {
         $input = array_replace_recursive((array) $this->request->getPost(), $overrides);
         $customerId = trim((string) ($input['customer_id'] ?? '')) ?: null;
         $warehouseId = trim((string) ($input['warehouse_id'] ?? '')) ?: null;
         $sourceSaleId = trim((string) ($input['source_sale_id'] ?? '')) ?: null;
         $channel = (string) ($input['pos_mode'] ?? '') === '1' ? 'kiosk' : 'standard';
-        $configuredPayments = $configuredPayments || $channel === 'kiosk';
+        $strictPaymentAllocation = $configuredPayments || $channel === 'kiosk';
+        $configuredPayments = true;
         $documentContext = $this->resolveDocumentContext($companyId, $channel, trim((string) ($input['document_type_id'] ?? '')), trim((string) ($input['point_of_sale_id'] ?? '')));
         if ($documentContext['error'] !== null) {
             return redirect()->back()->withInput()->with('error', $documentContext['error']);
@@ -3739,9 +3768,9 @@ class SalesController extends BaseController
             }
         }
         try {
-            $payments = $configuredPayments
-                ? (new \App\Libraries\KioskPayments())->prepare($companyId, (array) ($input['kiosk_payments'] ?? []))
-                : $this->parseSalePayments($input);
+            $paymentService = new \App\Libraries\SalesPaymentService();
+            $paymentContext = $paymentService->context($companyId, $currencyCode, $this->currentUser()['branch_id'] ?? null, $documentContext['pointOfSale']['id']);
+            $payments = $paymentService->prepare($companyId, (array) ($input['company_payments'] ?? $input['kiosk_payments'] ?? $input['payments'] ?? []), $paymentContext, $editingSaleId);
             (new \App\Libraries\PaymentIntegrityService())->validateReferences($companyId, $payments);
         } catch (\Throwable $e) {
             return redirect()->back()->withInput()->with('error', $e->getMessage());
@@ -3781,7 +3810,7 @@ class SalesController extends BaseController
         $subtotal = array_sum(array_map(static fn(array $row): float => (float) $row['subtotal'], $items));
         $paymentMethodDiscount = $this->paymentMethodDiscount($companyId, $payments, $subtotal);
         $totals = $this->calculateSaleTotals($items, (float) ($input['global_discount_total'] ?? 0) + $paymentMethodDiscount, $payments);
-        if ($configuredPayments) {
+        if ($strictPaymentAllocation) {
             try { \App\Libraries\KioskPayments::assertAllocated($payments, $totals['total']); }
             catch (\RuntimeException $e) { return redirect()->back()->withInput()->with('error', $e->getMessage()); }
         }
@@ -4555,7 +4584,8 @@ class SalesController extends BaseController
         $service = new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null);
         foreach ($this->salePayments($saleId) as $payment) {
             if (! \App\Libraries\PaymentIntegrityService::settled($payment)) { continue; }
-            $service->registerMovement([
+            $service->registerMovement(\App\Libraries\TreasuryPaymentService::metadata($payment)+[
+                'currency_code'=>$sale['currency_code'], 'exchange_rate'=>$sale['exchange_rate'] ?? 1,
                 'company_id' => $companyId,
                 'cash_register_id' => $sale['cash_register_id'],
                 'cash_session_id' => $sale['cash_session_id'],
@@ -4602,6 +4632,8 @@ class SalesController extends BaseController
             if ($items === []) {
                 return 'La venta debe tener productos.';
             }
+
+            (new \App\Libraries\SalesPaymentService())->validatePersisted($companyId, $sale, $this->salePayments($saleId));
 
             $warehouseId = $sale['warehouse_id'] ?: null;
 

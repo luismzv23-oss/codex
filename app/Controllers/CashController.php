@@ -350,7 +350,7 @@ class CashController extends BaseController
             'sessions' => $this->cashService()->activeSessions($context['company']['id']),
             'formAction' => site_url('caja/movimientos'),
             'isPopup' => $this->isPopupRequest(),
-        ]);
+        ] + (new \App\Libraries\TreasuryPaymentService())->formOptions($context['company']['id']));
     }
 
     public function createCheckForm()
@@ -420,76 +420,53 @@ class CashController extends BaseController
 
     public function storeReconciliation()
     {
-        $context = $this->cashContext('manage');
-        if ($context instanceof RedirectResponse) {
-            return $context;
-        }
+        $context=$this->cashContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+        try {
+            $this->cashService()->createReconciliation(array_merge((array)$this->request->getPost(),['company_id'=>$context['company']['id'],'created_by'=>$this->currentUser()['id']]));
+            return $this->popupOrRedirect($this->cashRoute('caja',$context['company']['id']),'Conciliación registrada.');
+        } catch (\Throwable $e) { return redirect()->back()->withInput()->with('error',$e->getMessage()); }
+    }
 
-        $sessionId = trim((string) $this->request->getPost('cash_session_id'));
-        $paymentMethod = trim((string) $this->request->getPost('payment_method'));
-        $expected = (float) $this->request->getPost('expected_amount');
-        $actual = (float) $this->request->getPost('actual_amount');
-        if ($sessionId === '' || $paymentMethod === '') {
-            return redirect()->back()->withInput()->with('error', 'Debes seleccionar una sesion y un medio.');
-        }
-
-        $ownedSession = $this->cashService()->ownedSession($context['company']['id'], $sessionId);
-        if (!$ownedSession || $ownedSession['status'] !== 'open') {
-            return redirect()->back()->withInput()->with('error', 'Debes seleccionar una sesion abierta propia.');
-        }
-        $this->cashService()->createReconciliation([
-            'company_id' => $context['company']['id'],
-            'cash_session_id' => $sessionId,
-            'payment_method' => $paymentMethod,
-            'expected_amount' => $expected,
-            'actual_amount' => $actual,
-            'notes' => trim((string) $this->request->getPost('notes')),
-            'created_by' => $this->currentUser()['id'],
-        ]);
-
-        return $this->popupOrRedirect($this->cashRoute('caja', $context['company']['id']), 'Conciliacion registrada correctamente.');
+    public function reconciliationPreview()
+    {
+        $context=$this->cashContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+        try {
+            return $this->response->setHeader('Cache-Control','no-store')->setJSON(['balances'=>$this->cashService()->reconciliationBalances($context['company']['id'],(string)$this->request->getGet('cash_session_id'))]);
+        } catch (\Throwable $e) { return $this->response->setStatusCode(422)->setJSON(['error'=>$e->getMessage()]); }
     }
 
     public function storeMovement()
     {
-        $context = $this->cashContext('manage');
-        if ($context instanceof RedirectResponse) {
-            return $context;
-        }
+        $context=$this->cashContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+        try {
+            (new \App\Libraries\TreasuryPaymentService())->manual($this->cashService(),$context['company']['id'],(array)$this->request->getPost(),$this->currentUser()['id']);
+            return $this->popupOrRedirect($this->cashRoute('caja',$context['company']['id']),'Movimiento registrado; los pendientes requieren confirmación.');
+        } catch (\Throwable $e) { return redirect()->back()->withInput()->with('error',$e->getMessage()); }
+    }
 
-        $sessionId = trim((string) $this->request->getPost('cash_session_id'));
-        $userId = null;
-        $session = $this->cashService()->ownedSession($context['company']['id'], $sessionId, $userId);
-        if (! $session) {
-            return redirect()->back()->withInput()->with('error', 'Debes seleccionar una sesion abierta valida o que te pertenezca.');
-        }
-
-        $movementType = trim((string) $this->request->getPost('movement_type')) ?: 'manual_income';
-        $amount = (float) $this->request->getPost('amount');
-        if ($amount <= 0) {
-            return redirect()->back()->withInput()->with('error', 'El monto debe ser mayor a cero.');
-        }
-
-        $signedAmount = in_array($movementType, ['manual_expense', 'withdrawal'], true) ? -1 * $amount : $amount;
-        $movementId = $this->cashService()->registerMovement([
-            'company_id' => $context['company']['id'],
-            'cash_register_id' => $session['cash_register_id'],
-            'cash_session_id' => $session['id'],
-            'movement_type' => $movementType,
-            'payment_method' => trim((string) $this->request->getPost('payment_method')) ?: null,
-            'amount' => $signedAmount,
-            'reference_type' => 'cash_manual',
-            'reference_number' => trim((string) $this->request->getPost('reference_number')),
-            'occurred_at' => trim((string) $this->request->getPost('occurred_at')) ?: date('Y-m-d H:i:s'),
-            'notes' => trim((string) $this->request->getPost('notes')),
-            'created_by' => $this->currentUser()['id'],
+    public function confirmMovementForm(string $id)
+    {
+        $context=$this->cashContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+        $payment=(new \App\Models\CashMovementModel())->where('company_id',$context['company']['id'])->where('reference_type','cash_manual')->where('status','pending')->find($id);
+        if (!$payment || !$this->cashService()->ownedSession($context['company']['id'],$payment['cash_session_id'])) throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        return view('cash/forms/payment_confirmation',[
+            'pageTitle'=>'Confirmar movimiento','payment'=>$payment,'companyId'=>$context['company']['id'],
+            'formAction'=>site_url('caja/movimientos/'.$id.'/confirmar'),'isPopup'=>$this->isPopupRequest(),
         ]);
+    }
 
-        if (! $movementId) {
-            return redirect()->back()->withInput()->with('error', 'No se pudo registrar el movimiento.');
-        }
-
-        return $this->popupOrRedirect($this->cashRoute('caja', $context['company']['id']), 'Movimiento de caja registrado.');
+    public function confirmMovement(string $id)
+    {
+        $context=$this->cashContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+        try {
+            (new \App\Libraries\TreasuryPaymentService())->confirmManual($this->cashService(),$context['company']['id'],$id,$this->currentUser()['id'],(string)$this->request->getPost('evidence'));
+            return $this->popupOrRedirect($this->cashRoute('caja',$context['company']['id']),'Movimiento confirmado.');
+        } catch (\Throwable $e) { return redirect()->back()->withInput()->with('error',$e->getMessage()); }
     }
 
     private function cashContext(string $requiredAccess = 'view')
@@ -763,11 +740,7 @@ class CashController extends BaseController
         $sales = $this->cashService()->sessionSales($context['company']['id'], $sessionId);
 
         // Summary of cash movements for this session
-        $paymentMethods = db_connect()->table('cash_movements')
-            ->select('payment_method, SUM(amount) AS total')
-            ->where('cash_session_id', $sessionId)
-            ->groupBy('payment_method')
-            ->get()->getResultArray();
+        $paymentMethods = $this->cashService()->sessionPaymentBreakdown($context['company']['id'],$sessionId);
 
         $data = [
             'session' => $session,
@@ -811,11 +784,7 @@ class CashController extends BaseController
             ->orderBy('cm.occurred_at', 'ASC')
             ->get()->getResultArray();
 
-        $paymentMethods = db_connect()->table('cash_movements')
-            ->select('payment_method, SUM(amount) AS total')
-            ->where('cash_session_id', $sessionId)
-            ->groupBy('payment_method')
-            ->get()->getResultArray();
+        $paymentMethods = $this->cashService()->sessionPaymentBreakdown($context['company']['id'],$sessionId);
 
         return view('cash/session_detail', [
             'pageTitle' => 'Detalle de sesión de caja',

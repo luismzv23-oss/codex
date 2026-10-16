@@ -6,6 +6,7 @@ $selectedCompanyId = $selectedCompanyId ?? '';
 <?= $this->extend('layouts/app') ?>
 
 <?= $this->section('content') ?>
+<link rel="stylesheet" href="<?= base_url('assets/css/company-payments.css') ?>">
 <?php $salesLive = false; ?>
 <?= view('sales/ui_start', get_defined_vars()) ?>
 <script src="<?= base_url('assets/js/sale-receipt-window.js') ?>"></script>
@@ -171,7 +172,7 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
                         <label class="form-label">Punto de venta</label>
                         <select name="point_of_sale_id" class="form-select">
                             <?php foreach (($pointsOfSale ?? []) as $pointOfSale): ?>
-                                <option value="<?= esc($pointOfSale['id']) ?>" <?= old('point_of_sale_id', $sale['point_of_sale_id'] ?? (($pointsOfSale[0]['id'] ?? ''))) === $pointOfSale['id'] ? 'selected' : '' ?>><?= esc($pointOfSale['name']) ?></option>
+                                <option value="<?= esc($pointOfSale['id']) ?>" data-branch="<?= esc($pointOfSale['branch_id'] ?? '') ?>" <?= old('point_of_sale_id', $sale['point_of_sale_id'] ?? (($pointsOfSale[0]['id'] ?? ''))) === $pointOfSale['id'] ? 'selected' : '' ?>><?= esc($pointOfSale['name']) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -284,13 +285,14 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
                         <div><div class="small text-secondary">Total a pagar</div><strong id="pos-payment-total">0,00</strong></div>
                         <div><div class="small text-secondary">Asignado a medios de pago</div><strong id="pos-payment-assigned">0,00</strong></div>
                         <div class="d-flex align-items-center gap-3">
-                            <div class="text-end" aria-live="polite"><div class="small" id="pos-payment-balance-label">Falta pagar</div><strong class="fs-4" id="pos-payment-balance">0,00</strong></div>
+                            <div class="text-end" id="pos-payment-balance-status" aria-live="polite"><div class="small" id="pos-payment-balance-label">Falta pagar</div><strong class="fs-4" id="pos-payment-balance">0,00</strong></div>
                             <button type="button" class="btn btn-dark icon-btn" id="add-sale-payment" title="Agregar medio de pago" aria-label="Agregar medio de pago"><i class="bi bi-plus-lg" aria-hidden="true"></i></button>
                         </div>
                     </div>
-                    <div id="sale-payments-body" class="overflow-auto"></div>
+                    <div id="sale-payments-body" class="company-payments"></div>
+                    <?php if (!empty($configuredPaymentsDraft)): ?><p class="small text-secondary mb-0">Puedes guardar sin pagos o con pagos parciales. El saldo quedará a cuenta corriente al confirmar la venta.</p><?php endif; ?>
                     <p class="small text-secondary mt-2 mb-0">Elige un medio e indica cuánto cubre. Si queda saldo, pulsa + para completar el resto con otro medio.</p>
-                    <p id="pos-payment-pending" class="small text-secondary mb-0" hidden>Las transferencias asignadas siguen pendientes de confirmación.</p>
+                    <p id="pos-payment-pending" class="small text-secondary mb-0" hidden>Hay medios de pago pendientes de verificación.</p>
                     <?php else: ?>
                     <div class="d-flex justify-content-between align-items-start mb-3">
                         <div>
@@ -384,6 +386,8 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
 <script src="<?= base_url('assets/js/sales-product-search.js') ?>"></script>
 <script>
 (() => {
+    const configuredPaymentsDraft = <?= json_encode(!empty($configuredPaymentsDraft)) ?>;
+    const paymentBranchId = <?= json_encode($paymentBranchId ?? $sale['branch_id'] ?? null) ?>;
     const useConfiguredPayments = <?= json_encode($useConfiguredPayments) ?>;
     const configuredMethods = <?= json_encode($paymentMethods ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     const paymentDiscounts = <?= json_encode($paymentDiscounts ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
@@ -394,7 +398,8 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
     const taxes = <?= json_encode($taxCatalog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     const customers = <?= json_encode($customers, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     const existingItems = <?= json_encode(array_values(array_map(static function (array $item): array { return ['product_id' => $item['product_id'], 'quantity' => (float) ($item['quantity'] ?? 0), 'unit_price' => (float) ($item['unit_price'] ?? 0), 'discount_rate' => (float) ($item['discount_rate'] ?? 0), 'tax_id' => $item['tax_id'] ?? '']; }, $saleItems)), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
-    const existingPayments = <?= json_encode(array_values(array_map(static function (array $payment): array { return ['payment_method' => $payment['payment_method'] ?? '', 'amount' => (float) ($payment['amount'] ?? 0), 'gateway_id' => $payment['gateway_id'] ?? '', 'cash_check_id' => $payment['cash_check_id'] ?? '', 'external_reference' => $payment['external_reference'] ?? '', 'reference' => $payment['reference'] ?? '', 'paid_at' => ! empty($payment['paid_at']) ? date('Y-m-d\TH:i', strtotime($payment['paid_at'])) : '', 'notes' => $payment['notes'] ?? '']; }, $salePayments)), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) ?>;
+    const submittedPayments = <?= json_encode(old('kiosk_payments') ?? old('company_payments') ?? null, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    const existingPayments = <?= json_encode(array_values($salePayments), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) ?>;
     const body = document.getElementById('sale-items-body');
     const openSearchButton = document.getElementById('open-sale-search');
     const searchField = document.getElementById('sale-search');
@@ -493,15 +498,16 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
             display.forEach(line => { line.row.querySelector('.sale-line-total').textContent = formatMoney(line.gross); });
         }
         if (useConfiguredPayments) {
-            paidTotal = lines.filter(line => line.type !== 'transfer').reduce((sum,line) => sum + line.total, 0);
+            paidTotal = lines.filter(line => !line.pending).reduce((sum,line) => sum + line.total, 0);
             const assigned = lines.reduce((sum,line) => sum + line.total, 0);
             const remaining = Math.round((paymentBase - lines.reduce((sum,line) => sum + line.base, 0)) * 100) / 100;
             document.getElementById('pos-payment-total').textContent = formatMoney(total);
             document.getElementById('pos-payment-assigned').textContent = formatMoney(assigned);
             document.getElementById('pos-payment-balance').textContent = formatMoney(Math.abs(remaining));
-            document.getElementById('pos-payment-balance-label').textContent = remaining < 0 ? 'Importe excedido' : remaining === 0 && paymentBase > 0 ? 'Total distribuido' : 'Falta pagar';
+            document.getElementById('pos-payment-balance-status').className = 'text-end' + (remaining < 0 ? ' text-danger' : remaining === 0 && paymentBase > 0 ? ' text-success' : '');
+            document.getElementById('pos-payment-balance-label').textContent = remaining < 0 ? 'Importe excedido' : remaining === 0 && paymentBase > 0 ? 'Total distribuido' : (configuredPaymentsDraft ? 'Saldo a cuenta corriente' : 'Falta pagar');
             document.getElementById('add-sale-payment').disabled = !paymentRows?.canAdd();
-            document.getElementById('pos-payment-pending').hidden = !lines.some(line => line.type === 'transfer');
+            document.getElementById('pos-payment-pending').hidden = !lines.some(line => line.pending);
         }
         document.getElementById('sale-subtotal').textContent = formatMoney(subtotal);
         document.getElementById('sale-tax-total').textContent = formatMoney(taxTotal);
@@ -645,10 +651,18 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
             const previousBase = paymentBase;
             syncTotals();
             if (previousBase !== paymentBase) paymentRows?.syncBase();
-        });
+        }, {compact:true, gateways:<?= json_encode($paymentGateways ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, checks:<?= json_encode($paymentChecks ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, partial:configuredPaymentsDraft, allowEmpty:configuredPaymentsDraft, context:()=>({
+            currency_code:document.querySelector('[name="currency_code"]')?.value || <?= json_encode($currencyCode) ?>,
+            branch_id:paymentBranchId || document.querySelector('[name="point_of_sale_id"]')?.selectedOptions[0]?.dataset.branch || null, point_of_sale_id:document.querySelector('[name="point_of_sale_id"]')?.value || null
+        })});
         const paymentForm = paymentsBody.closest('form');
+        paymentForm.querySelectorAll('[name="currency_code"],[name="point_of_sale_id"]').forEach(field=>field.addEventListener('change',()=>paymentRows.refresh()));
         let savingPos = false;
         paymentForm.addEventListener('submit', async event => {
+            if (configuredPaymentsDraft) {
+                try { paymentRows.validate(); } catch (error) { event.preventDefault(); alert(error.message); }
+                return;
+            }
             event.preventDefault();
             if (savingPos) return;
             syncTotals();
@@ -858,7 +872,7 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
     updateCustomerInfo();
     refreshItemStocks();
     syncTotals();
-    if (useConfiguredPayments) paymentRows.syncBase();
+    if (useConfiguredPayments) { if (submittedPayments) paymentRows.restoreInput(submittedPayments, existingPayments); else paymentRows.load(existingPayments); paymentRows.syncBase(); }
 
     // ARCA checkbox visibility based on document type
     const docTypeSelect = document.querySelector('[name="document_type_id"]');

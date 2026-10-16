@@ -121,7 +121,9 @@ class CashService
         foreach ($payments as $payment) {
             if (!PaymentIntegrityService::settled($payment)) continue;
             $method = (string) ($payment['payment_method'] ?? '');
-            if ($method !== '') $methods[$payment['sale_id']][$method] = $labels[$method] ?? $method;
+            $identity=($payment['payment_method_id'] ?? '') ?: $method;
+            $label=($payment['payment_method_name'] ?? '') ?: (($payment['payment_method_code'] ?? '') ?: ($labels[$method] ?? $method));
+            if ($method !== '') $methods[$payment['sale_id']][$identity] = $label;
         }
         foreach ($sales as &$sale) {
             $sale['payment_methods_label'] = implode(' + ', $methods[$sale['id']] ?? []) ?: '-';
@@ -199,19 +201,11 @@ class CashService
         }
         $registerModel = new CashRegisterModel();
         $sessionModel = new CashSessionModel();
-        $movementModel = new CashMovementModel();
-
         $today = date('Y-m-d');
-        
-        $incomesQuery = $movementModel->selectSum('amount', 'amount')
-            ->where('company_id', $companyId)
-            ->where('DATE(occurred_at) >=', $today)
-            ->where('amount >=', 0);
-            
-        $expensesQuery = $movementModel->selectSum('amount', 'amount')
-            ->where('company_id', $companyId)
-            ->where('DATE(occurred_at) >=', $today)
-            ->where('amount <', 0);
+        $incomesQuery = db_connect()->table('cash_movements')->select('COALESCE(SUM(amount * exchange_rate),0) AS amount',false)
+            ->where('company_id',$companyId)->where('status','posted')->where('DATE(occurred_at) >=',$today)->where('amount >=',0);
+        $expensesQuery = db_connect()->table('cash_movements')->select('COALESCE(SUM(amount * exchange_rate),0) AS amount',false)
+            ->where('company_id',$companyId)->where('status','posted')->where('DATE(occurred_at) >=',$today)->where('amount <',0);
 
         $registersQuery = $registerModel->where('company_id', $companyId)->where('active', 1);
         $sessionsOpenQuery = $sessionModel->where('company_id', $companyId)->where('status', 'open');
@@ -223,8 +217,8 @@ class CashService
             $sessionsOpenQuery->where('cash_register_id', $cashRegisterId);
         }
 
-        $incomes = (float) ($incomesQuery->first()['amount'] ?? 0);
-        $expenses = abs((float) ($expensesQuery->first()['amount'] ?? 0));
+        $incomes = (float) ($incomesQuery->get()->getRowArray()['amount'] ?? 0);
+        $expenses = abs((float) ($expensesQuery->get()->getRowArray()['amount'] ?? 0));
 
         return [
             'registers' => $registersQuery->countAllResults(),
@@ -240,7 +234,7 @@ class CashService
     public function paymentMethodBreakdown(string $companyId, $cashRegisterId = null): array
     {
         $query = db_connect()->table('cash_movements')
-            ->select('payment_method, SUM(amount) AS total', false)
+            ->select('*')
             ->where('company_id', $companyId);
 
         if ($cashRegisterId !== null && $cashRegisterId !== '' && $cashRegisterId !== []) {
@@ -252,10 +246,50 @@ class CashService
         }
 
         $this->scopeSessions($query, 'cash_session_id');
-        return $query->groupBy('payment_method')
-            ->orderBy('payment_method', 'ASC')
-            ->get()
-            ->getResultArray();
+        return $this->groupMethods($query->get()->getResultArray());
+    }
+
+    public function sessionPaymentBreakdown(string $companyId,string $sessionId): array
+    {
+        if (!$this->ownedSession($companyId,$sessionId)) throw new \RuntimeException('Sesión no disponible.');
+        return $this->groupMethods((new CashMovementModel())->where('company_id',$companyId)->where('cash_session_id',$sessionId)->findAll());
+    }
+
+    private function groupMethods(array $rows): array
+    {
+        $groups=[];
+        foreach ($rows as $row) {
+            if (($row['status'] ?? 'posted')!=='posted') continue;
+            $key=($row['payment_method_id'] ?? '') ?: ('legacy:'.($row['payment_method'] ?? ''));
+            $currency=$row['currency_code'] ?? '';
+            $index=$key.'|'.$currency;
+            if (!isset($groups[$index])) $groups[$index]=TreasuryPaymentService::metadata($row)+[
+                'payment_method'=>$row['payment_method'],'currency_code'=>$currency,'total'=>0,
+            ];
+            $groups[$index]['total']+=(float)$row['amount'];
+        }
+        foreach ($groups as &$group) $group['total']=round($group['total'],2);
+        return array_values($groups);
+    }
+
+    /** A distinct opening line prevents assigning the opening cash to every cash method. */
+    public function reconciliationBalances(string $companyId,string $sessionId): array
+    {
+        $session=$this->ownedSession($companyId,$sessionId);
+        if (!$session || $session['status']!=='open') throw new \RuntimeException('Selecciona una sesión abierta propia.');
+        $base=db_connect()->table('companies')->select('currency_code')->where('id',$companyId)->get()->getRowArray()['currency_code'] ?? 'ARS';
+        $rows=(new CashMovementModel())->where('company_id',$companyId)->where('cash_session_id',$sessionId)->findAll();
+        foreach ($rows as &$row) $row['currency_code']=$row['currency_code'] ?: $base;
+        unset($row);
+        $groups=$this->groupMethods($rows);
+        foreach ($groups as &$group) {
+            $group['reconciliation_key']=!empty($group['payment_method_id'])?'method:'.$group['payment_method_id']:'legacy:'.$group['payment_method'];
+            $group['label']=PaymentIntegrityService::label($group).' · '.$group['currency_code'];
+        }
+        unset($group);
+        $groups[]=['reconciliation_key'=>'opening','payment_method'=>'cash','currency_code'=>$base,
+            'payment_method_name'=>'Efectivo de apertura','label'=>'Efectivo de apertura · '.$base,'total'=>(float)$session['opening_amount']];
+        return $groups;
     }
 
 
@@ -316,21 +350,27 @@ class CashService
 
     public function createReconciliation(array $data): ?string
     {
-        $session = $this->ownedSession((string) $data['company_id'], (string) $data['cash_session_id']);
-        if (!$session || $session['status'] !== 'open') throw new \RuntimeException('Debes seleccionar una sesion abierta propia.');
-        $expected = round((float) ($data['expected_amount'] ?? 0), 2);
-        $actual = round((float) ($data['actual_amount'] ?? 0), 2);
-        return (new CashReconciliationModel())->insert([
-            'company_id' => $data['company_id'],
-            'cash_session_id' => $data['cash_session_id'],
-            'payment_method' => $data['payment_method'],
-            'expected_amount' => $expected,
-            'actual_amount' => $actual,
-            'difference_amount' => round($actual - $expected, 2),
-            'status' => abs($actual - $expected) < 0.01 ? 'balanced' : 'pending',
-            'notes' => $data['notes'] ?? null,
-            'created_by' => $data['created_by'] ?? null,
-        ], true);
+        return (new InventoryIntegrityService())->transaction((string)$data['company_id'],function() use($data) {
+            $balances=$this->reconciliationBalances((string)$data['company_id'],(string)$data['cash_session_id']);
+            $selected=null;
+            foreach ($balances as $balance) {
+                if ($balance['reconciliation_key']===($data['reconciliation_key'] ?? '') && $balance['currency_code']===($data['currency_code'] ?? '')) $selected=$balance;
+            }
+            if (!$selected) throw new \RuntimeException('Selecciona un medio y moneda con saldo en esta sesión.');
+            $value=$data['actual_amount'] ?? '';
+            if (!is_scalar($value) || !preg_match('/^-?\d+(?:\.\d{1,2})?$/D',(string)$value) || !is_finite((float)$value) || abs((float)$value)>999999999999.99) throw new \RuntimeException('Importe real inválido.');
+            $actual=round((float)$value,2);
+            $expected=round((float)$selected['total'],2);
+            $id=(new CashReconciliationModel())->insert(TreasuryPaymentService::metadata($selected)+[
+                'company_id'=>$data['company_id'],'cash_session_id'=>$data['cash_session_id'],
+                'payment_method'=>$selected['payment_method'],'currency_code'=>$selected['currency_code'],
+                'expected_amount'=>$expected,'actual_amount'=>$actual,'difference_amount'=>round($actual-$expected,2),
+                'status'=>abs($actual-$expected)<0.01?'balanced':'pending',
+                'notes'=>$data['notes'] ?? null,'created_by'=>$data['created_by'] ?? null,
+            ],true);
+            if (!$id) throw new \RuntimeException('No se pudo guardar la conciliación.');
+            return $id;
+        });
     }
 
     public function activeSessionForChannel(string $companyId, string $channel = 'general'): ?array
@@ -392,6 +432,11 @@ class CashService
 
     public function closeSession(string $companyId, string $sessionId, string $userId, float $actualAmount, ?string $notes = null, bool $isAdmin = false): bool
     {
+        return (new InventoryIntegrityService())->transaction($companyId,fn()=>$this->closeSessionLocked($companyId,$sessionId,$userId,$actualAmount,$notes,$isAdmin));
+    }
+
+    private function closeSessionLocked(string $companyId, string $sessionId, string $userId, float $actualAmount, ?string $notes, bool $isAdmin): bool
+    {
         $session = $this->ownedSession($companyId, $sessionId, $isAdmin ? null : $userId);
         if (! $session || ($session['status'] ?? '') !== 'open') {
             return false;
@@ -400,6 +445,9 @@ class CashService
         $expected = $this->expectedBalance($sessionId, (float) ($session['opening_amount'] ?? 0));
         $difference = round($actualAmount - $expected, 2);
 
+        foreach ((new CashMovementModel())->where('company_id',$companyId)->where('cash_session_id',$sessionId)->findAll() as $movement) {
+            if (($movement['status'] ?? 'posted')==='pending') throw new \RuntimeException('Confirma los movimientos manuales pendientes antes de cerrar la sesión.');
+        }
         $db = db_connect();
         $db->transStart();
 
@@ -454,7 +502,9 @@ class CashService
             return $existing['id'];
         }
 
-        $id = (new CashMovementModel())->insert([
+        $extra = TreasuryPaymentService::metadata($data);
+        foreach (['currency_code','exchange_rate','status','request_key','request_hash','branch_id','point_of_sale_id'] as $field) if (array_key_exists($field,$data)) $extra[$field]=$data[$field];
+        $id = (new CashMovementModel())->insert($extra + [
             'company_id' => $data['company_id'],
             'cash_register_id' => $data['cash_register_id'],
             'cash_session_id' => $data['cash_session_id'],
@@ -473,6 +523,7 @@ class CashService
             'created_by' => $data['created_by'],
         ], true);
 
+        if (!$id) throw new \RuntimeException('No se pudo guardar el movimiento.');
         $sessionModel = new CashSessionModel();
         $sessionModel->update($data['cash_session_id'], [
             'expected_closing_amount' => $this->expectedBalance((string) $data['cash_session_id'], (float) ($session['opening_amount'] ?? 0)),
@@ -483,8 +534,10 @@ class CashService
 
     public function expectedBalance(string $sessionId, float $openingAmount = 0): float
     {
-        $sum = (float) (((new CashMovementModel())->selectSum('amount', 'amount')->where('cash_session_id', $sessionId)->first()['amount']) ?? 0);
-        return round($openingAmount + $sum, 2);
+        $rows=(new CashMovementModel())->where('cash_session_id',$sessionId)->findAll();
+        $sum=0;
+        foreach ($rows as $row) if (($row['status'] ?? 'posted')==='posted') $sum+=(float)$row['amount']*(float)($row['exchange_rate'] ?? 1);
+        return round($openingAmount+$sum,2);
     }
 
     public function ownedSession(string $companyId, string $sessionId, ?string $userId = null): ?array

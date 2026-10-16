@@ -21,7 +21,7 @@
         </div>
 
         <?php if (in_array($receipt['status'] ?? '', ['pending', 'partial'], true)): ?>
-            <p class="alert alert-warning">Los medios confirmados ya fueron aplicados. Verifica las transferencias pendientes con su evidencia bancaria.</p>
+            <p class="alert alert-warning">Los medios confirmados ya fueron aplicados. Verifica los medios pendientes con la evidencia correspondiente.</p>
             <?php if ($context['canManage'] && (int) ($receipt['processing_version'] ?? 1) < 2): ?>
             <form method="post" action="<?= site_url('ventas/cobranzas/' . $receipt['id'] . '/confirmar?company_id=' . $selectedCompanyId) ?>" class="d-flex gap-2 mb-3">
                 <?= csrf_field() ?>
@@ -34,7 +34,7 @@
         <?php if ($paymentDetails): ?>
         <div class="table-responsive mb-3"><table class="table"><thead><tr><th>Medio</th><th>Importe</th><th>Estado / referencia</th><th>Acci?n</th></tr></thead><tbody>
         <?php foreach ($paymentDetails as $line): ?>
-        <tr><td><?= esc(['cash'=>'Efectivo','card'=>'Tarjeta','transfer'=>'Transferencia','check'=>'Cheque','qr'=>'QR'][$line['payment_method']] ?? $line['payment_method']) ?></td>
+        <tr><td><?= esc(\App\Libraries\PaymentIntegrityService::label($line)) ?></td>
         <td><?= esc(number_format($line['amount'], 2, ',', '.') . ' ' . $receipt['currency_code']) ?></td>
         <td><?= esc($line['external_reference'] ?: $line['reference']) ?><div class="small text-secondary"><?= !empty($line['bank_settled_at']) ? 'Acreditado en banco' : (!empty($line['posted_at']) ? 'Recibido' : 'Pendiente') ?></div></td><td>
         <?php if ($context['canManage'] && $receipt['status'] !== 'voided' && (int) ($receipt['processing_version'] ?? 1) >= 2): ?>
@@ -43,7 +43,7 @@
         <form method="post" class="d-flex gap-2" action="<?= site_url('ventas/cobranzas/' . $receipt['id'] . ($pending ? '/confirmar' : '/medios/' . $line['id'] . '/acreditar') . '?company_id=' . $selectedCompanyId . '&popup=1') ?>">
         <?= csrf_field() ?><input type="hidden" name="payment_id" value="<?= esc($line['id']) ?>">
         <input name="<?= $pending ? 'confirmation_note' : 'evidence' ?>" class="form-control" aria-label="Evidencia bancaria" placeholder="Referencia bancaria" maxlength="500" required>
-        <button class="btn btn-outline-success icon-btn" title="<?= $pending ? 'Confirmar transferencia' : 'Acreditar en banco' ?>" aria-label="<?= $pending ? 'Confirmar transferencia' : 'Acreditar en banco' ?>"><i class="bi bi-check2-circle"></i></button></form>
+        <button class="btn btn-outline-success icon-btn" title="<?= $pending ? 'Confirmar pago' : 'Acreditar en banco' ?>" aria-label="<?= $pending ? 'Confirmar transferencia' : 'Acreditar en banco' ?>"><i class="bi bi-check2-circle"></i></button></form>
         <?php endif; endif; ?></td></tr>
         <?php endforeach; ?>
         </tbody></table></div>
@@ -68,7 +68,8 @@
                     <div class="fw-semibold">
                         <?php
                         $methodLabels = ['cash' => 'Efectivo', 'card' => 'Tarjeta', 'transfer' => 'Transferencia', 'check' => 'Cheque', 'qr' => 'QR', 'mixed' => 'Mixto', 'credit' => 'Saldo a favor'];
-                        echo esc($methodLabels[$receipt['payment_method'] ?? ''] ?? ($receipt['payment_method'] ?? '-'));
+                        $details = json_decode($receipt['payment_details'] ?? '[]', true) ?: [];
+                                    echo esc($details ? implode(' + ', array_unique(array_map([\App\Libraries\PaymentIntegrityService::class, 'label'], $details))) : ($methodLabels[$receipt['payment_method'] ?? ''] ?? ($receipt['payment_method'] ?? '-')));
                         ?>
                     </div>
                 </div>

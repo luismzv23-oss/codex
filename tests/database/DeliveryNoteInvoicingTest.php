@@ -351,7 +351,7 @@ final class DeliveryNoteInvoicingTest extends CIUnitTestCase
             'companyId' => 'a', 'context' => ['company' => ['id' => 'a'], 'canManage' => true], 'input' => ['document_type_id' => 'invoice', 'point_of_sale_id' => 'kiosk'],
             'error' => 'El punto de venta no corresponde al comprobante seleccionado.', 'draft' => null, 'mode' => 'parcial',
             'documentTypes' => [['id' => 'invoice', 'name' => 'Factura B', 'channel' => 'standard']],
-            'pointsOfSale' => [['id' => 'pos', 'name' => 'Punto de Venta Principal', 'channel' => 'standard', 'document_type_id' => 'invoice'], ['id' => 'kiosk', 'name' => 'Punto de Venta Kiosco', 'channel' => 'kiosk', 'document_type_id' => 'ticket']],
+            'pointsOfSale' => [['id' => 'pos', 'code' => 'PV-STD', 'afip_pos_number' => 12, 'name' => 'Punto de Venta Principal', 'channel' => 'standard', 'document_type_id' => 'invoice'], ['id' => 'kiosk', 'code' => 'PV-KIOSCO', 'afip_pos_number' => 24, 'name' => 'Punto de Venta Kiosco', 'channel' => 'kiosk', 'document_type_id' => 'ticket']],
             'priceLists' => [], 'taxes' => [], 'formAction' => '/remito-test', 'isPopup' => true, 'popupWide' => true];
     }
     public function testPostValidationErrorKeepsPopupWithoutNavigationOrAssistant(): void
@@ -376,7 +376,11 @@ final class DeliveryNoteInvoicingTest extends CIUnitTestCase
         $kiosk = $xpath->query('//select[@name="point_of_sale_id"]/option[@value="kiosk"]')->item(0);
         $this->assertTrue($principal->hasAttribute('selected'));
         $this->assertFalse($principal->hasAttribute('disabled'));
-        $this->assertTrue($kiosk->hasAttribute('hidden'));
+        $this->assertFalse($kiosk->hasAttribute('hidden'));
+        $this->assertStringContainsString('PV-STD', $principal->textContent);
+        $this->assertStringContainsString('PV 00012', $principal->textContent);
+        $this->assertStringContainsString('PV 00024', $kiosk->textContent);
+        $this->assertStringContainsString('No compatible con esta factura', $kiosk->textContent);
         $this->assertTrue($kiosk->hasAttribute('disabled'));
         $this->assertStringNotContainsString('<nav class="navbar', $html);
     }

@@ -64,7 +64,7 @@ $fontSize = ['small'=>9,'medium'=>11,'large'=>13][$value('font_size','medium')] 
     <tr <?= $flag('show_discounts') ?>><td>Descuento general</td><td class="right"><?= $money($sale['global_discount_total'] ?? 0) ?></td></tr>
     <tr class="grand"><td>Importe total</td><td class="right"><?= $money($sale['total']) ?></td></tr>
 </table><p <?= $flag('show_currency') ?> class="right">Moneda: <?= esc($sale['currency_code']) ?></p></td></tr></table></div>
-<?php if ($visiblePayments): ?><div <?= $flag('show_payments') ?>><table class="payments"><tr><td><b>Medio de pago</b></td><td class="right"><b>Importe</b></td></tr><?php foreach ($visiblePayments as $payment): ?><tr><td><?= esc($payment['payment_method_code'] ?? $payment['payment_method'] ?? '') ?><?= ($payment['status'] ?? '') === 'pending' ? ' (pendiente)' : '' ?></td><td class="right"><?= $money($payment['amount']) ?></td></tr><?php endforeach; ?></table></div><?php endif; ?>
+<?php if ($visiblePayments): ?><div <?= $flag('show_payments') ?>><table class="payments"><tr><td><b>Medio de pago</b></td><td class="right"><b>Importe</b></td></tr><?php foreach ($visiblePayments as $payment): ?><tr><td><?= esc(\App\Libraries\PaymentIntegrityService::label($payment)) ?><?= ($payment['status'] ?? '') === 'pending' ? ' (pendiente)' : '' ?></td><td class="right"><?= $money($payment['amount']) ?></td></tr><?php endforeach; ?></table></div><?php endif; ?>
 <?php endif; ?>
 <div <?= $flag('show_notes') ?>><div class="foot notes"><b>Observaciones:</b> <?= esc($sale['notes'] ?? '') ?></div></div>
 <div <?= $flag('show_footer') ?>><div class="foot" data-pos-text="footer_notes"><?= esc($value('footer_notes')) ?></div></div>

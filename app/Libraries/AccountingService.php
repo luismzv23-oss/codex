@@ -497,21 +497,34 @@ class AccountingService
     public function syncPurchasePayment(string $companyId, string $paymentId, string $userId): array
     {
         $db = db_connect();
-        $payment = $db->table('purchase_payments')->where('id', $paymentId)->get()->getRowArray();
+        $payment = $db->table('purchase_payments')->where('company_id',$companyId)->where('id', $paymentId)->get()->getRowArray();
         if (!$payment) return ['ok' => false, 'error' => 'Payment not found'];
+        if (($payment['status'] ?? 'posted')!=='posted') return ['ok'=>true,'skipped'=>'pending'];
+        if ($db->table('journal_entries')->where('company_id',$companyId)->where('reference_type','purchase_payment')->where('reference_id',$paymentId)->countAllResults()) return ['ok'=>true,'already_synced'=>true];
 
         $map = $this->getAccountMapping($companyId);
         if (empty($map)) {
             throw new \RuntimeException("Falta configuracion de mapeo de cuentas contables para la empresa.");
         }
 
-        $amount = (float)($payment['amount'] ?? 0);
+        $amount = round((float)($payment['amount'] ?? 0)*(float)($payment['exchange_rate'] ?? 1),2);
         $lines = [];
 
         // Debit: Accounts Payable
         if (!empty($map['payable'])) $lines[] = ['account_id' => $map['payable'], 'debit' => $amount, 'credit' => 0, 'description' => 'Pago proveedor'];
         // Credit: Cash or Bank
         $cashAccount = $map['cash'] ?? $map['bank'] ?? null;
+        if (!empty($payment['payment_method_snapshot'])) {
+            $snapshot=json_decode($payment['payment_method_snapshot'],true,512,JSON_THROW_ON_ERROR);
+            $destination=$snapshot['funds_destination'] ?? '';
+            if ($destination==='clearing') {
+                $cashAccount=(new CollectionAccountingService())->account($companyId,CollectionAccountingService::paymentAccount($payment['payment_method']));
+            } elseif (in_array($destination,['cash','bank'],true)) {
+                $cashAccount=(new CollectionAccountingService())->account($companyId,$destination);
+            } else throw new \RuntimeException('Destino de fondos inválido para el pago.');
+            (new CollectionAccountingService())->account($companyId,'payable');
+            if (empty($map['payable']) || $map['payable']===$cashAccount) throw new \RuntimeException('Configura cuentas diferentes de proveedores y fondos.');
+        }
         if ($cashAccount) $lines[] = ['account_id' => $cashAccount, 'debit' => 0, 'credit' => $amount, 'description' => 'Egreso por pago'];
 
         if (empty($lines)) {
@@ -520,7 +533,7 @@ class AccountingService
 
         return $this->createJournalEntry($companyId, [
             'description' => 'Pago proveedor #' . ($payment['payment_number'] ?? $paymentId),
-            'entry_date' => $payment['payment_date'] ?? date('Y-m-d'),
+            'entry_date' => $payment['paid_at'] ?? date('Y-m-d'),
             'reference_type' => 'purchase_payment', 'reference_id' => $paymentId,
             'status' => 'posted', 'user_id' => $userId,
         ], $lines);

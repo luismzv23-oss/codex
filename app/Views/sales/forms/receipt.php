@@ -15,6 +15,7 @@
             <?php if (! empty($companyId)): ?><input type="hidden" name="company_id" value="<?= esc($companyId) ?>"><?php endif; ?>
             <div class="col-md-4"><label class="form-label">Fecha</label><input type="datetime-local" name="issue_date" class="form-control" value="<?= esc(date('Y-m-d\TH:i')) ?>"></div>
             <div class="col-md-3"><label class="form-label">Referencia</label><input type="text" name="reference" class="form-control"></div>
+            <label class="col-md-5">Punto de venta<select name="point_of_sale_id" class="form-select" data-collection-point><option value="">Sin punto de venta</option><?php foreach ($pointsOfSale ?? [] as $point): ?><option value="<?= esc($point['id']) ?>" data-branch="<?= esc($point['branch_id'] ?? '') ?>"><?= esc(($point['code'] ?? '') . ' · ' . $point['name']) ?></option><?php endforeach; ?></select></label>
             <?php include __DIR__ . '/payment_lines.php'; ?>
             <div class="col-12"><label class="form-label">Notas</label><input type="text" name="notes" class="form-control"></div>
             <div class="col-12" data-collection-items>

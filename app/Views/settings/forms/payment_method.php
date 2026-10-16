@@ -28,7 +28,7 @@ $extra = is_array($submitted) ? ($submitted['extra_required_fields'] ?? '') : im
                     <label for="payment-name" class="form-label">Nombre</label>
                     <input id="payment-name" class="form-control" name="name" maxlength="120" value="<?= esc($values['name'] ?? '') ?>" required>
                 </div>
-                <?php foreach (['type' => ['Tipo', $types], 'funds_destination' => ['Destino de fondos', $destinations], 'active' => ['Estado', ['1' => 'Activo', '0' => 'Inactivo']], 'allows_installments' => ['Permite cuotas', ['0' => 'No', '1' => 'Sí']], 'requires_confirmation' => ['Requiere confirmación', ['0' => 'No', '1' => 'Sí']]] as $field => [$label, $options]): ?>
+                <?php foreach (['type' => ['Tipo', $types], 'funds_destination' => ['Destino de fondos', $destinations], 'active' => ['Estado', ['1' => 'Activo', '0' => 'Inactivo']], 'allows_installments' => ['Permite cuotas', ['0' => 'No', '1' => 'Sí']], 'requires_confirmation' => ['Requiere confirmación', ['0' => 'No', '1' => 'Sí']], 'allow_collections' => ['Habilitado para cobros', ['1' => 'Sí', '0' => 'No']], 'allow_supplier_payments' => ['Habilitado para pagos a proveedores', ['0' => 'No', '1' => 'Sí']]] as $field => [$label, $options]): ?>
                     <div class="col-md-6">
                         <label class="form-label" for="payment-<?= esc($field) ?>"><?= esc($label) ?></label>
                         <select class="form-select" id="payment-<?= esc($field) ?>" name="<?= esc($field) ?>" required>

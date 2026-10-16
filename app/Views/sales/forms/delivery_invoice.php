@@ -30,12 +30,15 @@ if (!in_array($selectedPoint, array_column($validPoints, 'id'), true)) $selected
 <?php foreach ($documentTypes as $doc): ?>
 <option value="<?= esc($doc['id']) ?>" data-channel="<?= esc($doc['channel'] ?? 'standard') ?>" <?= ($input['document_type_id'] ?? '') === $doc['id'] ? 'selected' : '' ?> <?= $draft && $draft['document_type_id'] !== $doc['id'] ? 'disabled' : '' ?>><?= esc($doc['name']) ?></option>
 <?php endforeach; ?></select></label>
-<label class="col-md-6">Punto de venta<select name="point_of_sale_id" class="form-select" required data-delivery-point <?= !$validPoints ? 'disabled' : '' ?> aria-describedby="delivery-point-hint">
+<label class="col-md-6">Punto de venta<select name="point_of_sale_id" class="form-select" required data-delivery-point <?= !$pointsOfSale ? 'disabled' : '' ?> aria-describedby="delivery-point-hint">
 <option value="">Selecciona un punto de venta</option>
-<?php foreach ($pointsOfSale as $point): $compatible = $selectedDocument && \App\Libraries\DeliveryNoteInvoicingService::pointSupportsDocument($point, $selectedDocument); ?>
-<option value="<?= esc($point['id']) ?>" data-channel="<?= esc($point['channel'] ?? 'standard') ?>" data-document="<?= esc($point['document_type_id'] ?? '') ?>" <?= $selectedPoint === $point['id'] ? 'selected' : '' ?> <?= !$compatible ? 'hidden disabled' : '' ?>><?= esc($point['name']) ?></option>
+<?php foreach ($pointsOfSale as $point):
+$compatible = $selectedDocument && \App\Libraries\DeliveryNoteInvoicingService::pointSupportsDocument($point, $selectedDocument);
+$pointLabel = implode(' · ', array_filter([$point['code'] ?? '', $point['name'], !empty($point['afip_pos_number']) ? 'PV ' . str_pad((string) $point['afip_pos_number'], 5, '0', STR_PAD_LEFT) : '']));
+?>
+<option value="<?= esc($point['id']) ?>" data-channel="<?= esc($point['channel'] ?? 'standard') ?>" data-document="<?= esc($point['document_type_id'] ?? '') ?>" data-label="<?= esc($pointLabel) ?>" <?= $selectedPoint === $point['id'] ? 'selected' : '' ?> <?= !$compatible ? 'disabled' : '' ?>><?= esc($pointLabel . ($selectedDocument && !$compatible ? ' — No compatible con esta factura' : '')) ?></option>
 <?php endforeach; ?>
-</select><span class="small text-secondary" id="delivery-point-hint" data-delivery-point-hint aria-live="polite"><?= !$selectedDocument ? 'Primero selecciona el tipo de factura.' : (!$validPoints ? 'No hay un punto de venta activo compatible. Revisa la configuración de puntos de venta.' : '') ?></span></label>
+</select><span class="small text-secondary" id="delivery-point-hint" data-delivery-point-hint aria-live="polite"><?= !$selectedDocument ? 'Primero selecciona el tipo de factura.' : (!$validPoints ? 'No hay un punto de venta activo compatible. Revisa la configuración de puntos de venta.' : 'Puntos activos registrados en Configuración de Ventas. Los incompatibles se muestran deshabilitados.') ?></span></label>
 <?php if ($note['origin'] === 'cycle'): ?>
 <label class="col-md-5">Lista de precios<select name="price_list_id" class="form-select">
 <option value="">Precio de venta del producto</option>

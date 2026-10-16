@@ -47,7 +47,7 @@
                 <div class="border rounded-4 p-3 bg-light-subtle">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h3 class="h6 mb-0">Lineas del pedido</h3>
-                        <button type="button" class="btn btn-dark btn-sm" onclick="addOrderLine()"><i class="bi bi-plus-lg"></i> Agregar</button>
+                        <button type="button" class="btn btn-dark btn-sm" onclick="addOrderLine()"><i class="bi bi-plus-lg"></i> </button>
                     </div>
                     <table class="table table-sm align-middle mb-0">
                         <thead><tr><th>Producto</th><th>Cantidad</th><th>Precio Unit.</th><th>Desc. %</th><th>IVA %</th><th>Total</th><th></th></tr></thead>
@@ -58,7 +58,7 @@
             </div>
             <div class="col-md-6"><label class="form-label">Observaciones</label><textarea name="notes" class="form-control" rows="2"><?= esc($fromQuote['notes'] ?? '') ?></textarea></div>
             <div class="col-md-6"><label class="form-label">Notas internas</label><textarea name="internal_notes" class="form-control" rows="2"><?= esc($fromQuote['internal_notes'] ?? '') ?></textarea></div>
-            <div class="col-12 text-end"><button class="btn btn-dark"><i class="bi bi-save"></i> Guardar Pedido</button></div>
+            <div class="col-12 text-end"><button class="btn btn-dark"><i class="bi bi-save"></i></button></div>
         </form>
     </div>
 </div>

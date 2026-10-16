@@ -35,7 +35,21 @@ final class PurchaseIntegrityTest extends CIUnitTestCase
             $this->db->query('CREATE TABLE ' . $this->db->prefixTable($table) . ' (' . implode(', ', $columns) . ')');
             $this->tables[] = $table;
         }
-        $this->insert('companies', ['id' => 'a']);
+        $this->db->query('CREATE TABLE '.$this->db->prefixTable('company_payment_methods').' (id TEXT PRIMARY KEY, company_id TEXT, code TEXT, name TEXT, type TEXT, active INTEGER, percentage REAL, currency_ids TEXT, branch_ids TEXT, point_of_sale_ids TEXT, required_fields TEXT, requires_confirmation INTEGER, deleted_at TEXT, allow_collections INTEGER, allow_supplier_payments INTEGER, funds_destination TEXT)');
+        $this->tables[]='company_payment_methods';
+        $this->db->query('CREATE TABLE '.$this->db->prefixTable('currencies').' (id TEXT PRIMARY KEY, company_id TEXT, code TEXT, active INTEGER)');
+        $this->tables[]='currencies';
+        $this->insert('currencies',['id'=>'ars','company_id'=>'a','code'=>'ARS','active'=>1]);
+        $this->insert('company_payment_methods',['id'=>'cash','company_id'=>'a','code'=>'CASH','name'=>'Caja','type'=>'cash','active'=>1,'percentage'=>7,'allow_collections'=>1,'allow_supplier_payments'=>1,'funds_destination'=>'cash']);
+        foreach ([
+            'tax_withholdings'=>'company_id TEXT, active INTEGER, applies_to TEXT',
+            'automation_log'=>'id TEXT PRIMARY KEY, company_id TEXT, event TEXT, actions TEXT, actions_count INTEGER, created_at TEXT',
+            'event_log'=>'id TEXT PRIMARY KEY, event TEXT, payload TEXT, listeners_count INTEGER, created_at TEXT',
+        ] as $table=>$columns) {
+            $this->db->query('CREATE TABLE '.$this->db->prefixTable($table).' ('.$columns.')');
+            $this->tables[]=$table;
+        }
+        $this->insert('companies', ['id' => 'a','currency_code'=>'ARS']);
         $this->insert('suppliers', ['id' => 's', 'company_id' => 'a', 'active' => 1]);
         $this->insert('inventory_products', ['id' => 'p', 'company_id' => 'a', 'active' => 1, 'cost_price' => 10]);
         $this->insert('inventory_warehouses', ['id' => 'w', 'company_id' => 'a', 'active' => 1]);
@@ -221,7 +235,7 @@ final class PurchaseIntegrityTest extends CIUnitTestCase
     public function testPaymentsRequireCashAndUpdateDebtWithCashAtomically(): void
     {
         $this->invoice(null);
-        $input = ['purchase_payable_id' => $this->first('purchase_payables')['id'], 'amount' => 60];
+        $input = ['request_key'=>app_uuid(),'payment_method_id'=>'cash','purchase_payable_id' => $this->first('purchase_payables')['id'], 'amount' => 60];
         $this->assertSame(422, $this->api($input)->storePayment()->getStatusCode());
         $this->assertSame(0, $this->db->table('purchase_payments')->countAllResults());
         $this->insert('cash_registers', ['id' => 'reg', 'company_id' => 'a', 'active' => 1, 'register_type' => 'general']);
@@ -230,7 +244,7 @@ final class PurchaseIntegrityTest extends CIUnitTestCase
         $this->assertSame(201, $response->getStatusCode(), $response->getBody());
         $this->assertEquals(40, $this->first('purchase_payables')['balance_amount']);
         $this->assertEquals(-60, $this->first('cash_movements')['amount']);
-        $this->assertSame(422, $this->api($input)->storePayment()->getStatusCode());
+        $this->assertSame(201, $this->api($input)->storePayment()->getStatusCode());
         $this->assertSame(1, $this->db->table('purchase_payments')->countAllResults());
     }
 
@@ -242,8 +256,9 @@ final class PurchaseIntegrityTest extends CIUnitTestCase
         $accounting = $this->createMock(AccountingService::class);
         $accounting->method('syncPurchasePayment')->willThrowException(new RuntimeException('Accounting unavailable'));
         Services::injectMock('accounting', $accounting);
-        $response = $this->api(['purchase_payable_id' => $this->first('purchase_payables')['id'], 'amount' => 60])->storePayment();
+        $response = $this->api(['request_key'=>app_uuid(),'payment_method_id'=>'cash','purchase_payable_id' => $this->first('purchase_payables')['id'], 'amount' => 60])->storePayment();
         $this->assertSame(422, $response->getStatusCode());
+        $this->assertStringContainsString('Accounting unavailable',$response->getBody());
         $this->assertSame(0, $this->db->table('purchase_payments')->countAllResults());
         $this->assertSame(0, $this->db->table('cash_movements')->countAllResults());
         $this->assertEquals(100, $this->first('purchase_payables')['balance_amount']);

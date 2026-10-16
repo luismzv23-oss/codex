@@ -572,126 +572,34 @@ class PurchasesController extends BaseApiController
 
     public function storePayment()
     {
-        $context = $this->purchaseContext('manage');
-        if (isset($context['error'])) { return $this->fail($context['error'], $context['status']); }
+        $context=$this->purchaseContext('manage');
+        if (isset($context['error'])) return $this->fail($context['error'],$context['status']);
         try {
-            return (new InventoryIntegrityService())->transaction($context['company']['id'], fn() => $this->storePaymentLocked());
-        } catch (\Throwable $e) {
-            log_message('error', 'Compras: {message}', ['message' => $e->getMessage()]);
-            return $this->fail($e->getMessage(), 422);
-        }
+            return $this->success((new \App\Libraries\SupplierPaymentService())->create($context['company']['id'],$this->payload(),$this->apiUser()['id'],$this->apiUser()['branch_id'] ?? null),201);
+        } catch (\Throwable $e) { return $this->fail($e->getMessage(),422); }
     }
 
-    private function storePaymentLocked()
+    public function confirmPayment(string $id)
     {
-        $context = $this->purchaseContext('manage');
-        if (isset($context['error'])) {
-            return $this->fail($context['error'], $context['status']);
-        }
+        $context=$this->purchaseContext('manage');
+        if (isset($context['error'])) return $this->fail($context['error'],$context['status']);
+        try {
+            return $this->success((new \App\Libraries\SupplierPaymentService())->confirm($context['company']['id'],$id,$this->apiUser()['id'],(string)($this->payload()['evidence'] ?? '')));
+        } catch (\Throwable $e) { return $this->fail($e->getMessage(),422); }
+    }
 
-        $companyId = $context['company']['id'];
-        $payload = $this->payload();
-        $payableId = trim((string) ($payload['purchase_payable_id'] ?? ''));
-        $payable = $this->ownedPayable($companyId, $payableId);
-        $amount = round((float) ($payload['amount'] ?? 0), 2);
-        $gatewayId = trim((string) ($payload['gateway_id'] ?? ''));
-        $cashCheckId = trim((string) ($payload['cash_check_id'] ?? ''));
-        $currencyCode = strtoupper(trim((string) ($payload['currency_code'] ?? ($payable['currency_code'] ?? 'ARS')))) ?: 'ARS';
-        $exchangeRate = (float) ($payload['exchange_rate'] ?? 1);
-        if (! is_finite($exchangeRate) || $exchangeRate <= 0) { throw new \RuntimeException('Tipo de cambio invalido.'); }
-        $externalReference = trim((string) ($payload['external_reference'] ?? ''));
+    public function payments()
+    {
+        $context=$this->purchaseContext('view');
+        if (isset($context['error'])) return $this->fail($context['error'],$context['status']);
+        return $this->success((new \App\Libraries\SupplierPaymentService())->history($context['company']['id']));
+    }
 
-        if (! $payable) {
-            return $this->fail('La cuenta a pagar no existe.', 404);
-        }
-
-        if (! is_finite($amount) || $amount <= 0 || $amount > (float) ($payable['balance_amount'] ?? 0)) {
-            return $this->fail('El pago debe ser mayor a cero y no puede superar el saldo pendiente.', 422);
-        }
-
-        if ($gatewayId !== '' && ! (new CashPaymentGatewayModel())->where('company_id', $companyId)->where('id', $gatewayId)->where('active', 1)->first()) {
-            return $this->fail('La pasarela seleccionada no existe.', 422);
-        }
-
-        if ($cashCheckId !== '' && ! (new CashCheckModel())->where('company_id', $companyId)->where('id', $cashCheckId)->first()) {
-            return $this->fail('El cheque seleccionado no existe.', 422);
-        }
-
-        $db = db_connect();
-        $db->transStart();
-
-        $cashSession = (new PurchaseIntegrityService())->paymentSession($companyId, $payable, $currencyCode, $gatewayId, $cashCheckId);
-
-        $paymentId = (new PurchasePaymentModel())->insert([
-            'company_id' => $companyId,
-            'supplier_id' => $payable['supplier_id'],
-            'purchase_payable_id' => $payableId,
-            'payment_number' => $this->nextSequenceNumber($companyId, 'PAGPROV', 'PP'),
-            'payment_method' => trim((string) ($payload['payment_method'] ?? 'transferencia')) ?: 'transferencia',
-            'amount' => $amount,
-            'reference' => trim((string) ($payload['reference'] ?? '')),
-            'gateway_id' => $gatewayId ?: null,
-            'cash_check_id' => $cashCheckId ?: null,
-            'currency_code' => $currencyCode,
-            'exchange_rate' => $exchangeRate,
-            'external_reference' => $externalReference,
-            'paid_at' => trim((string) ($payload['paid_at'] ?? '')) ?: date('Y-m-d H:i:s'),
-            'notes' => trim((string) ($payload['notes'] ?? '')),
-            'created_by' => $this->apiUser()['id'],
-        ], true);
-
-        if ($cashSession) {
-            $cashMovementId = (new CashService())->registerMovement([
-                'company_id' => $companyId,
-                'cash_register_id' => $cashSession['cash_register_id'],
-                'cash_session_id' => $cashSession['id'],
-                'movement_type' => 'purchase_payment',
-                'payment_method' => trim((string) ($payload['payment_method'] ?? 'transferencia')) ?: 'transferencia',
-                'amount' => -1 * $amount,
-                'reference_type' => 'purchase_payment',
-                'reference_id' => $paymentId,
-                'reference_number' => $payable['payable_number'],
-                'gateway_id' => $gatewayId ?: null,
-                'cash_check_id' => $cashCheckId ?: null,
-                'external_reference' => $externalReference,
-                'occurred_at' => trim((string) ($payload['paid_at'] ?? '')) ?: date('Y-m-d H:i:s'),
-                'currency_code' => $currencyCode,
-                'exchange_rate' => $exchangeRate,
-                'notes' => 'Pago a proveedor',
-                'created_by' => $this->apiUser()['id'],
-            ]);
-            if (! $cashMovementId) { throw new \RuntimeException('No se pudo registrar el egreso de caja.'); }
-        }
-
-        $paidAmount = (float) ($payable['paid_amount'] ?? 0) + $amount;
-        $balance = max(0, (float) ($payable['total_amount'] ?? 0) - $paidAmount);
-        (new PurchasePayableModel())->update($payableId, [
-            'paid_amount' => $paidAmount,
-            'balance_amount' => $balance,
-            'status' => $balance <= 0 ? 'paid' : 'partial',
-        ]);
-
-        if ($currencyCode !== 'ARS' || abs($exchangeRate - 1) > 0.000001) {
-            (new SupplierExchangeDifferenceModel())->insert([
-                'company_id' => $companyId,
-                'supplier_id' => $payable['supplier_id'],
-                'purchase_payment_id' => $paymentId,
-                'currency_code' => $currencyCode,
-                'base_rate' => (float) ($payable['exchange_rate'] ?? 1),
-                'settlement_rate' => $exchangeRate,
-                'difference_amount' => $amount * ($exchangeRate - (float) ($payable['exchange_rate'] ?? 1)),
-                'observed_at' => trim((string) ($payload['paid_at'] ?? '')) ?: date('Y-m-d H:i:s'),
-            ]);
-        }
-
-        service('accounting')->syncPurchasePayment($companyId, (string) $paymentId, $this->apiUser()['id']);
-
-        $db->transComplete();
-        if (! $db->transStatus()) {
-            return $this->fail('No se pudo registrar el pago.', 500);
-        }
-
-        return $this->success((new PurchasePaymentModel())->find($paymentId), 201);
+    public function paymentMethods()
+    {
+        $context=$this->purchaseContext('view');
+        if (isset($context['error'])) return $this->fail($context['error'],$context['status']);
+        return $this->success(array_values(array_filter((new \App\Libraries\SalesPaymentService())->catalog($context['company']['id']),static fn($m)=>!empty($m['allow_supplier_payments']))));
     }
 
     protected function purchaseContext(string $requiredAccess = 'view'): array

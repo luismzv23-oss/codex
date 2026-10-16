@@ -85,7 +85,8 @@ final class PurchasesDashboardTest extends CIUnitTestCase
                 'items'=>[], 'gateways'=>[], 'checks'=>[], 'receipts'=>[], 'invoices'=>[], 'fromReceiptItems'=>[],
             ];
             $html = view('purchases/forms/'.$form,$values,['saveData'=>false]);
-            $this->assertStringContainsString('purchases-shell',$html,$form);
+            if ($form!=='payment') $this->assertStringContainsString('purchases-shell',$html,$form);
+            else $this->assertStringNotContainsString('purchases-hero-actions',$html);
             $this->assertStringContainsString('action="/compras/test-save?popup=1"',$html,$form);
             $this->assertStringContainsString('name="company_id"',$html,$form);
         }

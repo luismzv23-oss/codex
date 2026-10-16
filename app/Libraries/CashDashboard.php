@@ -29,16 +29,20 @@ final class CashDashboard
             return $registerIds ? $query->whereIn('cash_register_id', $registerIds) : $query->where('1 = 0', null, false);
         };
         $movements = $scope($db->table('cash_movements'))
-            ->select("DATE(occurred_at) AS day, payment_method, SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) AS income, SUM(CASE WHEN amount < 0 THEN -amount ELSE 0 END) AS expense, COUNT(*) AS count, SUM(CASE WHEN reconciliation_status = 'pending' THEN 1 ELSE 0 END) AS pending", false)
             ->where('occurred_at >=', $from.' 00:00:00')->where('occurred_at <', date('Y-m-d', strtotime($to.' +1 day')).' 00:00:00')
-            ->groupBy('DATE(occurred_at), payment_method')->orderBy('day')->get()->getResultArray();
+            ->orderBy('occurred_at')->get()->getResultArray();
         $data = ['income'=>0,'expense'=>0,'count'=>0,'pending'=>0,'days'=>[],'methods'=>[], 'from'=>$from,'to'=>$to];
         for ($day = $from; $day <= $to; $day = date('Y-m-d', strtotime($day.' +1 day'))) $data['days'][$day] = ['income'=>0,'expense'=>0];
         foreach ($movements as $row) {
-            foreach (['income','expense','count','pending'] as $key) $data[$key] += (float)$row[$key];
-            foreach (['income','expense'] as $key) $data['days'][$row['day']][$key] += (float)$row[$key];
-            $method = $row['payment_method'] ?: 'Sin medio';
-            $data['methods'][$method] = ($data['methods'][$method] ?? 0) + (float)$row['income'];
+            if (($row['status'] ?? 'posted')!=='posted') continue;
+            $amount=round((float)$row['amount']*(float)($row['exchange_rate'] ?? 1),2);
+            $income=max(0,$amount); $expense=max(0,-$amount); $day=substr($row['occurred_at'],0,10);
+            $data['income']+=$income; $data['expense']+=$expense; $data['count']++;
+            if (($row['reconciliation_status'] ?? '')==='pending') $data['pending']++;
+            $data['days'][$day]['income']+=$income; $data['days'][$day]['expense']+=$expense;
+            $method=PaymentIntegrityService::label($row);
+            if (!empty($row['payment_method_id'])) $method.=' ['.($row['payment_method_code'] ?? $row['payment_method_id']).']';
+            $data['methods'][$method]=($data['methods'][$method] ?? 0)+$income;
         }
         arsort($data['methods']);
         $data['net'] = round($data['income'] - $data['expense'], 2);

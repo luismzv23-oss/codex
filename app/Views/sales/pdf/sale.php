@@ -454,7 +454,7 @@
         <table style="width:100%;margin-top:16px;font-size:11px;">
             <tr><th>Medio de pago</th><th>Total</th><th>Estado</th></tr>
             <?php foreach ($paymentLines as $line): ?>
-                <tr><td><?= esc($line['payment_method_code']) ?></td><td><?= number_format((float)$line['amount'],2,',','.') ?></td><td><?= ($line['status'] ?? '') === 'pending' ? 'Pendiente de confirmación' : 'Registrado' ?></td></tr>
+                <tr><td><?= esc(\App\Libraries\PaymentIntegrityService::label($line)) ?></td><td><?= number_format((float)$line['amount'],2,',','.') ?></td><td><?= ($line['status'] ?? '') === 'pending' ? 'Pendiente de confirmación' : 'Registrado' ?></td></tr>
                 <?php if ($line['payment_method'] === 'cash'): ?><tr><td colspan="3">Efectivo entregado: <?= number_format((float)$line['received_amount'],2,',','.') ?> · Vuelto: <?= number_format((float)$line['change_amount'],2,',','.') ?></td></tr><?php endif; ?>
             <?php endforeach; ?>
         </table>

@@ -15,7 +15,7 @@
                     <li class="list-group-item px-0 py-3 d-flex flex-wrap justify-content-between align-items-center gap-2" data-record-id="<?= esc($method['id']) ?>" tabindex="-1">
                         <div class="text-break">
                             <span class="fw-medium"><?= esc($method['name']) ?></span> <span class="text-secondary">(<?= esc($method['code']) ?>)</span>
-                            <div class="small text-secondary"><?= esc(\App\Libraries\CompanyPaymentMethodService::TYPES[$method['type']] ?? $method['type']) ?> · <?= (int) $method['active'] === 1 ? 'Activo' : 'Inactivo' ?></div>
+                            <div class="small text-secondary"><?= esc(\App\Libraries\CompanyPaymentMethodService::TYPES[$method['type']] ?? $method['type']) ?> · <?= (int) $method['active'] === 1 ? 'Activo' : 'Inactivo' ?> · Cobros: <?= (int)($method['allow_collections'] ?? 1)?'Sí':'No' ?> · Proveedores: <?= !empty($method['allow_supplier_payments'])?'Sí':'No' ?></div>
                         </div>
                         <?php if (auth_can('settings.manage')): ?>
                             <div class="d-flex gap-2">

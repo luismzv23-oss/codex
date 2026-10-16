@@ -58,6 +58,7 @@ class PurchasesController extends BaseController
             'invoices' => $this->invoiceRows($companyId),
             'creditNotes' => $this->creditNoteRows($companyId),
             'costHistory' => $this->supplierCostRows($companyId),
+            'supplierPayments' => (new \App\Libraries\SupplierPaymentService())->history($companyId),
         ], \App\Libraries\PurchasesDashboard::filters((array)$this->request->getGet())));
     }
 
@@ -575,12 +576,13 @@ class PurchasesController extends BaseController
             'context' => $context,
             'companyId' => $context['company']['id'],
             'payable' => $payable,
+            'paymentBranchId' => $this->currentUser()['branch_id'] ?? null,
             'supplier' => $this->ownedSupplier($context['company']['id'], (string) $payable['supplier_id']),
             'gateways' => (new CashPaymentGatewayModel())->where('company_id', $context['company']['id'])->where('active', 1)->orderBy('name', 'ASC')->findAll(),
             'checks' => (new CashCheckModel())->where('company_id', $context['company']['id'])->orderBy('created_at', 'DESC')->findAll(),
             'formAction' => site_url('compras/pagos'),
             'isPopup' => $this->isPopupRequest(),
-        ]);
+        ] + (new \App\Libraries\TreasuryPaymentService())->formOptions($context['company']['id']));
     }
 
     public function createInvoiceForm()
@@ -765,119 +767,34 @@ class PurchasesController extends BaseController
 
     public function storePayment()
     {
-        $context = $this->purchaseContext('manage');
-        if ($context instanceof RedirectResponse) { return $context; }
+        $context=$this->purchaseContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
         try {
-            return (new InventoryIntegrityService())->transaction($context['company']['id'], fn() => $this->storePaymentLocked());
-        } catch (\Throwable $e) {
-            log_message('error', 'Compras: {message}', ['message' => $e->getMessage()]);
-            return redirect()->back()->withInput()->with('error', $e->getMessage());
-        }
+            $payment=(new \App\Libraries\SupplierPaymentService())->create($context['company']['id'],(array)$this->request->getPost(),$this->currentUser()['id'],$this->currentUser()['branch_id'] ?? null);
+            return $this->popupOrRedirect($this->purchaseRoute('compras',$context['company']['id']),$payment['status']==='pending'?'Pago pendiente de confirmación.':'Pago registrado correctamente.');
+        } catch (\Throwable $e) { return redirect()->back()->withInput()->with('error',$e->getMessage()); }
     }
 
-    private function storePaymentLocked()
+    public function confirmPaymentForm(string $id)
     {
-        $context = $this->purchaseContext('manage');
-        if ($context instanceof RedirectResponse) {
-            return $context;
-        }
-
-        $companyId = $context['company']['id'];
-        $payableId = trim((string) $this->request->getPost('purchase_payable_id'));
-        $payable = $this->ownedPayable($companyId, $payableId);
-        $amount = round((float) $this->request->getPost('amount'), 2);
-
-        if (! $payable) {
-            return redirect()->back()->withInput()->with('error', 'La cuenta a pagar no existe.');
-        }
-
-        if (! is_finite($amount) || $amount <= 0 || $amount > (float) ($payable['balance_amount'] ?? 0)) {
-            return redirect()->back()->withInput()->with('error', 'El pago debe ser mayor a cero y no puede superar el saldo pendiente.');
-        }
-
-        $db = db_connect();
-        $db->transStart();
-
-        $paymentMethod = trim((string) $this->request->getPost('payment_method')) ?: 'transferencia';
-        $gatewayId = trim((string) $this->request->getPost('gateway_id')) ?: null;
-        $cashCheckId = trim((string) $this->request->getPost('cash_check_id')) ?: null;
-        $currencyCode = trim((string) $this->request->getPost('currency_code')) ?: 'ARS';
-        $exchangeRate = (float) ($this->request->getPost('exchange_rate') ?: 1);
-        if (! is_finite($exchangeRate) || $exchangeRate <= 0) { throw new \RuntimeException('Tipo de cambio invalido.'); }
-        $externalReference = trim((string) $this->request->getPost('external_reference')) ?: null;
-
-        $cashSession = (new PurchaseIntegrityService())->paymentSession($companyId, $payable, $currencyCode, $gatewayId, $cashCheckId);
-
-        $paymentId = (new PurchasePaymentModel())->insert([
-            'company_id' => $companyId,
-            'supplier_id' => $payable['supplier_id'],
-            'purchase_payable_id' => $payableId,
-            'payment_number' => $this->nextSequenceNumber($companyId, 'PAGPROV', 'PP'),
-            'payment_method' => $paymentMethod,
-            'gateway_id' => $gatewayId,
-            'cash_check_id' => $cashCheckId,
-            'currency_code' => $currencyCode,
-            'exchange_rate' => $exchangeRate,
-            'amount' => $amount,
-            'reference' => trim((string) $this->request->getPost('reference')),
-            'external_reference' => $externalReference,
-            'paid_at' => trim((string) $this->request->getPost('paid_at')) ?: date('Y-m-d H:i:s'),
-            'notes' => trim((string) $this->request->getPost('notes')),
-            'created_by' => $this->currentUser()['id'],
-        ], true);
-
-        if ($cashSession) {
-            $cashMovementId = (new CashService())->registerMovement([
-                'company_id' => $companyId,
-                'cash_register_id' => $cashSession['cash_register_id'],
-                'cash_session_id' => $cashSession['id'],
-                'movement_type' => 'purchase_payment',
-                'payment_method' => $paymentMethod,
-                'gateway_id' => $gatewayId,
-                'cash_check_id' => $cashCheckId,
-                'amount' => -1 * $amount,
-                'reference_type' => 'purchase_payment',
-                'reference_id' => $paymentId,
-                'reference_number' => $payable['payable_number'],
-                'external_reference' => $externalReference,
-                'occurred_at' => trim((string) $this->request->getPost('paid_at')) ?: date('Y-m-d H:i:s'),
-                'currency_code' => $currencyCode,
-                'exchange_rate' => $exchangeRate,
-                'notes' => 'Pago a proveedor',
-                'created_by' => $this->currentUser()['id'],
-            ]);
-            if (! $cashMovementId) { throw new \RuntimeException('No se pudo registrar el egreso de caja.'); }
-        }
-
-        if ($currencyCode !== 'ARS' && abs($exchangeRate - 1) > 0.000001) {
-            (new SupplierExchangeDifferenceModel())->insert([
-                'company_id' => $companyId,
-                'purchase_payment_id' => $paymentId,
-                'currency_code' => $currencyCode,
-                'base_rate' => 1,
-                'settlement_rate' => $exchangeRate,
-                'difference_amount' => round(($exchangeRate - 1) * $amount, 2),
-                'notes' => 'Diferencia de cambio al pago',
-            ]);
-        }
-
-        $paidAmount = (float) ($payable['paid_amount'] ?? 0) + $amount;
-        $balance = max(0, (float) ($payable['total_amount'] ?? 0) - $paidAmount);
-        (new PurchasePayableModel())->update($payableId, [
-            'paid_amount' => $paidAmount,
-            'balance_amount' => $balance,
-            'status' => $balance <= 0 ? 'paid' : 'partial',
+        $context=$this->purchaseContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+        $payment=(new PurchasePaymentModel())->where('company_id',$context['company']['id'])->where('status','pending')->find($id);
+        if (!$payment) throw \CodeIgniter\Exceptions\PageNotFoundException::forPageNotFound();
+        return view('cash/forms/payment_confirmation',[
+            'pageTitle'=>'Confirmar pago a proveedor','payment'=>$payment,'companyId'=>$context['company']['id'],
+            'formAction'=>site_url('compras/pagos/'.$id.'/confirmar'),'isPopup'=>$this->isPopupRequest(),
         ]);
+    }
 
-        service('accounting')->syncPurchasePayment($companyId, (string) $paymentId, $this->currentUser()['id']);
-        EventBus::emit('purchase.payment_made', ['company_id' => $companyId, 'payment_id' => $paymentId, 'amount' => $amount, 'supplier_id' => $payable['supplier_id']]);
-
-        $db->transComplete();
-        if (! $db->transStatus()) {
-            return redirect()->back()->withInput()->with('error', 'No se pudo registrar el pago.');
-        }
-
-        return $this->popupOrRedirect($this->purchaseRoute('compras', $companyId), 'Pago registrado correctamente.');
+    public function confirmPayment(string $id)
+    {
+        $context=$this->purchaseContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+        try {
+            (new \App\Libraries\SupplierPaymentService())->confirm($context['company']['id'],$id,$this->currentUser()['id'],(string)$this->request->getPost('evidence'));
+            return $this->popupOrRedirect($this->purchaseRoute('compras',$context['company']['id']),'Pago confirmado.');
+        } catch (\Throwable $e) { return redirect()->back()->withInput()->with('error',$e->getMessage()); }
     }
 
     protected function purchaseContext(string $requiredAccess = 'view')

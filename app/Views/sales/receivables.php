@@ -114,7 +114,8 @@
                                 <td>
                                     <?php
                                     $methodLabels = ['cash' => 'Efectivo', 'card' => 'Tarjeta', 'transfer' => 'Transferencia', 'check' => 'Cheque', 'qr' => 'QR', 'mixed' => 'Mixto', 'credit' => 'Saldo a favor'];
-                                    echo esc($methodLabels[$receipt['payment_method'] ?? ''] ?? ($receipt['payment_method'] ?? '-'));
+                                    $details = json_decode($receipt['payment_details'] ?? '[]', true) ?: [];
+                                    echo esc($details ? implode(' + ', array_unique(array_map([\App\Libraries\PaymentIntegrityService::class, 'label'], $details))) : ($methodLabels[$receipt['payment_method'] ?? ''] ?? ($receipt['payment_method'] ?? '-')));
                                     ?>
                                 </td>
                                 <td><?= number_format((float) ($receipt['total_amount'] ?? 0), 2, ',', '.') ?><?php if (($receipt['available_amount'] ?? 0) > 0): ?><div class="small text-success">Disponible: <?= number_format($receipt['available_amount'], 2, ',', '.') ?></div><?php endif; ?></td>
@@ -149,17 +150,17 @@
 </div>
 
 <?php if (! empty($pendingPayments)): ?>
-<section class="card mt-4"><div class="card-body"><h2 class="h5">Transferencias de ventas pendientes de verificación</h2>
+<section class="card mt-4"><div class="card-body"><h2 class="h5">Pagos de ventas pendientes de verificación</h2>
 <div class="table-responsive"><table data-sales-table class="table"><thead><tr><th>Venta</th><th>Importe</th><th>Referencia</th><th>Verificación</th></tr></thead><tbody>
-<?php foreach ($pendingPayments as $payment): ?><tr><td><?= esc($payment['sale_number']) ?></td><td><?= esc(number_format($payment['amount'], 2, ',', '.') . ' ' . $payment['currency_code']) ?></td><td><?= esc($payment['external_reference'] ?: $payment['reference']) ?></td><td>
-<form method="post" action="<?= site_url('ventas/' . $payment['sale_id'] . '/pagos/' . $payment['id'] . '/confirmar?company_id=' . $selectedCompanyId) ?>" class="d-flex gap-2"><?= csrf_field() ?><input name="confirmation_note" class="form-control" aria-label="Evidencia de verificación" placeholder="Evidencia de verificación" required maxlength="500"><button class="btn btn-outline-success icon-btn" title="Confirmar transferencia" aria-label="Confirmar transferencia"><i class="bi bi-check2-circle"></i></button></form>
+<?php foreach ($pendingPayments as $payment): ?><tr><td><?= esc($payment['sale_number']) ?><div class="small text-secondary"><?= esc(\App\Libraries\PaymentIntegrityService::label($payment)) ?></div></td><td><?= esc(number_format($payment['amount'], 2, ',', '.') . ' ' . $payment['currency_code']) ?></td><td><?= esc($payment['external_reference'] ?: $payment['reference']) ?></td><td>
+<form method="post" action="<?= site_url('ventas/' . $payment['sale_id'] . '/pagos/' . $payment['id'] . '/confirmar?company_id=' . $selectedCompanyId) ?>" class="d-flex gap-2"><?= csrf_field() ?><input name="confirmation_note" class="form-control" aria-label="Evidencia de verificación" placeholder="Evidencia de verificación" required maxlength="500"><button class="btn btn-outline-success icon-btn" title="Confirmar pago" aria-label="Confirmar transferencia"><i class="bi bi-check2-circle"></i></button></form>
 </td></tr><?php endforeach; ?>
 </tbody></table></div></div></section>
 <?php endif; ?>
 <?php if (!empty($unsettledPayments)): ?>
 <section class="card mt-4"><div class="card-body"><h2 class="h5">Cobros de ventas por acreditar</h2><p class="text-secondary">Registra la acreditacion del importe completo. No genera un nuevo cobro al cliente.</p>
 <table data-sales-table class="table"><thead><tr><th>Venta</th><th>Medio</th><th>Importe</th><th>Acreditacion bancaria</th></tr></thead><tbody>
-<?php foreach ($unsettledPayments as $payment): ?><tr><td><?= esc($payment['sale_number']) ?></td><td><?= esc(['card'=>'Tarjeta','check'=>'Cheque','qr'=>'Billetera'][$payment['payment_method']]) ?></td><td><?= number_format($payment['amount'], 2, ',', '.') ?></td><td>
+<?php foreach ($unsettledPayments as $payment): ?><tr><td><?= esc($payment['sale_number']) ?></td><td><?= esc(\App\Libraries\PaymentIntegrityService::label($payment)) ?></td><td><?= number_format($payment['amount'], 2, ',', '.') ?></td><td>
 <form method="post" class="d-flex gap-2" action="<?= site_url('ventas/' . $payment['sale_id'] . '/pagos/' . $payment['id'] . '/acreditar?company_id=' . $selectedCompanyId) ?>"><?= csrf_field() ?><input name="evidence" class="form-control" placeholder="Referencia bancaria" aria-label="Referencia bancaria" required maxlength="500"><button class="btn btn-outline-success icon-btn" title="Acreditar en banco" aria-label="Acreditar en banco"><i class="bi bi-bank"></i></button></form>
 </td></tr><?php endforeach; ?></tbody></table></div></section>
 <?php endif; ?>

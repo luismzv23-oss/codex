@@ -111,7 +111,7 @@ $movTypeLabels = [
         <h2 class="h5 mb-3">Totales por medio de pago</h2>
         <div class="row g-3">
             <?php foreach ($paymentMethods as $pm): ?>
-                <?php $pmName = $pm['payment_method'] ?: 'Sin medio'; ?>
+                <?php $pmName = \App\Libraries\PaymentIntegrityService::label($pm).' · '.($pm['currency_code'] ?? ''); ?>
                 <div class="col-6">
                     <div class="bg-light rounded-3 p-3 text-center">
                         <div class="text-secondary small mb-1"><?= esc($pmLabels[strtolower($pmName)] ?? ucfirst($pmName)) ?></div>
@@ -175,7 +175,7 @@ $movTypeLabels = [
                     <tr>
                         <td class="small"><?= esc(date('d/m/Y H:i', strtotime($mov['occurred_at']))) ?></td>
                         <td><?= esc($movTypeLabels[$mov['movement_type']] ?? ucfirst($mov['movement_type'])) ?></td>
-                        <td class="small"><?= esc($pmLabels[strtolower($mov['payment_method'] ?? '')] ?? ucfirst($mov['payment_method'] ?? '-')) ?></td>
+                        <td class="small"><?= esc(\App\Libraries\PaymentIntegrityService::label($mov).' · '.($mov['currency_code'] ?? '').(($mov['status'] ?? 'posted')==='pending'?' (Pendiente)':'')) ?></td>
                         <td class="small text-secondary">
                             <?php if (!empty($mov['sale_id']) && !empty($mov['reference_number'])): ?>
                                 <a href="<?= site_url('ventas/' . $mov['sale_id'] . '/pdf') ?>" target="_blank" class="text-decoration-none">

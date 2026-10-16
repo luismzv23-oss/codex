@@ -151,6 +151,9 @@ class PurchaseIntegrityService
             $total += $item['line_total'] - $item['quantity'] * $p['total'] / $p['qty'];
             $invoiced += $item['quantity'];
         }
+        $extra = db_connect()->table('purchase_invoices')->selectSum('adjustment_total','amount')
+            ->where('company_id',$companyId)->where('purchase_receipt_id',$receiptId)->where('status !=','cancelled')->get()->getRowArray();
+        $total+=(float)($extra['amount'] ?? 0);
         $returns = db_connect()->table('purchase_returns')->selectSum('total', 'amount')->where('company_id', $companyId)
             ->where('purchase_receipt_id', $receiptId)->where('status !=', 'cancelled')->get()->getRowArray();
         // A credit documenting an existing return must not reduce the liability twice.

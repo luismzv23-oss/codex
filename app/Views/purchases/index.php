@@ -165,7 +165,9 @@
                         <tbody>
                         <?php foreach ($invoices as $invoice): ?>
                             <tr class="data-row" data-supplier="<?= esc($invoice['supplier_name']) ?>" data-number="<?= esc($invoice['invoice_number']) ?>">
-                                <td><?= esc($invoice['invoice_number']) ?><div class="small text-secondary"><?= esc(! empty($invoice['issue_date']) ? date('d/m/Y H:i', strtotime($invoice['issue_date'])) : '-') ?></div></td>
+                                <td><?= esc($invoice['invoice_number']) ?><?php if (!empty($invoice['import_id']) && in_array(auth_user()['role_slug'] ?? '',['admin','superadmin'],true)): ?>
+                                    <a href="<?= site_url('compras/importaciones?'.http_build_query(['company_id'=>$selectedCompanyId,'import'=>$invoice['import_id']])) ?>" class="btn btn-sm btn-outline-dark icon-btn" title="Consultar factura y original" aria-label="Consultar factura y original"><i class="bi bi-file-earmark-richtext"></i></a>
+                                <?php endif; ?><div class="small text-secondary"><?= esc(! empty($invoice['issue_date']) ? date('d/m/Y H:i', strtotime($invoice['issue_date'])) : '-') ?></div></td>
                                 <td><?= esc($invoice['supplier_name']) ?></td>
                                 <td><?= esc($invoice['receipt_number'] ?: '-') ?></td>
                                 <td><?= esc($invoice['currency_code']) ?></td>

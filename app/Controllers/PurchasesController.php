@@ -634,67 +634,13 @@ class PurchasesController extends BaseController
 
     private function storeInvoiceLocked()
     {
-        $context = $this->purchaseContext('manage');
-        if ($context instanceof RedirectResponse) {
-            return $context;
-        }
-
-        $companyId = $context['company']['id'];
-        $supplierId = trim((string) $this->request->getPost('supplier_id'));
-        $invoiceNumber = trim((string) $this->request->getPost('invoice_number'));
-        if (! $this->ownedSupplier($companyId, $supplierId) || $invoiceNumber === '') {
-            return redirect()->back()->withInput()->with('error', 'Debes seleccionar proveedor y numero de factura.');
-        }
-
-        $rows = $this->purchaseInvoiceItemsPayload($companyId);
-        if ($rows === []) {
-            return redirect()->back()->withInput()->with('error', 'Debes agregar al menos una linea en la factura.');
-        }
-
-        $purchaseReceiptId = trim((string) $this->request->getPost('purchase_receipt_id')) ?: null;
-
-        $currencyCode = trim((string) $this->request->getPost('currency_code')) ?: 'ARS';
-        $exchangeRate = (float) ($this->request->getPost('exchange_rate') ?: 1);
-        if (! is_finite($exchangeRate) || $exchangeRate <= 0) { throw new \RuntimeException('Tipo de cambio invalido.'); }
-        (new PurchaseIntegrityService())->validateInvoice($companyId, $supplierId, $purchaseReceiptId, $currencyCode, $rows);
-        $totals = $this->purchaseTotals($rows);
-        $invoiceId = (new PurchaseInvoiceModel())->insert([
-            'company_id' => $companyId,
-            'supplier_id' => $supplierId,
-            'purchase_receipt_id' => $purchaseReceiptId,
-            'invoice_number' => $invoiceNumber,
-            'currency_code' => $currencyCode,
-            'exchange_rate' => $exchangeRate,
-            'subtotal' => $totals['subtotal'],
-            'tax_total' => $totals['tax_total'],
-            'total' => $totals['total'],
-            'issue_date' => trim((string) $this->request->getPost('issue_date')) ?: date('Y-m-d H:i:s'),
-            'due_date' => trim((string) $this->request->getPost('due_date')) ?: null,
-            'status' => 'registered',
-            'notes' => trim((string) $this->request->getPost('notes')),
-            'created_by' => $this->currentUser()['id'],
-        ], true);
-
-        $itemModel = new PurchaseInvoiceItemModel();
-        foreach ($rows as $row) {
-            $itemModel->insert(array_merge($row, ['purchase_invoice_id' => $invoiceId]));
-            if (! empty($row['product_id'])) {
-                (new SupplierCostHistoryModel())->insert([
-                    'company_id' => $companyId,
-                    'supplier_id' => $supplierId,
-                    'product_id' => $row['product_id'],
-                    'purchase_invoice_id' => $invoiceId,
-                    'currency_code' => $currencyCode,
-                    'exchange_rate' => $exchangeRate,
-                    'unit_cost' => (float) $row['unit_cost'],
-                    'observed_at' => trim((string) $this->request->getPost('issue_date')) ?: date('Y-m-d H:i:s'),
-                ]);
-            }
-        }
-
-        (new PurchaseIntegrityService())->syncInvoice($companyId, (string) $invoiceId);
-
-        return $this->popupOrRedirect($this->purchaseRoute('compras', $companyId), 'Factura proveedor registrada correctamente.');
+        $context=$this->purchaseContext('manage');
+        if ($context instanceof RedirectResponse) return $context;
+        $companyId=$context['company']['id'];
+        $input=(array)$this->request->getPost();
+        $input['items']=$this->purchaseInvoiceItemsPayload($companyId);
+        (new \App\Libraries\PurchaseInvoiceService())->register($companyId,$input,(string)($this->currentUser()['id'] ?? ''));
+        return $this->popupOrRedirect($this->purchaseRoute('compras',$companyId),'Factura proveedor registrada correctamente.');
     }
 
     public function createCreditNoteForm()

@@ -357,67 +357,10 @@ class PurchasesController extends BaseApiController
 
     private function storeInvoiceLocked()
     {
-        $context = $this->purchaseContext('manage');
-        if (isset($context['error'])) {
-            return $this->fail($context['error'], $context['status']);
-        }
-
-        $payload = $this->payload();
-        $companyId = $context['company']['id'];
-        $supplierId = trim((string) ($payload['supplier_id'] ?? ''));
-        $invoiceNumber = trim((string) ($payload['invoice_number'] ?? ''));
-        if (! $this->ownedSupplier($companyId, $supplierId) || $invoiceNumber === '') {
-            return $this->fail('Debes seleccionar proveedor y numero de factura.', 422);
-        }
-
-        $rows = $this->purchaseInvoiceItemsPayload($companyId, (array) ($payload['items'] ?? []));
-        if ($rows === []) {
-            return $this->fail('Debes agregar al menos una linea en la factura.', 422);
-        }
-
-        $purchaseReceiptId = trim((string) ($payload['purchase_receipt_id'] ?? '')) ?: null;
-        $currencyCode = trim((string) ($payload['currency_code'] ?? '')) ?: 'ARS';
-        $exchangeRate = (float) ($payload['exchange_rate'] ?? 1);
-        if (! is_finite($exchangeRate) || $exchangeRate <= 0) { throw new \RuntimeException('Tipo de cambio invalido.'); }
-        (new PurchaseIntegrityService())->validateInvoice($companyId, $supplierId, $purchaseReceiptId, $currencyCode, $rows);
-        $totals = $this->purchaseTotals($rows);
-        $invoiceId = (new PurchaseInvoiceModel())->insert([
-            'company_id' => $companyId,
-            'supplier_id' => $supplierId,
-            'purchase_receipt_id' => trim((string) ($payload['purchase_receipt_id'] ?? '')) ?: null,
-            'invoice_number' => $invoiceNumber,
-            'currency_code' => $currencyCode,
-            'exchange_rate' => $exchangeRate,
-            'subtotal' => $totals['subtotal'],
-            'tax_total' => $totals['tax_total'],
-            'total' => $totals['total'],
-            'issue_date' => trim((string) ($payload['issue_date'] ?? '')) ?: date('Y-m-d H:i:s'),
-            'due_date' => trim((string) ($payload['due_date'] ?? '')) ?: null,
-            'status' => 'registered',
-            'notes' => trim((string) ($payload['notes'] ?? '')),
-            'created_by' => $this->apiUser()['id'] ?? null,
-        ], true);
-
-        $itemModel = new PurchaseInvoiceItemModel();
-        foreach ($rows as $row) {
-            $itemModel->insert(array_merge($row, ['purchase_invoice_id' => $invoiceId]));
-            if (! empty($row['product_id'])) {
-                (new SupplierCostHistoryModel())->insert([
-                    'company_id' => $companyId,
-                    'supplier_id' => $supplierId,
-                    'product_id' => $row['product_id'],
-                    'purchase_invoice_id' => $invoiceId,
-                    'currency_code' => $currencyCode,
-                    'exchange_rate' => $exchangeRate,
-                    'unit_cost' => (float) $row['unit_cost'],
-                    'observed_at' => trim((string) ($payload['issue_date'] ?? '')) ?: date('Y-m-d H:i:s'),
-                ]);
-            }
-        }
-
-        (new PurchaseIntegrityService())->syncInvoice($companyId, (string) $invoiceId);
-
-        return $this->success((new PurchaseInvoiceModel())->find($invoiceId), 201);
+        $context=$this->purchaseContext('manage');
+        if (isset($context['error'])) return $this->fail($context['error'],$context['status']);
+        $invoice=(new \App\Libraries\PurchaseInvoiceService())->register($context['company']['id'],$this->payload(),(string)($this->apiUser()['id'] ?? ''));
+        return $this->success($invoice,201);
     }
 
     public function storeCreditNote()

@@ -1,15 +1,15 @@
 <?php
 namespace App\Libraries;
-use App\Libraries\PurchaseImport\{InvoiceExtractor,AzureInvoiceExtractor,InvoiceExtractionNormalizer};
+use App\Libraries\PurchaseImport\{InvoiceExtractor,LocalInvoiceExtractor,InvoiceReaderFactory,InvoiceExtractionNormalizer};
 use App\Models\{PurchaseImportModel,PurchaseImportJobModel,PurchaseDocumentModel};
 
 class PurchaseImportWorker
 {
-    private InvoiceExtractor $extractor;
+    private InvoiceExtractor|LocalInvoiceExtractor|null $extractor;
     private PurchaseDocumentStorage $storage;
-    public function __construct(?InvoiceExtractor $extractor=null,?PurchaseDocumentStorage $storage=null)
+    public function __construct(InvoiceExtractor|LocalInvoiceExtractor|null $extractor=null,?PurchaseDocumentStorage $storage=null)
     {
-        $this->extractor=$extractor ?? new AzureInvoiceExtractor();$this->storage=$storage ?? new PurchaseDocumentStorage();
+        $this->extractor=$extractor;$this->storage=$storage ?? new PurchaseDocumentStorage();
     }
     public function run(int $limit=10,?string $company=null): int
     {
@@ -40,12 +40,20 @@ class PurchaseImportWorker
                 if (!$document) throw new \RuntimeException('Documento no disponible para lectura.');
                 $path=$this->storage->path($document);
                 if (!hash_equals($document['sha256'],hash_file('sha256',$path))) throw new \RuntimeException('El documento almacenado no coincide con su huella original.');
+                $extractor=$this->extractor ?? InvoiceReaderFactory::make($job['provider'] ?? 'azure');
+                if ($extractor instanceof LocalInvoiceExtractor) {
+                    $result=$extractor->extract($path,$document);
+                    $normalized=(new InvoiceExtractionNormalizer())->normalize($job['company_id'],$result,$document);
+                    if (strlen(json_encode($normalized,JSON_THROW_ON_ERROR))>4000000) throw new \RuntimeException('La lectura excedió el tamaño de resultado admitido.');
+                    $this->finish($job,['status'=>'done','error_message'=>null],$normalized);
+                    continue;
+                }
                 if (!$job['operation_url']) {
-                    $url=$this->extractor->start($path,$document);
+                    $url=$extractor->start($path,$document);
                     $this->finish($job,['operation_url'=>$url,'status'=>'queued','available_at'=>date('Y-m-d H:i:s',time()+5)],null);
                     continue;
                 }
-                $result=$this->extractor->poll($job['operation_url']);
+                $result=$extractor->poll($job['operation_url']);
                 if ($result===null) {
                     $this->finish($job,['status'=>'queued','available_at'=>date('Y-m-d H:i:s',time()+10)],null);continue;
                 }

@@ -21,6 +21,8 @@ final class PurchaseImportTest extends CIUnitTestCase
         (new \App\Database\Migrations\CreatePurchaseInvoiceImports(\Config\Database::forge('tests')))->up();
         require_once APPPATH.'Database/Migrations/2026-10-16-152000_KeepPurchaseImportExtractionHistory.php';
         (new \App\Database\Migrations\KeepPurchaseImportExtractionHistory(\Config\Database::forge('tests')))->up();
+        require_once APPPATH.'Database/Migrations/2026-10-16-153000_RecordPurchaseImportProvider.php';
+        (new \App\Database\Migrations\RecordPurchaseImportProvider(\Config\Database::forge('tests')))->up();
         $this->tables=array_merge($this->tables,['purchase_documents','purchase_imports','purchase_import_items','purchase_import_jobs','purchase_import_audit','supplier_product_links']);
         foreach (['a','b'] as $company) {
             $this->put('companies',['id'=>$company,'name'=>$company,'currency_code'=>'ARS','tax_id'=>'30712345678']);
@@ -53,6 +55,32 @@ final class PurchaseImportTest extends CIUnitTestCase
             'due_date'=>'2026-10-30','reviewed_total'=>'242.00','identity_reviewed'=>true,'items'=>[['description'=>'Producto','quantity'=>'2','unit_cost'=>'100','tax_rate'=>'21','tax_amount'=>'42.00','product_id'=>'a-product','supplier_code'=>'PROV-1']],'adjustments'=>[]],$replace);
     }
     private function saveReady(array $replace=[]): array {$draft=$this->draft();return $this->service->save('a',$draft['id'],['version'=>$draft['version'],'data'=>$this->input($replace)],'admin');}
+    public function testLocalQueueReadsPdfWithoutChangingDraftOrCreatingDebt(): void
+    {
+        $reader=new \App\Libraries\PurchaseImport\LocalInvoiceExtractor();
+        if (!$reader->configured()) $this->markTestSkipped('Requiere herramientas OCR locales.');
+        $settings=config('PurchaseImport');$oldProvider=$settings->provider;$settings->provider='local';
+        try {
+            $pdf=new \Dompdf\Dompdf();$pdf->loadHtml('<p>FACTURA A 00001-00000123</p><p>CUIT: 30-12345678-9</p><p>TOTAL 242,00</p>');$pdf->render();
+            $path=$this->directory.'/local.pdf';file_put_contents($path,$pdf->output());
+            $draft=$this->service->upload('a',$path,'local.pdf','admin');
+            $draft=$this->service->save('a',$draft['id'],['version'=>$draft['version'],'data'=>['supplier_name'=>'Nombre corregido manualmente','items'=>[]]],'admin');
+            $queued=$this->service->queue('a',$draft['id'],'admin');
+            $this->assertSame('queued',$queued['processing_status']);
+            $this->assertSame('local',$this->db->table('purchase_import_jobs')->get()->getRowArray()['provider']);
+            $worker=new PurchaseImportWorker($reader,$this->storage);$worker->run(1,'a');
+            $loaded=$this->service->get('a',$draft['id']);
+            $this->assertSame('done',$loaded['processing_status']);
+            $this->assertSame($draft['version'],$loaded['version']);
+            $this->assertSame('Nombre corregido manualmente',$loaded['data']['supplier_name']);
+            $this->assertSame('local',$loaded['extraction']['provider']);
+            $this->assertSame('242.00',$loaded['extraction']['suggestions']['reviewed_total']);
+            $this->assertSame('a-supplier',$loaded['extraction']['suggestions']['supplier_id']);
+            $this->assertNull($loaded['extraction']['locations']['invoice_number']['confidence']);
+            $this->assertSame('detected',$loaded['extraction']['locations']['invoice_number']['detection_status']);
+            foreach (['purchase_invoices','purchase_payables','inventory_movements'] as $table) $this->assertSame(0,$this->db->table($table)->countAllResults());
+        } finally {$settings->provider=$oldProvider;}
+    }
     public function testUploadKeepsPrivateOriginalAndDoesNotCreateFinancialOrStockEntries(): void
     {
         $draft=$this->draft();$this->assertSame('draft',$draft['review_status']);$this->assertEquals(1,$draft['document']['page_count']);
@@ -169,6 +197,19 @@ final class PurchaseImportTest extends CIUnitTestCase
         $this->assertSame('a-supplier',$result['suggestions']['supplier_id']);$this->assertSame('FACTURA_A',$result['suggestions']['document_type']);
         $this->assertSame('242.00',$result['suggestions']['reviewed_total']);$this->assertSame(1,$result['locations']['invoice_number']['regions'][0]['page']);
         $this->assertSame('100.000000',$result['suggestions']['items'][0]['unit_cost']);
+    }
+    public function testHeaderVatIsNotAddedAgainWhenItemRatesExplainIt(): void
+    {
+        $raw=$this->extracted();$fields=&$raw['documents'][0]['fields'];
+        unset($fields['Items']['valueArray'][0]['valueObject']['Tax']);
+        $fields['Items']['valueArray'][0]['valueObject']['TaxRate']=['valueNumber'=>21];
+        $fields['TotalTax']=['valueCurrency'=>['amount'=>42]];
+        $result=(new InvoiceExtractionNormalizer())->normalize('a',$raw,['page_count'=>1]);
+        $this->assertArrayNotHasKey('adjustments',$result['suggestions']);
+        $fields['Items']['valueArray'][0]['valueObject']['Tax']=['valueNumber'=>0];
+        $result=(new InvoiceExtractionNormalizer())->normalize('a',$raw,['page_count'=>1]);
+        $this->assertSame('0.00',$result['suggestions']['items'][0]['tax_amount']);
+        $this->assertSame('42.00',$result['suggestions']['adjustments'][0]['amount']);
     }
     public function testTruncatedCloudResultIsRejected(): void
     {

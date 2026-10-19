@@ -1,9 +1,9 @@
 <?= $this->extend('layouts/app') ?>
 <?= $this->section('content') ?>
-<link rel="stylesheet" href="<?= base_url('assets/css/purchase-imports.css') ?>">
+<link rel="stylesheet" href="<?= base_url('assets/css/purchase-imports.css').'?v='.filemtime(FCPATH.'assets/css/purchase-imports.css') ?>">
 <?php
 $configuration=['companyId'=>$companyId,'baseUrl'=>site_url('compras/importaciones'),'csrfHeader'=>config('Security')->headerName,
-    'csrfToken'=>csrf_hash(),'ocrConfigured'=>$ocrConfigured,'maxBytes'=>config('PurchaseImport')->maxBytes,
+    'csrfToken'=>csrf_hash(),'ocrConfigured'=>$ocrConfigured,'autoRead'=>$ocrConfigured && config('PurchaseImport')->provider==='local','maxBytes'=>config('PurchaseImport')->maxBytes,
     'suppliers'=>array_map(static fn($s)=>array_intersect_key($s,array_flip(['id','name','tax_id'])),$suppliers),
     'products'=>$products,'receipts'=>$receipts,'currencies'=>$currencies,'pdfModule'=>base_url('assets/lib/pdfjs/pdf.mjs'),
     'pdfWorker'=>base_url('assets/lib/pdfjs/pdf.worker.mjs'),'pdfAssets'=>rtrim(base_url('assets/lib/pdfjs/'),'/').'/'];
@@ -58,10 +58,11 @@ $configuration=['companyId'=>$companyId,'baseUrl'=>site_url('compras/importacion
         </aside>
         <div class="invoice-editor">
             <div class="invoice-editor-title"><div><span class="invoice-eyebrow" id="import-stage-caption">REVISIÓN ASISTIDA</span><h2 id="import-stage-title">Datos de la factura</h2></div><span id="import-save-status" class="invoice-chip" role="status">Guardado</span></div>
+            <div id="import-inline-message" class="invoice-message m-3" hidden></div>
             <div id="import-reading-panel" class="invoice-section" hidden>
                 <div class="invoice-reading-symbol"><i class="bi bi-file-earmark-richtext"></i></div><h3>Tu documento está listo para revisar</h3>
-                <p>Puedes solicitar la lectura automática o completar los datos manualmente. Las sugerencias siempre quedan sujetas a tu revisión.</p>
-                <?php if (!$ocrConfigured): ?><p class="invoice-help">La lectura automática todavía no está configurada. Puedes continuar con la carga manual y conservar el original.</p><?php else: ?><p class="invoice-help">La lectura utiliza el servicio documental de Azure configurado para esta aplicación.</p><?php endif; ?>
+                <p>La lectura local se solicita al cargar el archivo. Cuando termine, se completarán los campos vacíos para que los revises. Puedes continuar manualmente mientras se procesa.</p>
+                <?php if (!$ocrConfigured): ?><p class="invoice-help">La lectura automática todavía no está configurada. Puedes continuar con la carga manual y conservar el original.</p><?php elseif (config('PurchaseImport')->provider==='local'): ?><p class="invoice-help">La factura se lee en este servidor. Revisa los datos propuestos antes de registrarla.</p><?php else: ?><p class="invoice-help">La lectura utiliza el servicio documental externo configurado para esta aplicación.</p><?php endif; ?>
             </div>
             <form id="import-form" novalidate>
             <div id="import-header-panel" class="invoice-section">
@@ -111,5 +112,5 @@ $configuration=['companyId'=>$companyId,'baseUrl'=>site_url('compras/importacion
 </section>
 </div>
 <script id="import-config" type="application/json"><?= json_encode($configuration,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_THROW_ON_ERROR) ?></script>
-<script type="module" src="<?= base_url('assets/js/purchase-imports.js') ?>"></script>
+<script type="module" src="<?= base_url('assets/js/purchase-imports.js').'?v='.filemtime(FCPATH.'assets/js/purchase-imports.js') ?>"></script>
 <?= $this->endSection() ?>

@@ -7,7 +7,12 @@ if(configNode) {
     const data=()=>draft?.data || {};
     const url=(suffix='')=>{const value=new URL(config.baseUrl+suffix,window.location.href);value.searchParams.set('company_id',config.companyId);return value;};
     const fileUrl=()=>url('/'+encodeURIComponent(draft.id)+'/archivo').href;
-    function message(text,error=false) {const node=byId('import-message');node.textContent=text;node.hidden=!text;node.classList.toggle('is-error',error);}
+    function message(text,error=false) {
+        for(const id of ['import-message','import-inline-message']) {
+            const node=byId(id);if(!node) continue;
+            node.textContent=text;node.hidden=!text;node.classList.toggle('is-error',error);
+        }
+    }
     async function request(suffix,method='GET',body=null) {
         const abort=new AbortController(),timeout=setTimeout(()=>abort.abort(),45000);
         const headers={Accept:'application/json','X-Requested-With':'XMLHttpRequest'};
@@ -43,18 +48,20 @@ if(configNode) {
             const key=node.dataset.confidence,location=draft?.extraction?.locations?.[key];
             const suggested=draft?.extraction?.suggestions?.[key];
             const match=suggested!==undefined && String(data()[key] ?? '')===String(suggested);
-            node.textContent=location?(match?(Number(location.confidence)>=.9?'Detectado':'Revisar'):'Revisar: '+String(suggested ?? '').slice(0,24)):data()[key]?'':'Completar';
-            node.classList.toggle('is-detected',Boolean(location && match && Number(location.confidence)>=.9));
+            const detected=location?.detection_status==='detected' || (location?.confidence!=null && Number(location.confidence)>=.9);
+            node.textContent=location?(match?(detected?'Detectado':'Revisar'):'Revisar: '+String(suggested ?? '').slice(0,24)):data()[key]?'':'Completar';
+            node.classList.toggle('is-detected',Boolean(location && match && detected));
             node.title=location?'La lectura es orientativa; comprueba el original.':'';
         });
     }
     function processing() {
         if(!draft) return;
-        const names={idle:'Carga manual disponible',queued:'Lectura en espera',reading:'Leyendo documento',done:'Lectura disponible para revisar',error:'Lectura interrumpida: puedes continuar manualmente'};
+        const names={idle:'Documento pendiente de lectura',queued:'Lectura solicitada · el procesador se ejecuta cada minuto',reading:'Leyendo documento',done:'Lectura disponible para revisar',error:'Lectura interrumpida: puedes continuar manualmente'};
         byId('import-processing').textContent=names[draft.processing_status] || '';
         byId('import-apply').hidden=!draft.extraction?.suggestions || draft.review_status==='registered';
         byId('import-analyze').disabled=!config.ocrConfigured || ['queued','reading'].includes(draft.processing_status) || draft.review_status==='registered';
         if(draft.last_error) message(draft.last_error,true);
+        else if(draft.processing_status==='done' && draft.extraction?.notice) message(draft.extraction.notice);
         if(draft.review_status!=='registered' && ['queued','reading'].includes(draft.processing_status)) schedulePoll();else clearTimeout(pollTimer);
     }
     function schedulePoll() {
@@ -68,8 +75,10 @@ if(configNode) {
                     blocked=true;message('El borrador cambió en otra sesión. Descarga una copia de tus datos y actualiza antes de continuar.',true);return;
                 }
                 if(remote.version<draft.version) {schedulePoll();return;}
+                const justCompleted=remote.processing_status==='done' && draft.processing_status!=='done';
                 draft.processing_status=remote.processing_status;draft.extraction=remote.extraction;draft.last_error=remote.last_error;
                 processing();renderConfidence();
+                if(justCompleted) applyDetectedSuggestions();
             } catch(error) {message(error.message,true);schedulePoll();}
         },3500);
     }
@@ -217,6 +226,22 @@ if(configNode) {
         byId('import-confirm').hidden=draft.review_status==='registered';byId('import-success').hidden=draft.review_status!=='registered';
         if(draft.review_status==='registered') byId('import-success').textContent='Factura registrada. El original y los datos revisados quedaron conservados en Compras.';
         await preview();
+        if(draft.processing_status==='done' && draft.review_status!=='registered') applyDetectedSuggestions();
+        if(config.autoRead && draft.processing_status==='idle' && draft.review_status!=='registered') {
+            const queued=await request('/'+draft.id+'/analizar','POST',{});
+            draft.processing_status=queued.draft.processing_status;processing();setStage(2);
+            message('Lectura solicitada automáticamente. El procesador se ejecuta cada minuto.');
+        }
+    }
+    function applyDetectedSuggestions() {
+        if(!draft.extraction?.suggestions || draft.review_status==='registered') return;
+        const next=mergeSuggestions(data(),draft.extraction.suggestions);
+        const current=JSON.stringify(data());next.identity_reviewed=data().identity_reviewed;
+        if(JSON.stringify(next)!==current) {
+            next.identity_reviewed=false;draft.data=next;renderFields();renderItems();renderAdjustments();changed();
+        }
+        message(draft.extraction.notice || 'Datos detectados. Revisa el original antes de registrar.');
+        if(stage===2) setStage(3);
     }
     async function upload(file) {
         if(uploading) return;
@@ -227,8 +252,9 @@ if(configNode) {
             const result=await request('','POST',body);
             await openDraft(result.draft.id);
             const address=new URL(window.location.href);address.searchParams.set('import',draft.id);history.replaceState(null,'',address);
-            message(result.draft.reused?'Este archivo ya estaba cargado. Abrimos su registro existente.':'Documento guardado. Puedes solicitar la lectura o continuar manualmente.');
-            if(draft.review_status!=='registered') setStage(2);
+            message(result.draft.reused?'Este archivo ya estaba cargado. Abrimos su registro existente.':
+                ['queued','reading'].includes(draft.processing_status)?'Documento guardado. Lectura solicitada automáticamente; el procesador se ejecuta cada minuto.':'Documento guardado. Puedes solicitar la lectura o continuar manualmente.');
+            if(draft.review_status!=='registered') setStage(draft.processing_status==='done'?3:2);
         } catch(error) {message(error.message,true);} finally {uploading=false;}
     }
     document.querySelectorAll('[data-field]').forEach(control=>{control.addEventListener('input',()=>writeField(control));control.addEventListener('focus',()=>highlight(control.dataset.field));});
@@ -243,8 +269,7 @@ if(configNode) {
     byId('import-save').addEventListener('click',()=>save().then(()=>message('Borrador guardado.')).catch(error=>message(error.message,true)));
     byId('import-analyze').addEventListener('click',async()=>{try {await save();const result=await request('/'+draft.id+'/analizar','POST',{});draft.processing_status=result.draft.processing_status;processing();message('Lectura solicitada. Puedes avanzar con la revisión mientras se procesa.');}catch(error){message(error.message,true);}});
     byId('import-apply').addEventListener('click',()=>{
-        if(!draft.extraction?.suggestions || draft.review_status==='registered') return;
-        draft.data=mergeSuggestions(data(),draft.extraction.suggestions);renderFields();renderItems();renderAdjustments();changed();message('Sugerencias aplicadas a campos vacíos. Revisa impuestos, productos y totales.');setStage(3);
+        applyDetectedSuggestions();setStage(3);
     });
     byId('import-add-item').addEventListener('click',()=>{if((data().items?.length || 0)>=300){message('Se admiten hasta 300 conceptos.',true);return;}data().items??=[];data().items.push({description:'',quantity:'1',unit_cost:'',tax_rate:'0',tax_amount:'',product_id:'',supplier_code:''});data().identity_reviewed=false;renderItems();changed();});
     byId('import-add-adjustment').addEventListener('click',()=>{data().adjustments??=[];if(data().adjustments.length>=40)return;data().adjustments.push({kind:'charge',label:'',amount:''});data().identity_reviewed=false;renderAdjustments();changed();});

@@ -126,13 +126,14 @@ class PurchaseImportService
     }
     public function queue(string $companyId,string $id,string $userId): array
     {
-        if (!(new \App\Libraries\PurchaseImport\AzureInvoiceExtractor())->configured()) throw new RuntimeException('La lectura automática todavía no está configurada. Puedes completar y registrar el borrador manualmente.');
-        return (new InventoryIntegrityService())->transaction($companyId,function() use($companyId,$id,$userId) {
+        $provider=config('PurchaseImport')->provider;
+        if (!\App\Libraries\PurchaseImport\InvoiceReaderFactory::make($provider)->configured()) throw new RuntimeException('La lectura automática todavía no está configurada. Puedes completar y registrar el borrador manualmente.');
+        return (new InventoryIntegrityService())->transaction($companyId,function() use($companyId,$id,$userId,$provider) {
             $row=$this->owned($companyId,$id);
             if ($row['review_status']==='registered') throw new RuntimeException('El borrador ya está registrado.');
             if (in_array($row['processing_status'],['queued','reading'],true)) return $this->get($companyId,$id);
             $generation=(int)$row['generation']+1;
-            if (!(new PurchaseImportJobModel())->insert(['company_id'=>$companyId,'import_id'=>$id,'generation'=>$generation,'status'=>'queued','attempts'=>0,'available_at'=>date('Y-m-d H:i:s')])) throw new RuntimeException('No se pudo solicitar la lectura.');
+            if (!(new PurchaseImportJobModel())->insert(['company_id'=>$companyId,'import_id'=>$id,'generation'=>$generation,'provider'=>$provider,'status'=>'queued','attempts'=>0,'available_at'=>date('Y-m-d H:i:s')])) throw new RuntimeException('No se pudo solicitar la lectura.');
             if (!(new PurchaseImportModel())->update($id,['generation'=>$generation,'processing_status'=>'queued'])) throw new RuntimeException('No se pudo encolar el documento.');
             $this->audit($companyId,$id,$userId,'analysis_requested',['generation'=>$generation]);
             return $this->get($companyId,$id);

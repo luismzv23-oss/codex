@@ -136,3 +136,4 @@ _modules/*
 
 # Private purchase originals and financial documents
 /writable/private/
+/writable/tools/

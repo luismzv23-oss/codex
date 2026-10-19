@@ -34,7 +34,7 @@ class PurchaseImportsController extends PurchasesController
                 'products'=>db_connect()->table('inventory_products')->select('id,sku,name')->where('company_id',$companyId)->where('active',1)->orderBy('name')->get()->getResultArray(),
                 'receipts'=>db_connect()->table('purchase_receipts')->select('id,supplier_id,receipt_number,currency_code,status')->where('company_id',$companyId)->where('status !=','cancelled')->orderBy('created_at','DESC')->get()->getResultArray(),
                 'currencies'=>db_connect()->table('currencies')->select('code,name')->where('company_id',$companyId)->where('active',1)->orderBy('code')->get()->getResultArray(),
-                'ocrConfigured'=>(new \App\Libraries\PurchaseImport\AzureInvoiceExtractor())->configured(),
+                'ocrConfigured'=>\App\Libraries\PurchaseImport\InvoiceReaderFactory::make()->configured(),
             ]);
         } catch (RuntimeException $e) {return redirect()->to('/compras')->with('error',$e->getMessage());}
     }
@@ -44,6 +44,10 @@ class PurchaseImportsController extends PurchasesController
             $context=$this->importContext();$file=$this->request->getFile('invoice_file');
             if (!$file || !$file->isValid() || $file->hasMoved()) throw new RuntimeException('Selecciona un archivo válido. Si supera el límite del servidor, reduce su tamaño.');
             $draft=(new PurchaseImportService())->upload($context['company']['id'],$file->getTempName(),$file->getClientName(),$this->currentUser()['id']);
+            if (config('PurchaseImport')->provider==='local' && $draft['processing_status']==='idle' && $draft['review_status']!=='registered'
+                && \App\Libraries\PurchaseImport\InvoiceReaderFactory::make()->configured()) {
+                $draft=(new PurchaseImportService())->queue($context['company']['id'],$draft['id'],$this->currentUser()['id']);
+            }
             return $this->reply(['draft'=>$draft],201);
         } catch (\Throwable $e) {return $this->reply(['error'=>$e->getMessage()],422);}
     }

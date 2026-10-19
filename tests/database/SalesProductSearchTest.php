@@ -14,7 +14,8 @@ final class SalesProductSearchTest extends CIUnitTestCase
         foreach ([
             'sales_promotions' => 'id TEXT PRIMARY KEY, company_id TEXT, name TEXT, promotion_type TEXT, scope TEXT, value REAL, active INTEGER, start_date TEXT, end_date TEXT',
             'sales_promotion_items' => 'promotion_id TEXT, product_id TEXT',
-            'inventory_products' => 'id TEXT PRIMARY KEY, company_id TEXT, sku TEXT, name TEXT, brand TEXT, active INTEGER, sale_price REAL',
+            'inventory_products' => 'id TEXT PRIMARY KEY, company_id TEXT, sku TEXT, name TEXT, brand TEXT, active INTEGER, sale_price REAL, product_type TEXT',
+            'inventory_kit_items' => 'product_id TEXT, component_product_id TEXT, quantity REAL',
             'inventory_warehouses' => 'id TEXT PRIMARY KEY, company_id TEXT, active INTEGER',
             'inventory_stock_levels' => 'id TEXT PRIMARY KEY, company_id TEXT, product_id TEXT, warehouse_id TEXT, quantity REAL, reserved_quantity REAL',
         ] as $table => $schema) {
@@ -63,5 +64,18 @@ final class SalesProductSearchTest extends CIUnitTestCase
 
         $request->setGlobal('get', ['q' => 'No existe']);
         $this->assertSame([], json_decode($controller->productSearch()->getBody(), true)['products']);
+    }
+
+    public function testPackOnlySearchLoadsBaseStockWithinCompany(): void
+    {
+        $db = db_connect('tests');
+        $db->table('inventory_products')->insert(['id'=>'pack','company_id'=>'a','sku'=>'pack','name'=>'Cajon','active'=>1,'sale_price'=>500,'product_type'=>'kit']);
+        $db->table('inventory_kit_items')->insert(['product_id'=>'pack','component_product_id'=>'a','quantity'=>4]);
+        // A foreign tenant balance must never contribute to availability.
+        $db->table('inventory_stock_levels')->insert(['id'=>'foreign','company_id'=>'b','product_id'=>'a','warehouse_id'=>'warehouse','quantity'=>100,'reserved_quantity'=>0]);
+        $product = $db->table('inventory_products')->where('id','pack')->get()->getRowArray();
+        $catalog = (new App\Libraries\SalesPackAvailability())->catalog('a', [$product]);
+        $this->assertSame(2.0, $catalog[0]['stocks']['warehouse']['available']);
+        $this->assertSame(['a'=>4.0], $catalog[0]['stock_requirements']);
     }
 }

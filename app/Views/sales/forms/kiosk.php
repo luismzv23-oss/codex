@@ -20,6 +20,9 @@ $productCatalog = array_values(array_map(static function (array $product): array
         'unit' => $product['unit'] ?? 'unidad',
         'price' => (float) ($product['sale_price'] ?? 0),
         'stocks' => $product['stocks'] ?? [],
+        'stock_requirements' => $product['stock_requirements'] ?? [],
+        'component_stocks' => $product['component_stocks'] ?? [],
+        'pack_units' => $product['pack_units'] ?? null,
         'image' => $product['image'] ?? null,
     ];
 }, $products ?? []));
@@ -265,6 +268,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
 <script src="<?= base_url('assets/js/sale-receipt-window.js') ?>"></script>
 <script src="<?= base_url('assets/js/kiosk-payments.js') ?>"></script>
 <script src="<?= base_url('assets/js/sales-product-search.js') ?>"></script>
+<script src="<?= base_url('assets/js/sales-pack-stock.js') ?>"></script>
 <script>
     (() => {
         let catalog = <?= json_encode($productCatalog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
@@ -526,6 +530,19 @@ $productCatalog = array_values(array_map(static function (array $product): array
 
         // ── Change (vuelto) calculation ─────────────────────
         const updatePaymentSummary = () => {
+            const shortages = SalesPackStock.shortages(Array.from(items.values()).map(item => ({
+                product: item.stockProduct, quantity: Number(item.quantity),
+            })), warehouseField?.value || '');
+            let stockNotice = document.getElementById('kiosk-pack-stock-notice');
+            if (!stockNotice) {
+                stockNotice = document.createElement('div');
+                stockNotice.id = 'kiosk-pack-stock-notice';
+                stockNotice.className = 'alert alert-warning';
+                stockNotice.setAttribute('role', 'status');
+                ticketBody.closest('table').after(stockNotice);
+            }
+            stockNotice.hidden = shortages.length === 0;
+            stockNotice.textContent = shortages.length ? 'Stock insuficiente considerando unidades y packs del carrito. Revisá las cantidades; se comprobará nuevamente al confirmar.' : '';
             displayedItems().forEach(({item, gross}) => {
                 const quantityField = Array.from(ticketBody.querySelectorAll('.kiosk-qty')).find(field => field.dataset.id === String(item.id));
                 const row = quantityField?.closest('tr');
@@ -670,6 +687,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                 existing.quantity = Number(existing.quantity) + 1;
             } else {
                 items.set(product.id, {
+                    stockProduct: product,
                     id: product.id,
                     product_id: product.id,
                     sku: product.sku,
@@ -739,7 +757,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                     }
                         <div>
                             <div class="fw-semibold">${product.sku} - ${product.name}</div>
-                            <div class="small text-secondary">${product.brand || 'Sin marca'}</div>
+                            <div class="small text-secondary">${product.brand || 'Sin marca'}${product.pack_units ? ` · Pack de ${Number(product.pack_units)} unidades` : ''}</div>
                         </div>
                     </div>
                     <div class="text-end">

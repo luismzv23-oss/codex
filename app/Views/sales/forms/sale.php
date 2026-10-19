@@ -47,6 +47,9 @@ $productCatalog = array_values(array_map(static function (array $product): array
         'unit' => $product['unit'] ?? 'unidad',
         'sale_price' => (float) ($product['sale_price'] ?? 0),
         'stocks' => $product['stocks'] ?? [],
+        'stock_requirements' => $product['stock_requirements'] ?? [],
+        'component_stocks' => $product['component_stocks'] ?? [],
+        'pack_units' => $product['pack_units'] ?? null,
         'image' => $product['image'] ?? null,
     ];
 }, $products ?? []));
@@ -384,6 +387,7 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
 </div>
 <script src="<?= base_url('assets/js/kiosk-payments.js') ?>"></script>
 <script src="<?= base_url('assets/js/sales-product-search.js') ?>"></script>
+<script src="<?= base_url('assets/js/sales-pack-stock.js') ?>"></script>
 <script>
 (() => {
     const configuredPaymentsDraft = <?= json_encode(!empty($configuredPaymentsDraft)) ?>;
@@ -468,6 +472,18 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
     };
 
     const syncTotals = () => {
+        const stockRows = Array.from(body.querySelectorAll('tr'));
+        const shortages = SalesPackStock.shortages(stockRows.map(row => ({
+            product: productMap[row.querySelector('.sale-product')?.value],
+            quantity: Number(row.querySelector('.sale-quantity')?.value || 0),
+        })), warehouseField.value);
+        stockRows.forEach(row => {
+            const id = row.querySelector('.sale-product')?.value;
+            const field = row.querySelector('.sale-quantity');
+            const insufficient = shortages.some(item => item.products.includes(id));
+            field?.classList.toggle('is-invalid', insufficient);
+            if (field) field.title = insufficient ? 'Stock insuficiente considerando unidades y packs del carrito.' : '';
+        });
         let subtotal = 0; let taxTotal = 0; let paidTotal = 0;
         const displayRows = [];
         body.querySelectorAll('tr').forEach((row) => {
@@ -608,7 +624,7 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
                         }
                         <div>
                             <div class="fw-semibold">${product.sku} - ${product.name}</div>
-                            <div class="small text-secondary">${product.brand || 'Sin marca'}</div>
+                            <div class="small text-secondary">${product.brand || 'Sin marca'}${product.pack_units ? ` · Pack de ${Number(product.pack_units)} unidades` : ''}</div>
                         </div>
                     </div>
                     <div class="text-end">

@@ -3687,6 +3687,7 @@ class SalesController extends BaseController
                 'brand' => $p['brand'] ?? '', 'unit' => $p['unit'] ?? 'unidad',
                 'regular_price' => (float) ($p['regular_price'] ?? $p['sale_price']), 'sale_price' => (float) $p['sale_price'], 'stocks' => $p['stocks'],
                 'image' => $p['image'] ?? null,
+                'stock_requirements' => $p['stock_requirements'], 'component_stocks' => $p['component_stocks'], 'pack_units' => $p['pack_units'],
             ], $products),
         ]);
     }
@@ -3705,34 +3706,16 @@ class SalesController extends BaseController
             return [];
         }
 
-        $stockRows = db_connect()->table('inventory_stock_levels s')
-            ->select('s.product_id, s.warehouse_id, SUM(s.quantity) AS quantity, SUM(s.reserved_quantity) AS reserved_quantity', false)
-            ->join('inventory_warehouses w', 'w.id = s.warehouse_id')
-            ->where('s.company_id', $companyId)
-            ->whereIn('s.product_id', array_column($products, 'id'))
-            ->where('w.active', 1)
-            ->groupBy('s.product_id, s.warehouse_id')
-            ->get()
-            ->getResultArray();
-
-        $stockMap = [];
-        foreach ($stockRows as $row) {
-            $stockMap[$row['product_id']][$row['warehouse_id']] = [
-                'stock' => (float) $row['quantity'],
-                'reserved' => (float) ($row['reserved_quantity'] ?? 0),
-                'available' => ((float) $row['quantity']) - ((float) ($row['reserved_quantity'] ?? 0)),
-            ];
-        }
-
+        $products = (new \App\Libraries\SalesPackAvailability())->catalog($companyId, $products);
         $promotionMap = $this->promotionMap($companyId);
-        return array_map(function (array $product) use ($stockMap, $promotionMap): array {
+        return array_map(function (array $product) use ($promotionMap): array {
             $product['sale_price'] = (float) ($product['sale_price'] ?? 0);
             $product['regular_price'] = $product['sale_price'];
             foreach ($promotionMap['promotions'] as $promotion) {
                 if ($promotion['promotion_type'] === 'price' && in_array($promotion['id'], $promotionMap['product_map'][$product['id']] ?? [], true)) $product['sale_price'] = (float)$promotion['value'];
             }
             $product['cost_price'] = (float) ($product['cost_price'] ?? 0);
-            $product['stocks'] = $stockMap[$product['id']] ?? [];
+            // Stock for kits is derived from components by SalesPackAvailability.
             return $product;
         }, $products);
     }

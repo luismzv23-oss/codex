@@ -202,7 +202,8 @@
                         <h2 class="h4 mb-1">Productos inventariables</h2>
                         <p class="text-secondary mb-0">Catalogo operativo con minimos, stock consolidado y trazabilidad por producto.</p>
                     </div>
-                    <div class="d-flex flex-wrap align-items-center gap-2">
+                    <div class="d-flex flex-nowrap align-items-center gap-2">
+                        <input type="search" id="productNameCodeFilter" class="form-control" style="width: 230px;" placeholder="Nombre o código" aria-label="Filtrar productos por nombre o código">
                         <div class="btn-group btn-group-sm p-1 bg-light rounded-pill border" role="group" id="productStatusFilterGroup" aria-label="Filtro de estado de productos">
                             <button type="button" class="btn btn-dark rounded-pill px-3 product-status-btn active" data-status="active">Activos</button>
                             <button type="button" class="btn btn-light rounded-pill px-3 text-secondary product-status-btn" data-status="inactive">Inactivos</button>
@@ -500,6 +501,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         matchesRow(row, query) {
             let matches = !query || row.textContent.toLowerCase().includes(query);
+            if (matches && this.tableId === 'products-table') {
+                const productQuery = document.getElementById('productNameCodeFilter').value.toLowerCase().trim();
+                const code = row.cells[1]?.textContent.toLowerCase() || '';
+                const name = row.cells[2]?.textContent.toLowerCase() || '';
+                matches = !productQuery || code.includes(productQuery) || name.includes(productQuery);
+            }
             if (matches && this.customFilterFn) {
                 matches = Boolean(this.customFilterFn(row));
             }
@@ -653,6 +660,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentProductStatusFilter === 'active') return isActive;
         if (currentProductStatusFilter === 'inactive') return !isActive;
         return true;
+    });
+
+    document.getElementById('productNameCodeFilter').addEventListener('input', () => {
+        productsTable.currentPage = 1;
+        productsTable.update();
     });
 
     const productStatusFilterGroup = document.getElementById('productStatusFilterGroup');

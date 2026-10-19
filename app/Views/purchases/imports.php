@@ -92,6 +92,14 @@ $configuration=['companyId'=>$companyId,'baseUrl'=>site_url('compras/importacion
                 <datalist id="import-products"><?php foreach ($products as $product): ?><option value="<?= esc($product['sku'].' · '.$product['name']) ?>"></option><?php endforeach; ?></datalist>
                 <div class="invoice-subheading"><h3 class="h6">Conceptos del documento</h3><button id="import-add-item" class="btn btn-outline-dark icon-btn" type="button" title="Agregar concepto" aria-label="Agregar concepto"><i class="bi bi-plus-lg"></i></button></div>
                 <div id="import-items"></div>
+                <nav id="import-items-pagination" class="d-flex align-items-center justify-content-between gap-2 my-3" aria-label="Páginas de conceptos">
+                    <span id="import-items-page-status" class="small text-secondary" aria-live="polite"></span>
+                    <div class="d-flex align-items-center gap-2">
+                        <button id="import-items-prev" type="button" class="btn btn-outline-dark icon-btn" title="Conceptos anteriores" aria-label="Conceptos anteriores"><i class="bi bi-chevron-left"></i></button>
+                        <span id="import-items-page-number" class="small"></span>
+                        <button id="import-items-next" type="button" class="btn btn-outline-dark icon-btn" title="Conceptos siguientes" aria-label="Conceptos siguientes"><i class="bi bi-chevron-right"></i></button>
+                    </div>
+                </nav>
                 <div class="invoice-subheading"><h3 class="h6">Impuestos adicionales, cargos y descuentos</h3><button id="import-add-adjustment" class="btn btn-outline-dark icon-btn" type="button" title="Agregar ajuste" aria-label="Agregar ajuste"><i class="bi bi-plus-lg"></i></button></div>
                 <p class="invoice-help">Agrega únicamente importes que no estén incluidos en los conceptos. Revisa la clasificación de los impuestos detectados.</p>
                 <div id="import-adjustments"></div>

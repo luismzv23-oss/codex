@@ -134,6 +134,21 @@ if(configNode) {
         });filterReceipts();renderConfidence();
     }
     const productLabel=product=>product.sku+' · '+product.name;
+    let itemsPage=1;
+    const itemsPageSize=1;
+    function paginateItems() {
+        const rows=Array.from(byId('import-items').children),total=rows.length;
+        const pages=Math.max(1,Math.ceil(total/itemsPageSize));
+        itemsPage=Math.min(Math.max(1,itemsPage),pages);
+        const start=(itemsPage-1)*itemsPageSize;
+        rows.forEach((row,index)=>{row.hidden=index<start || index>=start+itemsPageSize;});
+        byId('import-items-page-status').textContent=total ? `Conceptos ${start+1}–${Math.min(start+itemsPageSize,total)} de ${total}` : 'Sin conceptos';
+        byId('import-items-page-number').textContent=`${itemsPage} / ${pages}`;
+        byId('import-items-prev').disabled=itemsPage===1;
+        byId('import-items-next').disabled=itemsPage===pages;
+    }
+    byId('import-items-prev').addEventListener('click',()=>{itemsPage--;paginateItems();});
+    byId('import-items-next').addEventListener('click',()=>{itemsPage++;paginateItems();});
     function renderItems() {
         const container=byId('import-items');container.replaceChildren();
         (data().items || []).forEach((item,index)=>{
@@ -141,12 +156,37 @@ if(configNode) {
             row.innerHTML='<div class="invoice-item-head"><label class="invoice-field"><span>Descripción</span><input class="form-control" data-item-field="description" maxlength="500"></label><button type="button" class="btn btn-outline-danger icon-btn" title="Quitar concepto" aria-label="Quitar concepto"><i class="bi bi-trash"></i></button></div><div class="invoice-item-numbers"><label class="invoice-field"><span>Cantidad</span><input class="form-control" data-item-field="quantity" type="number" min="0.000001" step="0.000001"></label><label class="invoice-field"><span>Costo neto unitario</span><input class="form-control" data-item-field="unit_cost" type="number" min="0" step="0.000001"></label><label class="invoice-field"><span>IVA %</span><input class="form-control" data-item-field="tax_rate" type="number" min="0" max="100" step="0.0001"></label><label class="invoice-field"><span>Importe IVA</span><input class="form-control" data-item-field="tax_amount" type="number" min="0" step="0.01" placeholder="Calculado"></label></div><div class="invoice-item-link"><label class="invoice-field"><span>Producto interno</span><input class="form-control" data-product-search list="import-products" placeholder="Busca por código o nombre"></label><label class="invoice-field"><span>Código del proveedor</span><input class="form-control" data-item-field="supplier_code" maxlength="120"></label></div>';
             row.querySelectorAll('[data-item-field]').forEach(control=>{
                 const key=control.dataset.itemField;control.value=item[key] ?? '';control.disabled=draft.review_status==='registered';
+                if(key==='quantity') {
+                    control.min='1';control.step='1';
+                    if(control.value!=='') control.value=String(Number(control.value));
+                }
+                if(['unit_cost','tax_rate'].includes(key)) {
+                    control.step='0.01';
+                    if(control.value!=='') control.value=Number(control.value).toFixed(2);
+                }
+                if(key==='tax_amount') control.readOnly=true;
+                if(['quantity','unit_cost','tax_rate'].includes(key)) {
+                    control.addEventListener('change',()=>{
+                        if(control.value!=='' && Number.isFinite(Number(control.value))) {
+                            control.value=key==='quantity'?String(Number(control.value)):Number(control.value).toFixed(2);
+                            item[key]=control.value;
+                            refreshItemTax();changed();
+                        }
+                    });
+                }
                 control.addEventListener('focus',()=>highlight('items.'+index+'.'+key));
                 control.addEventListener('input',()=>{
-                    item[key]=control.value;if(['quantity','unit_cost','tax_rate'].includes(key)) {item.tax_amount='';row.querySelector('[data-item-field="tax_amount"]').value='';}
+                    item[key]=control.value;if(['quantity','unit_cost','tax_rate'].includes(key)) {item.tax_amount='';refreshItemTax();}
                     data().identity_reviewed=false;changed();
                 });
             });
+            function refreshItemTax() {
+                const quantity=row.querySelector('[data-item-field="quantity"]');
+                quantity.setCustomValidity(quantity.value!=='' && !Number.isInteger(Number(quantity.value))?'La cantidad debe ser un número entero.':'');
+                const amount=totals({items:[{...item,tax_amount:''}]}).tax;
+                row.querySelector('[data-item-field="tax_amount"]').value=amount.toFixed(2);
+            }
+            refreshItemTax();
             const search=row.querySelector('[data-product-search]');search.value=productLabel(config.products.find(p=>p.id===item.product_id) || {sku:'',name:''}).replace(/^ · $/,'');
             search.disabled=data().purchase_kind==='service' || draft.review_status==='registered';
             search.addEventListener('change',()=>{item.product_id=config.products.find(p=>productLabel(p)===search.value)?.id || '';data().identity_reviewed=false;changed();});
@@ -154,6 +194,7 @@ if(configNode) {
             remove.addEventListener('click',()=>{data().items.splice(index,1);data().identity_reviewed=false;renderItems();changed();});
             container.append(row);
         });
+        paginateItems();
     }
     function renderAdjustments() {
         const container=byId('import-adjustments');container.replaceChildren();
@@ -162,6 +203,15 @@ if(configNode) {
             row.innerHTML='<select class="form-select" aria-label="Tipo de ajuste"><option value="vat">IVA adicional</option><option value="tax">Otro impuesto</option><option value="charge">Cargo</option><option value="discount">Descuento</option></select><input class="form-control" maxlength="180" aria-label="Descripción del ajuste" placeholder="Descripción"><input class="form-control" type="number" min="0.01" step="0.01" aria-label="Importe del ajuste"><button type="button" class="btn btn-outline-danger icon-btn" title="Quitar ajuste" aria-label="Quitar ajuste"><i class="bi bi-trash"></i></button>';
             const controls=row.querySelectorAll('select,input');
             ['kind','label','amount'].forEach((key,i)=>{controls[i].value=adjustment[key] ?? '';controls[i].disabled=draft.review_status==='registered';controls[i].addEventListener('input',()=>{adjustment[key]=controls[i].value;data().identity_reviewed=false;changed();});});
+            const amountField=controls[2];
+            if(amountField.value!=='') amountField.value=Number(amountField.value).toFixed(2);
+            amountField.addEventListener('change',()=>{
+                if(amountField.value!=='' && Number.isFinite(Number(amountField.value))) {
+                    amountField.value=Number(amountField.value).toFixed(2);
+                    adjustment.amount=amountField.value;
+                    data().identity_reviewed=false;changed();
+                }
+            });
             const remove=row.querySelector('button');remove.disabled=draft.review_status==='registered';remove.addEventListener('click',()=>{data().adjustments.splice(index,1);data().identity_reviewed=false;renderAdjustments();changed();});
             container.append(row);
         });
@@ -219,6 +269,7 @@ if(configNode) {
         if(rectangle) {for(const [key,value] of Object.entries(rectangle)) marker.style[key]=value+'%';marker.scrollIntoView({block:'nearest',behavior:'auto'});}
     }
     async function openDraft(id) {
+        itemsPage=1;
         const result=await request('/'+encodeURIComponent(id));draft=result.draft;dirty=false;blocked=false;confirmationKey=crypto.randomUUID();
         byId('import-upload-panel').hidden=true;byId('import-workspace').hidden=false;byId('import-filename').textContent=draft.document.original_name;
         renderFields();renderItems();renderAdjustments();processing();setStage(draft.review_status==='registered'?5:3);
@@ -271,7 +322,7 @@ if(configNode) {
     byId('import-apply').addEventListener('click',()=>{
         applyDetectedSuggestions();setStage(3);
     });
-    byId('import-add-item').addEventListener('click',()=>{if((data().items?.length || 0)>=300){message('Se admiten hasta 300 conceptos.',true);return;}data().items??=[];data().items.push({description:'',quantity:'1',unit_cost:'',tax_rate:'0',tax_amount:'',product_id:'',supplier_code:''});data().identity_reviewed=false;renderItems();changed();});
+    byId('import-add-item').addEventListener('click',()=>{if((data().items?.length || 0)>=300){message('Se admiten hasta 300 conceptos.',true);return;}data().items??=[];data().items.push({description:'',quantity:'1',unit_cost:'',tax_rate:'0',tax_amount:'',product_id:'',supplier_code:''});itemsPage=Math.ceil(data().items.length/itemsPageSize);data().identity_reviewed=false;renderItems();changed();});
     byId('import-add-adjustment').addEventListener('click',()=>{data().adjustments??=[];if(data().adjustments.length>=40)return;data().adjustments.push({kind:'charge',label:'',amount:''});data().identity_reviewed=false;renderAdjustments();changed();});
     byId('import-confirm').addEventListener('click',async()=>{
         if(confirming || !draft || draft.review_status==='registered') return;

@@ -119,7 +119,7 @@
                         <?php if ($rows === []): $rows = [[null, null], [null, null], [null, null]]; endif; ?>
                         <?php foreach ($rows as $row): ?>
                             <div class="col-md-8">
-                                <select name="component_product_id[]" class="form-select">
+                                <select name="component_product_id[]" class="form-select select-search" placeholder="Buscar por código o nombre" aria-label="Buscar componente por código o nombre">
                                     <option value="">Componente</option>
                                     <?php foreach ($componentOptions as $component): ?>
                                         <option value="<?= esc($component['id']) ?>" <?= (string) ($row[0] ?? '') === (string) $component['id'] ? 'selected' : '' ?>><?= esc($component['sku'] . ' - ' . $component['name']) ?></option>

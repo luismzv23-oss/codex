@@ -24,6 +24,12 @@
                         <option value="<?= esc($receipt['id']) ?>" <?= (($fromReceipt['id'] ?? '') === $receipt['id']) ? 'selected' : '' ?>><?= esc($receipt['receipt_number'] . ' / ' . $receipt['supplier_name']) ?>
                         </option><?php endforeach; ?>
                 </select></div>
+            <input type="hidden" name="request_key" value="<?= esc(old('request_key') ?: app_uuid()) ?>">
+            <div class="col-md-4"><label class="form-label">Tipo de comprobante</label><select class="form-select" name="document_type">
+                <?php foreach (['LEGACY'=>'Numeración libre / anterior','FACTURA_A'=>'Factura A','FACTURA_B'=>'Factura B','FACTURA_C'=>'Factura C','FACTURA_M'=>'Factura M','FACTURA_E'=>'Factura E','OTRO'=>'Otro comprobante'] as $value=>$label): ?><option value="<?= esc($value) ?>"><?= esc($label) ?></option><?php endforeach; ?>
+            </select></div>
+            <div class="col-md-4"><label class="form-label">Punto de venta del proveedor</label><input class="form-control" name="point_of_sale" maxlength="5" inputmode="numeric"><div class="form-text">Completa al elegir un tipo de comprobante.</div></div>
+            <div class="col-md-4"><label class="form-label">Número sin punto de venta</label><input class="form-control" name="invoice_sequence" maxlength="8" inputmode="numeric"></div>
             <div class="col-md-4"><label class="form-label">Factura</label><input type="text" name="invoice_number"
                     class="form-control" required></div>
             <div class="col-md-3"><label class="form-label">Moneda</label><select name="currency_code"

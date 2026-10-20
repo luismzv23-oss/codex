@@ -133,3 +133,7 @@ _modules/*
 
 /results/
 /phpunit*.xml
+
+# Private purchase originals and financial documents
+/writable/private/
+/writable/tools/

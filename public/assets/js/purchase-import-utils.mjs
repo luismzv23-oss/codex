@@ -1,4 +1,16 @@
 export const money = value => (Number(value)||0).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
+export function importDecimal(value) {
+    const match=/^(\d+)(?:\.(\d+))?$/.exec(String(value));
+    if(!match) return value;
+    const fraction=(match[2] || '').padEnd(3,'0');
+    const cents=BigInt(match[1])*100n+BigInt(fraction.slice(0,2))+(fraction[2]>='5'?1n:0n);
+    return `${cents/100n}.${String(cents%100n).padStart(2,'0')}`;
+}
+export function normalizeImportItem(item) {
+    const result={...item,tax_amount:''};
+    for(const key of ['unit_cost','tax_rate']) if(result[key]!=null && result[key]!=='') result[key]=importDecimal(result[key]);
+    return result;
+}
 export function totals(data) {
     let net=0,tax=0,extra=0;
     for(const item of data.items || []) {

@@ -59,6 +59,7 @@ class PurchaseImportService
             if ((string)($input['version'] ?? '')!==(string)$row['version']) throw new RuntimeException('El borrador cambió en otra sesión. Recarga antes de continuar.');
             $data=$input['data'] ?? null;
             if (!is_array($data) || strlen(json_encode($data,JSON_THROW_ON_ERROR))>1500000) throw new RuntimeException('Borrador inválido o demasiado grande.');
+            $data=PurchaseImportAmounts::normalize($data);
             $items=$data['items'] ?? [];
             if (!is_array($items) || count($items)>300) throw new RuntimeException('Se admiten hasta 300 conceptos.');
             unset($data['items']);$data=$this->cleanData($data);
@@ -70,7 +71,7 @@ class PurchaseImportService
                 if (!$model->insert(['import_id'=>$id,'line_number'=>$index+1,'data_json'=>json_encode($item,JSON_THROW_ON_ERROR)])) throw new RuntimeException('No se pudo guardar el detalle.');
             }
             $ready=false;
-            try {(new PurchaseInvoiceService())->normalize($companyId,$data+['items'=>$items],true);$ready=true;} catch (RuntimeException $e) {}
+            try {PurchaseImportAmounts::validate($data+['items'=>$items]);(new PurchaseInvoiceService())->normalize($companyId,$data+['items'=>$items],true);$ready=true;} catch (RuntimeException $e) {}
             if (!(new PurchaseImportModel())->update($id,['data_json'=>json_encode($data,JSON_THROW_ON_ERROR),'version'=>(int)$row['version']+1,'review_status'=>$ready?'ready':'needs_review'])) throw new RuntimeException('No se pudo guardar el borrador.');
             $this->audit($companyId,$id,$userId,'saved',['previous_data'=>json_decode($row['data_json'] ?: '{}',true),'data'=>$data,'items'=>$items,'version'=>(int)$row['version']+1]);
             return $this->get($companyId,$id);
@@ -103,7 +104,8 @@ class PurchaseImportService
                 return $this->get($companyId,$id);
             }
             if ((string)($input['version'] ?? '')!==(string)$row['version']) throw new RuntimeException('El borrador cambió. Actualiza la revisión antes de registrar.');
-            $draft=$this->get($companyId,$id);$data=$draft['data'];$data['request_key']=$key;
+            $draft=$this->get($companyId,$id);$data=PurchaseImportAmounts::normalize($draft['data']);$data['request_key']=$key;
+            PurchaseImportAmounts::validate($data);
             $invoice=(new PurchaseInvoiceService())->register($companyId,$data,$userId,true,$id);
             foreach ($data['items'] as $item) {
                 $code=trim((string)($item['supplier_code'] ?? ''));$product=$item['product_id'] ?? '';

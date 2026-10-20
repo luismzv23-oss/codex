@@ -1,6 +1,18 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {totals,mergeSuggestions,highlightRect} from '../../public/assets/js/purchase-import-utils.mjs';
+import {totals,mergeSuggestions,highlightRect,normalizeImportItem,importDecimal} from '../../public/assets/js/purchase-import-utils.mjs';
+test('Calculated import VAT replaces stale zero and decimal rounding matches the server',()=>{
+    const item=normalizeImportItem({quantity:'15',unit_cost:'7149.580000',tax_rate:'21.0000',tax_amount:'0.00'});
+    assert.equal(item.unit_cost,'7149.58');assert.equal(item.tax_amount,'');
+    assert.equal(totals({items:[item]}).tax,22521.18);
+    assert.equal(importDecimal('1.005'),'1.01');assert.equal(importDecimal('1.275'),'1.28');
+});
+test('Talca fifteen lines reconcile with perceptions, internal taxes and one cent rounding',()=>{
+    const pairs=[[15,'7149.58'],[20,'7149.58'],[10,'7149.58'],[15,'7408.32'],[5,'5829.61'],[5,'5829.61'],[5,'5829.61'],[5,'6040.58'],[15,'3744.63'],[15,'3947.93'],[10,'4972.73'],[2,'6748.65'],[2,'6748.65'],[2,'6748.65'],[2,'6992.89']];
+    const items=pairs.map(([quantity,unit_cost])=>normalizeImportItem({quantity,unit_cost,tax_rate:'21',tax_amount:'0'}));
+    const result=totals({items,adjustments:['23102.89','23102.89','45597.62','0.01'].map(amount=>({kind:'tax',amount})),reviewed_total:'1023619.96'});
+    assert.deepEqual(result,{net:770096.33,tax:161720.22,extra:91803.41,total:1023619.96,difference:0});
+});
 test('Invoice totals reconcile cents including explicit VAT, taxes and discounts',()=>{
     const value=totals({items:[{quantity:'2',unit_cost:'100',tax_rate:'21',tax_amount:'42'}],adjustments:[
         {kind:'charge',amount:'10'},{kind:'discount',amount:'5'},{kind:'vat',amount:'1'},{kind:'tax',amount:'2'}

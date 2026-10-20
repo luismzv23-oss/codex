@@ -1,4 +1,4 @@
-import {money,totals,mergeSuggestions,highlightRect} from './purchase-import-utils.mjs';
+import {money,totals,mergeSuggestions,highlightRect,importDecimal,normalizeImportItem} from './purchase-import-utils.mjs?v=amounts-2';
 const configNode=document.getElementById('import-config');
 if(configNode) {
     const config=JSON.parse(configNode.textContent), byId=id=>document.getElementById(id);
@@ -12,6 +12,7 @@ if(configNode) {
             const node=byId(id);if(!node) continue;
             node.textContent=text;node.hidden=!text;node.classList.toggle('is-error',error);
         }
+        if(error) byId('import-inline-message')?.scrollIntoView({block:'center',behavior:'smooth'});
     }
     async function request(suffix,method='GET',body=null) {
         const abort=new AbortController(),timeout=setTimeout(()=>abort.abort(),45000);
@@ -54,14 +55,14 @@ if(configNode) {
             node.title=location?'La lectura es orientativa; comprueba el original.':'';
         });
     }
-    function processing() {
+    function processing(showMessage=true) {
         if(!draft) return;
         const names={idle:'Documento pendiente de lectura',queued:'Lectura solicitada · el procesador se ejecuta cada minuto',reading:'Leyendo documento',done:'Lectura disponible para revisar',error:'Lectura interrumpida: puedes continuar manualmente'};
         byId('import-processing').textContent=names[draft.processing_status] || '';
         byId('import-apply').hidden=!draft.extraction?.suggestions || draft.review_status==='registered';
         byId('import-analyze').disabled=!config.ocrConfigured || ['queued','reading'].includes(draft.processing_status) || draft.review_status==='registered';
-        if(draft.last_error) message(draft.last_error,true);
-        else if(draft.processing_status==='done' && draft.extraction?.notice) message(draft.extraction.notice);
+        if(showMessage && draft.last_error) message(draft.last_error,true);
+        else if(showMessage && draft.processing_status==='done' && draft.extraction?.notice) message(draft.extraction.notice);
         if(draft.review_status!=='registered' && ['queued','reading'].includes(draft.processing_status)) schedulePoll();else clearTimeout(pollTimer);
     }
     function schedulePoll() {
@@ -152,6 +153,10 @@ if(configNode) {
     function renderItems() {
         const container=byId('import-items');container.replaceChildren();
         (data().items || []).forEach((item,index)=>{
+            const previous=JSON.stringify(item);
+            if(draft.review_status!=='registered') {
+                Object.assign(item,normalizeImportItem(item));
+            }
             const row=document.createElement('div');row.className='invoice-item';
             row.innerHTML='<div class="invoice-item-head"><label class="invoice-field"><span>Descripción</span><input class="form-control" data-item-field="description" maxlength="500"></label><button type="button" class="btn btn-outline-danger icon-btn" title="Quitar concepto" aria-label="Quitar concepto"><i class="bi bi-trash"></i></button></div><div class="invoice-item-numbers"><label class="invoice-field"><span>Cantidad</span><input class="form-control" data-item-field="quantity" type="number" min="0.000001" step="0.000001"></label><label class="invoice-field"><span>Costo neto unitario</span><input class="form-control" data-item-field="unit_cost" type="number" min="0" step="0.000001"></label><label class="invoice-field"><span>IVA %</span><input class="form-control" data-item-field="tax_rate" type="number" min="0" max="100" step="0.0001"></label><label class="invoice-field"><span>Importe IVA</span><input class="form-control" data-item-field="tax_amount" type="number" min="0" step="0.01" placeholder="Calculado"></label></div><div class="invoice-item-link"><label class="invoice-field"><span>Producto interno</span><input class="form-control" data-product-search list="import-products" placeholder="Busca por código o nombre"></label><label class="invoice-field"><span>Código del proveedor</span><input class="form-control" data-item-field="supplier_code" maxlength="120"></label></div>';
             row.querySelectorAll('[data-item-field]').forEach(control=>{
@@ -168,7 +173,7 @@ if(configNode) {
                 if(['quantity','unit_cost','tax_rate'].includes(key)) {
                     control.addEventListener('change',()=>{
                         if(control.value!=='' && Number.isFinite(Number(control.value))) {
-                            control.value=key==='quantity'?String(Number(control.value)):Number(control.value).toFixed(2);
+                            control.value=key==='quantity'?String(Number(control.value)):importDecimal(control.value);
                             item[key]=control.value;
                             refreshItemTax();changed();
                         }
@@ -193,6 +198,7 @@ if(configNode) {
             const remove=row.querySelector('button');remove.disabled=draft.review_status==='registered';
             remove.addEventListener('click',()=>{data().items.splice(index,1);data().identity_reviewed=false;renderItems();changed();});
             container.append(row);
+            if(JSON.stringify(item)!==previous) changed();
         });
         paginateItems();
     }
@@ -331,6 +337,9 @@ if(configNode) {
         clearTimeout(saveTimer);
         try {
             await save();const values=totals(data());
+            if(data().purchase_kind==='goods' && !data().purchase_receipt_id) throw new Error('Selecciona la recepción o indica mercadería pendiente de recibir.');
+            const invalidQuantity=(data().items || []).findIndex(item=>!Number.isInteger(Number(item.quantity)) || Number(item.quantity)<=0);
+            if(invalidQuantity!==-1) throw new Error('El concepto '+(invalidQuantity+1)+' requiere una cantidad entera mayor que cero.');
             if(values.difference===null || values.difference!==0) throw new Error('Completa el total del documento y resuelve la diferencia antes de registrar.');
             if(!data().identity_reviewed) throw new Error('Confirma la revisión del documento antes de registrar.');
             const result=await request('/'+draft.id+'/confirmar','POST',{version:draft.version,request_key:confirmationKey});
@@ -341,7 +350,7 @@ if(configNode) {
         } catch(error) {message(error.message,true);} finally {
             confirming=false;byId('import-form').inert=false;byId('import-confirm').disabled=false;
             for(const id of ['import-save','import-apply','import-prev','import-next','import-reload']) byId(id).disabled=false;
-            byId('import-save').disabled=draft.review_status==='registered';processing();setStage(stage);
+            byId('import-save').disabled=draft.review_status==='registered';processing(false);setStage(stage);
         }
     });
     byId('import-reload').addEventListener('click',async()=>{if(dirty && !window.confirm('Hay cambios sin guardar. Descarga una copia si necesitas conservarlos. ¿Actualizar desde el servidor?'))return;try{await openDraft(draft.id);message('Borrador actualizado.');}catch(error){message(error.message,true);}});

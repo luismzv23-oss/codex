@@ -55,6 +55,18 @@ final class PurchaseImportTest extends CIUnitTestCase
             'due_date'=>'2026-10-30','reviewed_total'=>'242.00','identity_reviewed'=>true,'items'=>[['description'=>'Producto','quantity'=>'2','unit_cost'=>'100','tax_rate'=>'21','tax_amount'=>'42.00','product_id'=>'a-product','supplier_code'=>'PROV-1']],'adjustments'=>[]],$replace);
     }
     private function saveReady(array $replace=[]): array {$draft=$this->draft();return $this->service->save('a',$draft['id'],['version'=>$draft['version'],'data'=>$this->input($replace)],'admin');}
+    public function testSaveRecalculatesStaleVatWithoutCreatingInvoice(): void
+    {
+        $input=$this->input();
+        $input['items'][0]['tax_amount']='0.00';
+        $input['items'][0]['unit_cost']='100.000000';
+        $draft=$this->draft();
+        $saved=$this->service->save('a',$draft['id'],['version'=>$draft['version'],'data'=>$input],'admin');
+        $this->assertSame('',$saved['data']['items'][0]['tax_amount']);
+        $this->assertSame('100.00',$saved['data']['items'][0]['unit_cost']);
+        $this->assertSame('ready',$saved['review_status']);
+        $this->assertSame(0,$this->db->table('purchase_invoices')->countAllResults());
+    }
     public function testLocalQueueReadsPdfWithoutChangingDraftOrCreatingDebt(): void
     {
         $reader=new \App\Libraries\PurchaseImport\LocalInvoiceExtractor();

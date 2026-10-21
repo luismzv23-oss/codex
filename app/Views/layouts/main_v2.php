@@ -84,6 +84,16 @@
                 <a href="<?= base_url('inventario') ?>" class="nav-item-v2 <?= (str_contains(uri_string(), 'inventario')) ? 'active' : '' ?>">📊 Inventario & Kardex</a>
                 <a href="<?= base_url('caja') ?>" class="nav-item-v2 <?= (str_contains(uri_string(), 'caja')) ? 'active' : '' ?>">💵 Caja & Tesorería</a>
                 <a href="<?= base_url('contabilidad') ?>" class="nav-item-v2 <?= (str_contains(uri_string(), 'contabilidad')) ? 'active' : '' ?>">📈 Contabilidad e IVA</a>
+                <?php
+                $moduleUser = auth_user() ?? [];
+                $moduleCompanyId = ($moduleUser['role_slug'] ?? '') === 'superadmin'
+                    ? (service('request')->getGet('company_id') ?: ($moduleUser['company_id'] ?? null)) : ($moduleUser['company_id'] ?? null);
+                $moduleLinks = (new \App\Libraries\Core\ModuleNavigation())->accessible($moduleUser,$moduleCompanyId);
+                foreach ($moduleLinks as $moduleLink):
+                    if (in_array($moduleLink['slug'],['ventas','compras','inventario','caja','contabilidad'],true)) continue;
+                ?>
+                <a href="<?= esc($moduleLink['entry_url']) ?>" class="nav-item-v2"><?= esc($moduleLink['name']) ?></a>
+                <?php endforeach; ?>
             </nav>
 
             <div style="padding-top:1rem; border-top:1px solid var(--codex-border-color);">

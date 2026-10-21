@@ -48,15 +48,12 @@ class AuthController extends BaseController
             return redirect()->back()->withInput()->with('errors', $this->validator->getErrors());
         }
 
-        $reset = auth()->createPasswordReset((string) $this->request->getPost('email'));
-
-        if (! $reset) {
-            return redirect()->back()->with('error', 'No encontramos un usuario activo con ese correo.');
+        try {
+            service('passwordRecovery')->request(trim((string) $this->request->getPost('email')));
+        } catch (\RuntimeException $e) {
+            return redirect()->back()->with('error', 'La recuperación por correo no está disponible.');
         }
-
-        $url = site_url('reset-password/' . $reset['selector'] . '/' . $reset['token']);
-
-        return redirect()->back()->with('message', 'En entorno local puedes restablecer desde este enlace: ' . $url);
+        return redirect()->back()->with('message', 'Si el correo corresponde a una cuenta activa, recibirás instrucciones para restablecer la contraseña.');
     }
 
     public function resetPassword(string $selector, string $token)

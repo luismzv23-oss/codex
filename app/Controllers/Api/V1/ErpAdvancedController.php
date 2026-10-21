@@ -96,9 +96,10 @@ class ErpAdvancedController extends ResourceController
         $worker = new ArcaAsyncWorker();
         $ok = $worker->queueInvoice($companyId, $saleId, ['sale_number' => $this->request->getVar('sale_number') ?? '']);
 
+        if (!$ok) return $this->failValidationError('Comprobante no disponible para encolar.');
         return $this->respond([
-            'status'  => $ok ? 200 : 500,
-            'message' => $ok ? 'Comprobante encolado para autorización ARCA asíncrona.' : 'Error al encolar comprobante.',
+            'status'  => 200,
+            'message' => 'Comprobante encolado para autorización ARCA asíncrona.',
             'data'    => ['sale_id' => $saleId, 'queued' => $ok],
         ]);
     }
@@ -110,7 +111,9 @@ class ErpAdvancedController extends ResourceController
     {
         $limit = (int) ($this->request->getVar('limit') ?: 20);
         $worker = new ArcaAsyncWorker();
-        $summary = $worker->processBatch($limit);
+        $companyId = $this->getCompanyId();
+        if ($companyId === '') return $this->failUnauthorized('Empresa no identificada.');
+        $summary = $worker->processBatch($companyId, $limit);
 
         return $this->respond([
             'status'  => 200,

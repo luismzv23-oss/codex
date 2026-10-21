@@ -112,6 +112,6 @@ class SupplierPaymentService
         if (($payment['status'] ?? '')!=='posted' && !(new PurchasePaymentModel())->update($payment['id'],['status'=>'posted'])) throw new RuntimeException('No se pudo actualizar el pago.');
         $result=service('accounting')->syncPurchasePayment($companyId,$payment['id'],$userId);
         if (empty($result['ok'])) throw new RuntimeException($result['error'] ?? 'No se pudo contabilizar el pago.');
-        EventBus::emit('purchase.payment_made',['company_id'=>$companyId,'payment_id'=>$payment['id'],'amount'=>$payment['amount'],'supplier_id'=>$payable['supplier_id']]);
+        \App\Libraries\Core\Events\BusinessEvents::supplierPayment($companyId,$payment['id']);
     }
 }

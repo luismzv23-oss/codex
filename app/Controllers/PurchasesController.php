@@ -5,7 +5,6 @@ namespace App\Controllers;
 use App\Libraries\AccountingService;
 use App\Libraries\PurchaseIntegrityService;
 use App\Libraries\InventoryIntegrityService;
-use App\Libraries\EventBus;
 use App\Libraries\CashService;
 use App\Models\BranchModel;
 use App\Models\CashCheckModel;
@@ -435,7 +434,7 @@ class PurchasesController extends BaseController
         ]);
 
         service('accounting')->syncPurchaseReceipt($companyId, (string) $receiptId, $this->currentUser()['id']);
-        EventBus::emit('inventory.stock_received', ['company_id' => $companyId, 'receipt_id' => $receiptId]);
+        \App\Libraries\Core\Events\BusinessEvents::stockReceived($companyId, (string)$receiptId);
 
         $db->transComplete();
 

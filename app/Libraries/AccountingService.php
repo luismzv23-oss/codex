@@ -69,11 +69,12 @@ class AccountingService
         }
     }
 
-    public function postEntry(string $entryId): bool
+    public function postEntry(string $companyId, string $entryId): bool
     {
-        return db_connect()->table('journal_entries')
-            ->where('id', $entryId)->where('status', 'draft')
+        $db = db_connect();
+        $ok = $db->table('journal_entries')->where(['id' => $entryId, 'company_id' => $companyId, 'status' => 'draft'])
             ->update(['status' => 'posted', 'posted_at' => date('Y-m-d H:i:s')]);
+        return $ok && $db->affectedRows() === 1;
     }
 
     public function journalFromSale(string $companyId, array $sale, array $map): array
@@ -210,12 +211,15 @@ class AccountingService
             'profit_margin' => $tr > 0 ? round(($tr - $te) / $tr * 100, 2) : 0];
     }
 
-    public function accountLedger(string $accountId, string $from, string $to): array
+    public function accountLedger(string $companyId, string $accountId, string $from, string $to): array
     {
+        if (!db_connect()->table('accounts')->where(['id' => $accountId, 'company_id' => $companyId])->countAllResults()) {
+            throw new \InvalidArgumentException('Cuenta no disponible en esta empresa.');
+        }
         $rows = db_connect()->table('journal_entry_lines jl')
             ->select('jl.*, je.entry_number, je.entry_date, je.description AS entry_description')
             ->join('journal_entries je', 'je.id = jl.journal_entry_id')
-            ->where('jl.account_id', $accountId)->where('je.status', 'posted')
+            ->where('jl.account_id', $accountId)->where('je.company_id', $companyId)->where('je.status', 'posted')
             ->where('je.entry_date >=', $from)->where('je.entry_date <=', $to)
             ->orderBy('je.entry_date')->orderBy('je.entry_number')->get()->getResultArray();
 

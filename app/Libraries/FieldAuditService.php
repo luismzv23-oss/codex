@@ -1,71 +1,35 @@
 <?php
-
 namespace App\Libraries;
 
-/**
- * FieldAuditService — Universal Field-Level Change Tracking Engine.
- * Captures entity state diffs (old_value vs new_value), filters sensitive keys,
- * and writes structured audit logs to audit_logs for compliance governance.
- */
+use App\Models\AuditLogModel;
+
+/** Field changes use the canonical audit schema; watched fields cannot expose secrets. */
 class FieldAuditService
 {
-    /**
-     * Audit entity changes between old state and new state.
-     */
     public function logEntityDiff(
-        string $entityName,
-        string $entityId,
-        array $oldState,
-        array $newState,
-        ?string $companyId = null,
-        ?string $userId = null,
-        array $watchedFields = []
+        string $entityName, string $entityId, array $oldState, array $newState,
+        ?string $companyId = null, ?string $userId = null, array $watchedFields = []
     ): bool {
-        $db = db_connect();
-
-        $diffs = [];
-        $keysToCompare = !empty($watchedFields) ? $watchedFields : array_unique(array_merge(array_keys($oldState), array_keys($newState)));
-
-        // Exclude internal timestamps if not specifically watched
-        $ignoredKeys = ['updated_at', 'created_at', 'password_hash', 'remember_token'];
-
-        foreach ($keysToCompare as $key) {
-            if (in_array($key, $ignoredKeys) && empty($watchedFields)) {
-                continue;
-            }
-
-            $oldVal = $oldState[$key] ?? null;
-            $newVal = $newState[$key] ?? null;
-
-            if ((string) $oldVal !== (string) $newVal) {
-                $diffs[$key] = [
-                    'old' => $oldVal,
-                    'new' => $newVal,
-                ];
-            }
+        $before = $after = [];
+        $keys = $watchedFields ?: array_unique(array_merge(array_keys($oldState), array_keys($newState)));
+        foreach ($keys as $key) {
+            if (preg_match('/password|secret|token|backup_codes|private_key|api[_-]?key|authorization/i', $key)) continue;
+            if (!$watchedFields && in_array($key, ['created_at', 'updated_at'], true)) continue;
+            $old = $oldState[$key] ?? null;
+            $new = $newState[$key] ?? null;
+            if ($old !== $new) { $before[$key] = $old; $after[$key] = $new; }
         }
-
-        if (empty($diffs)) {
-            return false; // No relevant field changes detected
-        }
-
+        if (!$after) return false;
         $user = auth_user();
-        $userId ??= ($user['id'] ?? null);
-        $companyId ??= ($user['company_id'] ?? null);
-
-        return $db->table('audit_logs')->insert([
-            'id'             => app_uuid(),
-            'company_id'     => $companyId,
-            'user_id'        => $userId,
-            'action'         => 'UPDATE_ENTITY_FIELD_DIFF',
-            'entity_name'    => $entityName,
-            'entity_id'      => $entityId,
-            'details'        => json_encode([
-                'changed_fields' => array_keys($diffs),
-                'diffs'          => $diffs,
-                'ip_address'     => $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1',
-            ]),
-            'created_at'     => date('Y-m-d H:i:s'),
+        return (bool) (new AuditLogModel())->insert([
+            'company_id'=>$companyId ?? ($user['company_id'] ?? null),
+            'user_id'=>$userId ?? ($user['id'] ?? null),
+            'module'=>'field_audit', 'action'=>'UPDATE_ENTITY_FIELD_DIFF',
+            'entity_type'=>$entityName, 'entity_id'=>$entityId,
+            'before_payload'=>json_encode($before, JSON_THROW_ON_ERROR),
+            'after_payload'=>json_encode($after, JSON_THROW_ON_ERROR),
+            'notes'=>json_encode(['changed_fields'=>array_keys($after)], JSON_THROW_ON_ERROR),
+            'ip_address'=>service('request')->getIPAddress(),
         ]);
     }
 }

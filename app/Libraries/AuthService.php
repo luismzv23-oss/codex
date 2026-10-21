@@ -13,6 +13,7 @@ class AuthService
     private PasswordResetTokenModel $passwordResets;
     private RolePermissionModel $rolePermissions;
     private ?array $requestUser = null;
+    private bool $requestResolved = false;
 
     public function __construct()
     {
@@ -35,6 +36,7 @@ class AuthService
 
         session()->regenerate(true);
         $this->storeUser($user['id']);
+        if ($this->requestUser === null) return false;
         $this->users->update($user['id'], ['last_login_at' => date('Y-m-d H:i:s')]);
 
         return true;
@@ -42,61 +44,48 @@ class AuthService
 
     public function storeUser(string $userId): void
     {
-        $user = $this->users->findForAuthById($userId);
-
-        if (! $user) {
+        $this->requestUser = $this->loadCurrentUser($userId);
+        $this->requestResolved = true;
+        if (!$this->requestUser) {
+            session()->remove(['auth_user', 'active_company_id']);
             return;
         }
-
-        session()->set('auth_user', [
-            'id' => $user['id'],
-            'company_id' => $user['company_id'],
-            'branch_id' => $user['branch_id'],
-            'branch_name' => $user['branch_name'] ?? null,
-            'branch_code' => $user['branch_code'] ?? null,
-            'role_id' => $user['role_id'],
-            'role_slug' => $user['role_slug'],
-            'role_name' => $user['role_name'],
-            'name' => $user['name'],
-            'username' => $user['username'],
-            'email' => $user['email'],
-            'company_name' => $user['company_name'],
-            'must_change_password' => (int) $user['must_change_password'],
-            'permissions' => $this->permissionsForRole($user['role_id']),
-        ]);
-
-        if (!empty($user['company_id'])) {
-            session()->set('active_company_id', $user['company_id']);
-        } else {
-            session()->remove('active_company_id');
-        }
+        session()->set('auth_user', $this->requestUser);
+        if (!empty($this->requestUser['company_id'])) session()->set('active_company_id', $this->requestUser['company_id']);
+        else session()->remove('active_company_id');
     }
 
     public function user(): ?array
     {
-        if ($this->requestUser !== null) {
-            return $this->requestUser;
-        }
-        $user = session()->get('auth_user');
-
-        return is_array($user) ? $user : null;
+        if ($this->requestResolved) return $this->requestUser;
+        $stored = session()->get('auth_user');
+        $this->requestResolved = true;
+        $this->requestUser = is_array($stored) && !empty($stored['id']) ? $this->loadCurrentUser((string) $stored['id']) : null;
+        if ($this->requestUser) session()->set('auth_user', $this->requestUser);
+        elseif (is_array($stored)) session()->remove(['auth_user', 'active_company_id']);
+        return $this->requestUser;
     }
 
-    /** Resolve current permissions for a bearer request without creating a web login. */
+    /** Bearer authentication refreshes identity without creating or altering a web login. */
     public function authenticateRequest(string $userId): bool
     {
-        $this->requestUser = null;
+        $this->requestResolved = true;
+        $this->requestUser = $this->loadCurrentUser($userId);
+        return $this->requestUser !== null;
+    }
+
+    private function loadCurrentUser(string $userId): ?array
+    {
         $user = $this->users->findForAuthById($userId);
-        if (!$user || (int) $user['active'] !== 1) {
-            return false;
-        }
-        $this->requestUser = array_intersect_key($user, array_flip([
+        if (!$user || (int) $user['active'] !== 1 || empty($user['role_id']) || empty($user['role_slug'])) return null;
+        $current = array_intersect_key($user, array_flip([
             'id', 'company_id', 'branch_id', 'branch_name', 'branch_code',
             'role_id', 'role_slug', 'role_name', 'name', 'username', 'email',
             'company_name', 'must_change_password',
         ]));
-        $this->requestUser['permissions'] = $this->permissionsForRole($user['role_id']);
-        return true;
+        $current['must_change_password'] = (int) ($user['must_change_password'] ?? 0);
+        $current['permissions'] = $this->permissionsForRole($user['role_id']);
+        return $current;
     }
 
     public function check(): bool
@@ -106,7 +95,11 @@ class AuthService
 
     public function can(string $permission): bool
     {
-        $user = $this->user();
+        return self::allows($this->user(), $permission);
+    }
+
+    public static function allows(?array $user, string $permission): bool
+    {
 
         if (! $user) {
             return false;
@@ -139,6 +132,8 @@ class AuthService
 
     public function logout(): void
     {
+        $this->requestUser = null;
+        $this->requestResolved = true;
         session()->remove(['auth_user', 'active_company_id']);
         session()->regenerate(true);
     }
@@ -196,16 +191,31 @@ class AuthService
             return false;
         }
 
-        $this->users->update($reset['user_id'], [
-            'password_hash' => password_hash($newPassword, PASSWORD_DEFAULT),
-            'must_change_password' => 0,
-        ]);
-
-        $this->passwordResets->update($reset['id'], [
-            'used_at' => date('Y-m-d H:i:s'),
-        ]);
-
-        return true;
+        $db = db_connect();
+        if (!$db->transBegin()) return false;
+        try {
+            // Claim once inside the same transaction as the password update.
+            $ok = $db->table('password_reset_tokens')->where('id', $reset['id'])->where('used_at', null)
+                ->where('expires_at >', date('Y-m-d H:i:s'))->update(['used_at'=>date('Y-m-d H:i:s')]);
+            if (!$ok || $db->affectedRows() !== 1) {
+                $db->transRollback();
+                return false;
+            }
+            $user = $this->users->where('id', $reset['user_id'])->where('active', 1)->first();
+            if (!$user || !$this->users->update($reset['user_id'], [
+                'password_hash'=>password_hash($newPassword, PASSWORD_DEFAULT), 'must_change_password'=>0,
+            ])) {
+                $db->transRollback();
+                return false;
+            }
+            if (!$db->transStatus()) throw new \RuntimeException('Password reset failed.');
+            if (!$db->transCommit()) throw new \RuntimeException('Password reset failed.');
+            return true;
+        } catch (\Throwable $e) {
+            $db->transRollback();
+            log_message('error', 'Password reset failed.');
+            return false;
+        }
     }
 
     private function permissionsForRole(string $roleId): array

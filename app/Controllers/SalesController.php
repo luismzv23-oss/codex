@@ -6,7 +6,6 @@ use App\Libraries\SalesIntegrityService;
 
 use App\Libraries\AccountingService;
 use App\Libraries\ArcaService;
-use App\Libraries\EventBus;
 use App\Libraries\CashService;
 use App\Models\CashCheckModel;
 use App\Models\CashPaymentGatewayModel;
@@ -481,9 +480,7 @@ class SalesController extends BaseController
         if ($context instanceof RedirectResponse) { return $context; }
         try {
             $payload = (array) $this->request->getPost();
-            $before = (new SalesReceiptModel())->where('company_id', $context['company']['id'])->find($id);
-            $applied = (new \App\Libraries\SalesCollectionService(null, new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null)))->confirm($context['company']['id'], $id, $this->currentUser()['id'], trim((string) ($payload['confirmation_note'] ?? '')), trim((string) ($payload['payment_id'] ?? '')) ?: null);
-            if ($applied) { $receipt = (new SalesReceiptModel())->find($id); \App\Libraries\EventBus::emit('sale.payment_received', ['company_id' => $context['company']['id'], 'payment' => ['amount' => (float) $receipt['received_amount'] - (float) ($before['received_amount'] ?? 0)], 'receipt_id' => $id]); }
+            (new \App\Libraries\SalesCollectionService(null, new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null)))->confirm($context['company']['id'], $id, $this->currentUser()['id'], trim((string) ($payload['confirmation_note'] ?? '')), trim((string) ($payload['payment_id'] ?? '')) ?: null);
             return $this->popupOrRedirect($this->salesRoute('ventas/cobranzas', $context['company']['id']), 'Operación registrada correctamente.');
         } catch (\Throwable $e) { return redirect()->back()->withInput()->with('error', $e->getMessage()); }
     }
@@ -513,7 +510,6 @@ class SalesController extends BaseController
             }
             $receipt = (new \App\Libraries\SalesCollectionService(null, new CashService($this->roleSlug() === 'vendedor' ? (string) ($this->currentUser()['id'] ?? '') : null)))->create($companyId, $this->currentUser()['id'], $payload,
                 fn() => $this->nextSequenceNumber($companyId, 'RECIBO', 'REC'));
-            if (empty($receipt['_replayed']) && (float) $receipt['received_amount'] > 0) { \App\Libraries\EventBus::emit('sale.payment_received', ['company_id' => $companyId, 'payment' => ['amount' => $receipt['received_amount']], 'receipt_id' => $receipt['id']]); }
             return $this->popupOrRedirect($this->salesRoute('ventas/cobranzas', $companyId), in_array($receipt['status'], ['pending', 'partial'], true) ? 'Medios recibidos aplicados. Quedan medios pendientes de verificar.' : 'Cobro registrado correctamente.');
         } catch (\Throwable $e) { return redirect()->back()->withInput()->with('error', $e->getMessage()); }
     }
@@ -2063,7 +2059,7 @@ class SalesController extends BaseController
         $this->syncReceivableForSale($id);
         $this->syncSaleCommission($context['company']['id'], $id);
         (new AccountingService())->reverseCancelledSale($context['company']['id'], $id, $this->currentUser()['id']);
-        EventBus::emit('sale.cancelled', ['company_id' => $context['company']['id'], 'sale' => (new SaleModel())->find($id)]);
+        \App\Libraries\Core\Events\BusinessEvents::sale($context['company']['id'], $id, 'cancelled');
         $this->logAudit($context['company']['id'], 'sales', 'sale', $id, 'cancel', $sale, (new SaleModel())->find($id));
         $this->logDocumentEvent($context['company']['id'], 'sales', 'sale', $id, 'cancelled', ['sale_number' => $sale['sale_number'] ?? null]);
 
@@ -4755,7 +4751,7 @@ class SalesController extends BaseController
                 $db->table('sales_orders')->where('id', $order['id'])->where('company_id', $companyId)->update(['status' => $newStatus, 'updated_at' => date('Y-m-d H:i:s')]);
             }
 
-            EventBus::emit('sale.confirmed', ['company_id' => $companyId, 'sale' => (new SaleModel())->find($saleId), 'items' => (new SaleItemModel())->where('sale_id', $saleId)->findAll()]);
+            \App\Libraries\Core\Events\BusinessEvents::sale($companyId, $saleId, 'confirmed');
 
 
             return $db->transStatus() ? true : 'No se pudo confirmar la venta.';

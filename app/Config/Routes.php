@@ -21,6 +21,7 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     $routes->get('dashboard/qa', 'DashboardController::qa', ['filter' => 'permission:dashboard.view']);
     $routes->post('dashboard/qa/runs', 'DashboardController::storeQaRun', ['filter' => 'permission:dashboard.view']);
     $routes->get('sistemas', 'SystemsController::index', ['filter' => 'permission:systems.view']);
+    $routes->get('sistemas/integracion', 'ModuleIntegrationController::index', ['filter' => 'permission:systems.manage']);
     $routes->get('sistemas/nuevo', 'SystemsController::create', ['filter' => 'permission:systems.manage']);
     $routes->post('sistemas', 'SystemsController::store', ['filter' => 'permission:systems.manage']);
     $routes->get('sistemas/(:segment)/editar', 'SystemsController::edit/$1', ['filter' => 'permission:systems.manage']);
@@ -482,12 +483,15 @@ $routes->group('api/v1', ['namespace' => 'App\Controllers\Api\V1'], static funct
     $routes->post('notifications/read-all', 'NotificationsController::markAllRead', ['filter' => 'apiauth']);
 
     // ── Advanced ERP Operations (Phase 7) ─────────────────
-    $routes->post('mrp/calculate', 'Api\V1\ErpAdvancedController::calculateMrp', ['filter' => 'apipermission:systems.view']);
-    $routes->post('sales/check-credit-risk', 'Api\V1\ErpAdvancedController::checkCreditRisk', ['filter' => 'apipermission:systems.view']);
-    $routes->post('sales/arca/queue', 'Api\V1\ErpAdvancedController::queueArcaInvoice', ['filter' => 'apipermission:systems.manage']);
-    $routes->post('sales/arca/process-batch', 'Api\V1\ErpAdvancedController::processArcaBatch', ['filter' => 'apipermission:systems.manage']);
-    $routes->post('purchases/withholdings/calculate', 'Api\V1\ErpAdvancedController::calculateWithholdings', ['filter' => 'apipermission:systems.view']);
-    $routes->post('cash/reconcile-statement', 'Api\V1\ErpAdvancedController::reconcileBankStatement', ['filter' => 'apipermission:systems.manage']);
-    $routes->post('cash/checks/transition', 'Api\V1\ErpAdvancedController::transitionCheckState', ['filter' => 'apipermission:systems.manage']);
+    $routes->post('mrp/calculate', 'ErpAdvancedController::calculateMrp', ['filter' => 'apipermission:systems.view']);
+    $routes->post('sales/check-credit-risk', 'ErpAdvancedController::checkCreditRisk', ['filter' => 'apipermission:systems.view']);
+    $routes->post('sales/arca/queue', 'ErpAdvancedController::queueArcaInvoice', ['filter' => 'apipermission:systems.manage']);
+    $routes->post('sales/arca/process-batch', 'ErpAdvancedController::processArcaBatch', ['filter' => 'apipermission:systems.manage']);
+    $routes->post('purchases/withholdings/calculate', 'ErpAdvancedController::calculateWithholdings', ['filter' => 'apipermission:systems.view']);
+    $routes->post('cash/reconcile-statement', 'ErpAdvancedController::reconcileBankStatement', ['filter' => 'apipermission:systems.manage']);
+    $routes->post('cash/checks/transition', 'ErpAdvancedController::transitionCheckState', ['filter' => 'apipermission:systems.manage']);
 });
 
+
+// Only trusted, deployed module code can declare additional routes.
+(new \App\Libraries\Core\ModuleRegistry())->registerRoutes($routes);

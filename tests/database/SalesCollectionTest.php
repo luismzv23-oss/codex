@@ -8,10 +8,11 @@ use CodeIgniter\Test\CIUnitTestCase;
 
 final class SalesCollectionTest extends CIUnitTestCase
 {
+    use \Tests\Support\IntegrationEventsFixture;
     private array $tables = [];
     protected function setUp(): void
     {
-        parent::setUp(); helper('app');
+        parent::setUp(); $this->installEventFixture(); helper('app');
         $this->db = db_connect('tests');
         $this->db->resetDataCache();
         $schemas = [
@@ -60,6 +61,7 @@ final class SalesCollectionTest extends CIUnitTestCase
     }
     protected function tearDown(): void
     {
+        $this->removeEventFixture();
         foreach (array_reverse($this->tables) as $table) { $this->db->query('DROP TABLE '.$this->db->prefixTable($table)); }
         parent::tearDown();
     }
@@ -123,15 +125,21 @@ final class SalesCollectionTest extends CIUnitTestCase
     {
         $r=$this->service()->create('a','user',$this->payload([['payment_method'=>'cash','amount'=>40],['payment_method'=>'transfer','amount'=>30,'external_reference'=>'BANK-1'],['payment_method'=>'transfer','amount'=>30,'external_reference'=>'BANK-2']]),fn()=>'REC-1');
         $this->assertSame('partial',$r['status']);
+        $this->assertSame(1,$this->db->table('integration_outbox')->countAllResults());
         $this->assertSame(1,$this->db->table('sale_payments')->countAllResults());
         $this->assertEquals(60,$this->db->table('sales_receivables')->where('id','one')->get()->getRowArray()['balance_amount']);
         $lines=json_decode($r['payment_details'],true);
         $this->service()->confirm('a',$r['id'],'verifier','Verified BANK-1',$lines[1]['id']);
         $this->service()->confirm('a',$r['id'],'verifier','Retry BANK-1',$lines[1]['id']);
         $this->assertSame(2,$this->db->table('cash_movements')->countAllResults());
+        $this->assertSame(2,$this->db->table('integration_outbox')->countAllResults());
         $this->assertEquals(30,$this->db->table('sales_receivables')->where('id','one')->get()->getRowArray()['balance_amount']);
         $this->service()->confirm('a',$r['id'],'verifier','Verified BANK-2',$lines[2]['id']);
         $this->assertSame(3,$this->db->table('sale_payments')->countAllResults());
+        $events=$this->db->table('integration_outbox')->get()->getResultArray();
+        $this->assertCount(3,$events);
+        $this->assertSame(3,count(array_unique(array_column($events,'operation_key'))));
+        $this->assertEquals(100,array_sum(array_map(static fn($event)=>json_decode($event['payload'],true)['amount'],$events)));
         $this->assertEquals(0,$this->db->table('sales_receivables')->where('id','one')->get()->getRowArray()['balance_amount']);
         $pending=$this->service()->create('a','user',$this->payload([['payment_method'=>'cash','amount'=>10],['payment_method'=>'transfer','amount'=>90,'reference'=>'BANK-3']],[['receivable_id'=>'two','applied_amount'=>100]]),fn()=>'REC-2');
         $this->service()->reverse('a',$pending['id'],'user','Cancel partial receipt');
@@ -164,6 +172,17 @@ final class SalesCollectionTest extends CIUnitTestCase
         $this->assertSame(0,$this->db->table('sale_payments')->countAllResults());
         $this->assertEquals(100,$this->db->table('sales_receivables')->where('id','one')->get()->getRowArray()['balance_amount']);
     }
+    public function testLaterPaymentFailureAlsoRollsBackEarlierPaymentEvent(): void
+    {
+        $this->db->table('company_settings')->where('key','account_card_clearing')->delete();
+        try {
+            $this->service()->create('a','user',$this->payload([['payment_method'=>'cash','amount'=>50],['payment_method'=>'card','amount'=>50]]),fn()=>'REC-FAIL');
+            $this->fail('The second payment must fail');
+        } catch (RuntimeException $e) { $this->assertStringContainsString('cuenta',$e->getMessage()); }
+        foreach (['cash_movements','sales_receipts','integration_outbox','integration_deliveries'] as $table) $this->assertSame(0,$this->db->table($table)->countAllResults());
+        $this->assertEquals(100,$this->db->table('sales_receivables')->where('id','one')->get()->getRowArray()['balance_amount']);
+    }
+
     public function testAccountingFailureRollsBackMovementsAndBalances(): void
     {
         $this->db->table('company_settings')->where('key','account_receivable')->delete();

@@ -418,9 +418,7 @@ class SalesController extends BaseApiController
         if (isset($context['error'])) { return $this->fail($context['error'], $context['status']); }
         try {
             $payload = $this->payload();
-            $before = (new SalesReceiptModel())->where('company_id', $context['company']['id'])->find($id);
-            $applied = (new \App\Libraries\SalesCollectionService(null, new CashService(($this->apiUser()['role_slug'] ?? '') === 'vendedor' ? (string) ($this->apiUser()['id'] ?? '') : null)))->confirm($context['company']['id'], $id, $this->apiUser()['id'], trim((string) ($payload['confirmation_note'] ?? '')), trim((string) ($payload['payment_id'] ?? '')) ?: null);
-            if ($applied) { $receipt = (new SalesReceiptModel())->find($id); \App\Libraries\EventBus::emit('sale.payment_received', ['company_id' => $context['company']['id'], 'payment' => ['amount' => (float) $receipt['received_amount'] - (float) ($before['received_amount'] ?? 0)], 'receipt_id' => $id]); }
+            (new \App\Libraries\SalesCollectionService(null, new CashService(($this->apiUser()['role_slug'] ?? '') === 'vendedor' ? (string) ($this->apiUser()['id'] ?? '') : null)))->confirm($context['company']['id'], $id, $this->apiUser()['id'], trim((string) ($payload['confirmation_note'] ?? '')), trim((string) ($payload['payment_id'] ?? '')) ?: null);
             return $this->success(['receipt_id' => $id, 'ok' => true]);
         } catch (\Throwable $e) { return $this->fail($e->getMessage(), 422); }
     }
@@ -458,7 +456,6 @@ class SalesController extends BaseApiController
 
             $receipt = (new \App\Libraries\SalesCollectionService(null, new CashService(($this->apiUser()['role_slug'] ?? '') === 'vendedor' ? (string) ($this->apiUser()['id'] ?? '') : null)))->create($companyId, $this->apiUser()['id'], $payload,
                 fn() => $this->nextSequenceNumber($companyId, 'RECIBO', 'REC'));
-            if (empty($receipt['_replayed']) && (float) $receipt['received_amount'] > 0) { \App\Libraries\EventBus::emit('sale.payment_received', ['company_id' => $companyId, 'payment' => ['amount' => $receipt['received_amount']], 'receipt_id' => $receipt['id']]); }
             return $this->success($receipt, 201);
         } catch (\Throwable $e) { return $this->fail($e->getMessage(), 422); }
     }
@@ -1000,6 +997,7 @@ class SalesController extends BaseApiController
         $this->syncReceivableForSale($id);
         $this->syncSaleCommission($context['company']['id'], $id);
         (new AccountingService())->reverseCancelledSale($context['company']['id'], $id, $this->apiUser()['id']);
+        \App\Libraries\Core\Events\BusinessEvents::sale($context['company']['id'], $id, 'cancelled');
         if ($db->transStatus()) {
             $this->logAudit($context['company']['id'], 'sales', 'sale', $id, 'cancel', $sale, (new SaleModel())->find($id));
             $this->logDocumentEvent($context['company']['id'], 'sales', 'sale', $id, 'cancelled', ['sale_id' => $id]);
@@ -1843,6 +1841,7 @@ class SalesController extends BaseApiController
         $this->syncSaleCommission($companyId, $saleId);
         $accounting = (new AccountingService())->syncSale($companyId, $saleId, $this->apiUser()['id']);
         if (empty($accounting['ok'])) throw new \RuntimeException($accounting['error'] ?? 'No se pudo contabilizar la venta.');
+        \App\Libraries\Core\Events\BusinessEvents::sale($companyId, $saleId, 'confirmed');
 
         return $db->transStatus() ? true : 'No se pudo confirmar la venta.';
     }

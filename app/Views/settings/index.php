@@ -58,42 +58,20 @@
                     </div>
                 </div>
                 <div class="row g-3">
+                    <?php foreach ((new \App\Libraries\Core\ModuleNavigation())->settings($company['id'] ?? null, auth_user()) as $moduleSetting): ?>
                     <div class="col-md-4">
                         <div class="border rounded-4 p-3 h-100 settings-module">
                             <div class="d-flex justify-content-between align-items-start gap-3">
                                 <div>
-                                    <span class="settings-module-icon"><i class="bi bi-box-seam" aria-hidden="true"></i></span>
-                                    <div class="fw-semibold">Inventario</div>
-                                    <div class="small text-secondary">Depositos, alertas, stock negativo y politicas operativas.</div>
+                                    <span class="settings-module-icon"><i class="bi <?= esc($moduleSetting['icon']) ?>" aria-hidden="true"></i></span>
+                                    <div class="fw-semibold"><?= esc($moduleSetting['name']) ?></div>
+                                    <div class="small text-secondary"><?= esc($moduleSetting['description']) ?></div>
                                 </div>
-                                <a href="<?= site_url('inventario/configuracion?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-outline-dark btn-sm icon-btn" title="Configurar inventario" aria-label="Configurar inventario"><i class="bi bi-arrow-up-right" aria-hidden="true"></i></a>
+                                <a href="<?= esc($moduleSetting['url']) ?>" class="btn btn-outline-dark btn-sm icon-btn" title="Configurar <?= esc($moduleSetting['name']) ?>" aria-label="Configurar <?= esc($moduleSetting['name']) ?>" <?php if (!empty($moduleSetting['popup'])): ?>data-popup="true" data-popup-title="<?= esc($moduleSetting['name']) ?>" data-popup-subtitle="<?= esc($moduleSetting['description']) ?>"<?php endif; ?>><i class="bi bi-arrow-up-right" aria-hidden="true"></i></a>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-4">
-                        <div class="border rounded-4 p-3 h-100 settings-module">
-                            <div class="d-flex justify-content-between align-items-start gap-3">
-                                <div>
-                                    <span class="settings-module-icon"><i class="bi bi-receipt" aria-hidden="true"></i></span>
-                                    <div class="fw-semibold">Ventas</div>
-                                    <div class="small text-secondary">Argentina ARCA, monedas habilitadas, facturacion estandar y kiosco.</div>
-                                </div>
-                                <a href="<?= site_url('ventas/configuracion?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-outline-dark btn-sm icon-btn" title="Configurar ventas" aria-label="Configurar ventas"><i class="bi bi-arrow-up-right" aria-hidden="true"></i></a>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="border rounded-4 p-3 h-100 settings-module">
-                            <div class="d-flex justify-content-between align-items-start gap-3">
-                                <div>
-                                    <span class="settings-module-icon"><i class="bi bi-printer" aria-hidden="true"></i></span>
-                                    <div class="fw-semibold">Impresión y Tickets</div>
-                                    <div class="small text-secondary">Diseño de comprobantes, ancho de papel, cabeceras y leyendas.</div>
-                                </div>
-                                <a href="<?= site_url('configuracion/tickets?company_id=' . ($company['id'] ?? '')) ?>" class="btn btn-outline-dark btn-sm icon-btn" title="Configurar impresión y tickets" aria-label="Configurar impresión y tickets" data-popup="true" data-popup-title="Configuracion de Impresion y Tickets" data-popup-subtitle="Personalizar cabeceras, pie de pagina, dimensiones y visibilidad de datos."><i class="bi bi-arrow-up-right" aria-hidden="true"></i></a>
-                            </div>
-                        </div>
-                    </div>
+                    <?php endforeach; ?>
                 </div>
             </div>
         </div>

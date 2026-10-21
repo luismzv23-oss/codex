@@ -3,10 +3,10 @@
 namespace App\Controllers;
 
 use App\Libraries\InventoryIntegrityService;
+use App\Libraries\Core\{ActorContext, CompanyContext, AccessException};
 
 use App\Models\BranchModel;
 use App\Models\CompanyModel;
-use App\Models\CompanySystemModel;
 use App\Models\InventoryAssemblyItemModel;
 use App\Models\InventoryAssemblyModel;
 use App\Models\InventoryCostLayerModel;
@@ -23,8 +23,6 @@ use App\Models\InventorySettingModel;
 use App\Models\InventoryStockLevelModel;
 use App\Models\InventoryWarehouseModel;
 use App\Models\SaleModel;
-use App\Models\SystemModel;
-use App\Models\UserSystemModel;
 use App\Libraries\AccountingService;
 use CodeIgniter\Database\BaseBuilder;
 use CodeIgniter\HTTP\RedirectResponse;
@@ -2331,83 +2329,18 @@ class InventoryController extends BaseController
 
     protected function inventoryContext(string $requiredAccess = 'view')
     {
-        $companyId = $this->resolveInventoryCompanyId();
-
-        if (! $companyId) {
-            return redirect()->to('/sistemas')->with('error', 'Debes seleccionar una empresa para operar Inventario.');
+        try {
+            $actor = ActorContext::current();
+            $company = CompanyContext::resolve($actor, CompanyContext::requested($this->request));
+            return service('systemAccess')->context($actor, $company, 'inventario', $requiredAccess);
+        } catch (AccessException $e) {
+            return redirect()->to($e->getCode() === 401 ? '/login' : '/sistemas')->with('error', $e->getMessage());
         }
-
-        $company = (new CompanyModel())->find($companyId);
-
-        if (! $company) {
-            return redirect()->to('/sistemas')->with('error', 'La empresa seleccionada no existe.');
-        }
-
-        $system = (new SystemModel())->where('slug', 'inventario')->first();
-
-        if (! $system || (int) ($system['active'] ?? 0) !== 1) {
-            return redirect()->to('/sistemas')->with('error', 'El sistema Inventario no esta disponible.');
-        }
-
-        $accessLevel = 'view';
-        $companyAssignment = (new CompanySystemModel())
-            ->where('company_id', $companyId)
-            ->where('system_id', $system['id'])
-            ->where('active', 1)
-            ->first();
-
-        if (! $this->isSuperadmin()) {
-            if (! $companyAssignment) {
-                return redirect()->to('/sistemas')->with('error', 'La empresa no tiene Inventario asignado.');
-            }
-
-            $userAssignment = (new UserSystemModel())
-                ->where('company_id', $companyId)
-                ->where('user_id', $this->currentUser()['id'] ?? '')
-                ->where('system_id', $system['id'])
-                ->where('active', 1)
-                ->first();
-
-            if (! $userAssignment) {
-                return redirect()->to('/sistemas')->with('error', 'Tu usuario no tiene acceso activo a Inventario.');
-            }
-
-            $accessLevel = $userAssignment['access_level'] ?? 'view';
-        }
-
-        if ($requiredAccess === 'manage' && ! $this->isSuperadmin() && $accessLevel !== 'manage') {
-            return redirect()->to($this->inventoryRoute('inventario', $companyId))->with('error', 'Tu usuario solo tiene acceso de consulta en Inventario.');
-        }
-
-        return [
-            'company' => $company,
-            'system' => $system,
-            'access_level' => $accessLevel,
-            'canManage' => $this->isSuperadmin() || $accessLevel === 'manage',
-            'canConfigure' => $this->isSuperadmin() || (($this->roleSlug() === 'admin') && $accessLevel === 'manage'),
-        ];
     }
 
     private function canConfigureInventory(array $context): bool
     {
         return (bool) ($context['canConfigure'] ?? false);
-    }
-
-    private function resolveInventoryCompanyId(): ?string
-    {
-        if ($this->isSuperadmin()) {
-            $companyId = trim((string) ($this->request->getGet('company_id') ?: $this->request->getPost('company_id')));
-
-            if ($companyId !== '') {
-                return $companyId;
-            }
-
-            $company = (new CompanyModel())->orderBy('name', 'ASC')->first();
-
-            return $company['id'] ?? null;
-        }
-
-        return $this->companyId();
     }
 
     private function inventoryCompanies(): array

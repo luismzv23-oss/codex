@@ -334,6 +334,7 @@ class PurchasesController extends BaseApiController
         ]);
 
         service('accounting')->syncPurchaseReceipt($companyId, (string) $receiptId, $this->apiUser()['id']);
+        \App\Libraries\Core\Events\BusinessEvents::stockReceived($companyId, (string)$receiptId);
 
         $db->transComplete();
         if (! $db->transStatus()) {

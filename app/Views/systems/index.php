@@ -1,6 +1,7 @@
 <?= $this->extend('layouts/app') ?>
 
 <?= $this->section('content') ?>
+<?php $moduleNavigation = new \App\Libraries\Core\ModuleNavigation(); ?>
 <link rel="stylesheet" href="<?= base_url('assets/css/systems-workspace.css') ?>">
 <div class="systems-workspace" id="systems-workspace-root">
 <header class="systems-heading">
@@ -10,7 +11,10 @@
         <p class="text-secondary mb-0"><?= $isSuperadmin ? 'Conecta empresas, sistemas y equipos desde un solo lugar.' : 'Accede a los sistemas de tu empresa y organiza los permisos de tu equipo.' ?></p>
     </div>
     <?php if ($isSuperadmin): ?>
+    <div class="d-flex gap-2">
+        <a href="<?= esc($moduleNavigation->url('sistemas/integracion',$selectedCompanyId)) ?>" class="btn btn-outline-dark icon-btn" title="Verificar integración" aria-label="Verificar integración"><i class="bi bi-plug" aria-hidden="true"></i></a>
         <a href="<?= site_url('sistemas/nuevo') ?>" class="btn btn-dark icon-btn" data-popup="true" data-popup-title="Nuevo sistema" data-popup-subtitle="Registrar un nuevo sistema del ecosistema." title="Nuevo sistema" aria-label="Nuevo sistema"><i class="bi bi-window-plus"></i></a>
+    </div>
     <?php endif; ?>
 </header>
 
@@ -60,11 +64,7 @@
                         <?php foreach ($accessibleSystems as $system): ?>
                             <?php
                             $canEnter = $system['entry_url'] !== '#' && (int) ($system['active'] ?? 1) === 1;
-                            $baseHref = $system['entry_url'];
-                            $companyQuery = (! empty($selectedCompanyId) && in_array($system['slug'], ['inventario', 'ventas', 'compras', 'caja', 'contabilidad', 'impuestos', 'comercial'], true)) 
-                                ? (str_contains($baseHref, '?') ? '&' : '?') . 'company_id=' . $selectedCompanyId 
-                                : '';
-                            $entryHref = $canEnter ? ($baseHref . $companyQuery) : '#';
+                            $entryHref = $canEnter ? $moduleNavigation->entry($system,$selectedCompanyId) : '#';
                             ?>
                             <div class="col-md-6 col-xl-4 system-card-item">
                                 <div class="card h-100 border rounded-4 systems-module <?= $canEnter ? 'is-clickable' : '' ?>" <?= $canEnter ? 'onclick="if (!event.target.closest(\'button, a\')) window.location.href=\'' . esc($entryHref, 'js') . '\';"' : '' ?> style="<?= $canEnter ? 'cursor: pointer;' : '' ?>">

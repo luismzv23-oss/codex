@@ -276,6 +276,38 @@ class AuthController extends BaseApiController
         return $this->success(['enabled' => false, 'message' => '2FA desactivado.']);
     }
 
+    public function forgotPassword()
+    {
+        $input = $this->payload();
+        if (!service('validation')->reset()->setRules(['email'=>'required|valid_email|max_length[150]'])->run($input)) {
+            return $this->fail('Indicá un correo válido.', 422);
+        }
+        try {
+            service('passwordRecovery')->request(trim($input['email']));
+        } catch (\RuntimeException $e) {
+            return $this->fail('La recuperación por correo no está disponible.', 503);
+        }
+        return $this->success(['message'=>'Si el correo corresponde a una cuenta activa, recibirás instrucciones para restablecer la contraseña.'], 202);
+    }
+
+    public function resetPassword()
+    {
+        $input = $this->payload();
+        $rules = [
+            'selector'=>'required|regex_match[/^[a-f0-9]{16}$/]',
+            'token'=>'required|regex_match[/^[a-f0-9]{32}$/]',
+            'password'=>'required|min_length[8]|max_length[255]|strong_password|not_common_password',
+            'password_confirm'=>'required|matches[password]',
+        ];
+        if (!service('validation')->reset()->setRules($rules)->run($input)) {
+            return $this->fail('Revisá el enlace y los requisitos de la contraseña.', 422);
+        }
+        if (!$this->authService()->resetPassword($input['selector'], $input['token'], $input['password'])) {
+            return $this->fail('El enlace no es válido, venció o ya fue utilizado.', 422);
+        }
+        return $this->success(['message'=>'Contraseña actualizada correctamente.']);
+    }
+
     // ── Helpers ──────────────────────────────────────────
 
     /**

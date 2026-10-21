@@ -40,23 +40,25 @@ class NotificationService
         }
     }
 
-    public function unreadCount(string $userId): int
+    public function unreadCount(string $userId, string $companyId): int
     {
-        return (int) db_connect()->table('notifications')->where('user_id', $userId)->where('read_at IS NULL')->countAllResults();
+        return (int) db_connect()->table('notifications')->where(['user_id' => $userId, 'company_id' => $companyId])->where('read_at IS NULL')->countAllResults();
     }
 
-    public function getForUser(string $userId, int $limit = 20): array
+    public function getForUser(string $userId, string $companyId, int $limit = 20): array
     {
-        return db_connect()->table('notifications')->where('user_id', $userId)->orderBy('created_at', 'DESC')->limit($limit)->get()->getResultArray();
+        return db_connect()->table('notifications')->where(['user_id' => $userId, 'company_id' => $companyId])->orderBy('created_at', 'DESC')->limit($limit)->get()->getResultArray();
     }
 
-    public function markRead(string $notificationId): void
+    public function markRead(string $notificationId, string $userId, string $companyId): bool
     {
-        db_connect()->table('notifications')->where('id', $notificationId)->update(['read_at' => date('Y-m-d H:i:s')]);
+        $builder = db_connect()->table('notifications')->where(['id' => $notificationId, 'user_id' => $userId, 'company_id' => $companyId]);
+        if (!(clone $builder)->countAllResults()) return false;
+        return $builder->update(['read_at' => date('Y-m-d H:i:s')]);
     }
 
-    public function markAllRead(string $userId): void
+    public function markAllRead(string $userId, string $companyId): void
     {
-        db_connect()->table('notifications')->where('user_id', $userId)->where('read_at IS NULL')->update(['read_at' => date('Y-m-d H:i:s')]);
+        db_connect()->table('notifications')->where(['user_id' => $userId, 'company_id' => $companyId])->where('read_at IS NULL')->update(['read_at' => date('Y-m-d H:i:s')]);
     }
 }

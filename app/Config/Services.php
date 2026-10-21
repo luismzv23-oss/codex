@@ -28,6 +28,18 @@ class Services extends BaseService
         return new \App\Libraries\AuthService();
     }
 
+    public static function systemAccess(bool $getShared = true)
+    {
+        if ($getShared) return static::getSharedInstance('systemAccess');
+        return new \App\Libraries\Core\SystemAccessService();
+    }
+
+    public static function passwordRecovery(bool $getShared = true)
+    {
+        if ($getShared) return static::getSharedInstance('passwordRecovery');
+        return new \App\Libraries\PasswordRecoveryService();
+    }
+
     public static function audit(bool $getShared = true)
     {
         if ($getShared) {

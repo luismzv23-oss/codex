@@ -3,9 +3,8 @@
 namespace App\Controllers\Api\V1;
 
 use App\Libraries\InventoryIntegrityService;
+use App\Libraries\Core\{ActorContext, CompanyContext, AccessException};
 
-use App\Models\CompanyModel;
-use App\Models\CompanySystemModel;
 use App\Models\InventoryAssemblyItemModel;
 use App\Models\InventoryAssemblyModel;
 use App\Models\InventoryCostLayerModel;
@@ -21,8 +20,6 @@ use App\Models\InventorySerialModel;
 use App\Models\InventorySettingModel;
 use App\Models\InventoryStockLevelModel;
 use App\Models\InventoryWarehouseModel;
-use App\Models\SystemModel;
-use App\Models\UserSystemModel;
 
 class InventoryController extends BaseApiController
 {
@@ -1134,72 +1131,15 @@ class InventoryController extends BaseApiController
 
     protected function inventoryContext(string $requiredAccess): array
     {
-        $companyId = $this->resolveCompanyId();
-        if (! $companyId) {
-            return ['error' => 'Debes seleccionar una empresa para operar Inventario.', 'status' => 422];
+        try {
+            $actor = ActorContext::current();
+            $company = CompanyContext::resolve($actor, CompanyContext::requested($this->request));
+            $context = service('systemAccess')->context($actor, $company, 'inventario', $requiredAccess);
+            $this->ensureDefaults($company->id(), $company->toArray());
+            return $context;
+        } catch (AccessException $e) {
+            return ['error'=>$e->getMessage(), 'status'=>$e->getCode()];
         }
-
-        $company = (new CompanyModel())->find($companyId);
-        if (! $company) {
-            return ['error' => 'La empresa seleccionada no existe.', 'status' => 404];
-        }
-
-        $system = (new SystemModel())->where('slug', 'inventario')->first();
-        if (! $system || (int) ($system['active'] ?? 0) !== 1) {
-            return ['error' => 'El sistema Inventario no esta disponible.', 'status' => 404];
-        }
-
-        $companyAssignment = (new CompanySystemModel())->where('company_id', $companyId)->where('system_id', $system['id'])->where('active', 1)->first();
-        $accessLevel = 'view';
-
-        if (! $this->apiIsSuperadmin()) {
-            if (! $companyAssignment) {
-                return ['error' => 'La empresa no tiene Inventario asignado.', 'status' => 403];
-            }
-
-            $assignment = (new UserSystemModel())
-                ->where('company_id', $companyId)
-                ->where('user_id', $this->apiUser()['id'] ?? '')
-                ->where('system_id', $system['id'])
-                ->where('active', 1)
-                ->first();
-
-            if (! $assignment) {
-                return ['error' => 'Tu usuario no tiene acceso activo a Inventario.', 'status' => 403];
-            }
-
-            $accessLevel = $assignment['access_level'] ?? 'view';
-        }
-
-        if ($requiredAccess === 'configure' && ! ($this->apiIsSuperadmin() || (($this->apiUser()['role_slug'] ?? null) === 'admin' && $accessLevel === 'manage'))) {
-            return ['error' => 'Solo superadmin o admin pueden configurar Inventario.', 'status' => 403];
-        }
-
-        if ($requiredAccess === 'manage' && ! ($this->apiIsSuperadmin() || $accessLevel === 'manage')) {
-            return ['error' => 'Tu usuario solo tiene acceso de consulta en Inventario.', 'status' => 403];
-        }
-
-        $this->ensureDefaults($companyId, $company);
-
-        return [
-            'company' => $company,
-            'system' => $system,
-            'access_level' => $accessLevel,
-        ];
-    }
-
-    private function resolveCompanyId(): ?string
-    {
-        if ($this->apiIsSuperadmin()) {
-            $companyId = trim((string) ($this->request->getGet('company_id') ?? ($this->payload()['company_id'] ?? '')));
-            if ($companyId !== '') {
-                return $companyId;
-            }
-            $company = (new CompanyModel())->orderBy('name', 'ASC')->first();
-            return $company['id'] ?? null;
-        }
-
-        return $this->apiCompanyId();
     }
 
     private function ensureDefaults(string $companyId, array $company): void

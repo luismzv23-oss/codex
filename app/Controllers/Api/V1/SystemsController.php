@@ -304,7 +304,7 @@ class SystemsController extends BaseApiController
         ];
     }
 
-    private function canManageSystems(): bool
+    protected function canManageSystems(): bool
     {
         if ($this->apiIsSuperadmin()) {
             return true;

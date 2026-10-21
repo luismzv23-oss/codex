@@ -25,10 +25,11 @@ class WithholdingService
         float   $paymentAmount,
         string  $sourceType,
         string  $sourceId,
-        ?string $supplierId = null
+        ?string $supplierId = null,
+        ?array $snapshot = null
     ): array {
         $db = db_connect();
-        $configs = $db->table('tax_withholdings')
+        $configs = $snapshot ?? $db->table('tax_withholdings')
             ->where('company_id', $companyId)
             ->where('active', 1)
             ->whereIn('applies_to', [$sourceType === 'sale' ? 'sales' : 'purchases', 'both'])
@@ -39,6 +40,7 @@ class WithholdingService
         $totalWithheld = 0;
 
         foreach ($configs as $config) {
+            if (($config['company_id'] ?? null) !== $companyId) throw new \RuntimeException('Configuración tributaria de otra empresa.');
             $minAmount = (float) ($config['min_amount'] ?? 0);
 
             if ($paymentAmount < $minAmount) {
@@ -52,6 +54,11 @@ class WithholdingService
                 continue;
             }
 
+            $existing = $db->table('tax_withholdings_applied')->where('company_id',$companyId)->where('source_type',$sourceType)->where('source_id',$sourceId)->where('withholding_id',$config['id'])->get()->getRowArray();
+            if ($existing) {
+                self::assertSameTax($existing,$paymentAmount,$rate,$amount);
+                $applied[]=$existing; $totalWithheld += $amount; continue;
+            }
             $certNumber = $this->generateCertificateNumber($companyId, $config['tax_type']);
 
             $record = [
@@ -68,7 +75,7 @@ class WithholdingService
                 'applied_at'         => date('Y-m-d H:i:s'),
             ];
 
-            $db->table('tax_withholdings_applied')->insert($record);
+            if (!$db->table('tax_withholdings_applied')->insert($record)) throw new \RuntimeException('No se pudo guardar la retención.');
 
             $applied[] = array_merge($record, [
                 'tax_type' => $config['tax_type'],
@@ -92,10 +99,11 @@ class WithholdingService
         float   $saleAmount,
         string  $sourceType,
         string  $sourceId,
-        ?string $customerId = null
+        ?string $customerId = null,
+        ?array $snapshot = null
     ): array {
         $db = db_connect();
-        $configs = $db->table('tax_perceptions')
+        $configs = $snapshot ?? $db->table('tax_perceptions')
             ->where('company_id', $companyId)
             ->where('active', 1)
             ->get()
@@ -105,6 +113,7 @@ class WithholdingService
         $totalPerceived = 0;
 
         foreach ($configs as $config) {
+            if (($config['company_id'] ?? null) !== $companyId) throw new \RuntimeException('Configuración tributaria de otra empresa.');
             $rate   = (float) ($config['rate'] ?? 0);
             $amount = round($saleAmount * ($rate / 100), 2);
 
@@ -125,7 +134,12 @@ class WithholdingService
                 'applied_at'     => date('Y-m-d H:i:s'),
             ];
 
-            $db->table('tax_perceptions_applied')->insert($record);
+            $existing = $db->table('tax_perceptions_applied')->where('company_id',$companyId)->where('source_type',$sourceType)->where('source_id',$sourceId)->where('perception_id',$config['id'])->get()->getRowArray();
+            if ($existing) {
+                self::assertSameTax($existing,$saleAmount,$rate,$amount);
+                $applied[]=$existing; $totalPerceived += $amount; continue;
+            }
+            if (!$db->table('tax_perceptions_applied')->insert($record)) throw new \RuntimeException('No se pudo guardar la percepción.');
 
             $applied[] = array_merge($record, [
                 'tax_type' => $config['tax_type'],
@@ -139,6 +153,13 @@ class WithholdingService
             'total_perceived' => $totalPerceived,
             'total_with_perception' => $saleAmount + $totalPerceived,
         ];
+    }
+
+    private static function assertSameTax(array $existing,float $base,float $rate,float $amount): void
+    {
+        if (round((float)$existing['base_amount'],2)!==round($base,2) || (float)$existing['rate']!==$rate || round((float)$existing['amount'],2)!==round($amount,2)) {
+            throw new \RuntimeException('El origen ya tiene un impuesto aplicado con otros valores.');
+        }
     }
 
     /**
@@ -159,7 +180,7 @@ class WithholdingService
             ->select('certificate_number')
             ->where('company_id', $companyId)
             ->like('certificate_number', $prefix, 'after')
-            ->orderBy('created_at', 'DESC')
+            ->orderBy('certificate_number', 'DESC')
             ->limit(1)
             ->get()
             ->getRowArray();

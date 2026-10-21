@@ -7,11 +7,12 @@ use Config\Services;
 
 final class PurchaseIntegrityTest extends CIUnitTestCase
 {
+    use \Tests\Support\IntegrationEventsFixture;
     private array $tables = [];
 
     protected function setUp(): void
     {
-        parent::setUp();
+        parent::setUp(); $this->installEventFixture();
         helper(['app', 'url']);
         $this->db = db_connect('tests');
         $models = ['Company', 'Supplier', 'PurchaseOrder', 'PurchaseOrderItem', 'PurchaseReceipt', 'PurchaseReceiptItem',
@@ -42,7 +43,6 @@ final class PurchaseIntegrityTest extends CIUnitTestCase
         $this->insert('currencies',['id'=>'ars','company_id'=>'a','code'=>'ARS','active'=>1]);
         $this->insert('company_payment_methods',['id'=>'cash','company_id'=>'a','code'=>'CASH','name'=>'Caja','type'=>'cash','active'=>1,'percentage'=>7,'allow_collections'=>1,'allow_supplier_payments'=>1,'funds_destination'=>'cash']);
         foreach ([
-            'tax_withholdings'=>'company_id TEXT, active INTEGER, applies_to TEXT',
             'automation_log'=>'id TEXT PRIMARY KEY, company_id TEXT, event TEXT, actions TEXT, actions_count INTEGER, created_at TEXT',
             'event_log'=>'id TEXT PRIMARY KEY, event TEXT, payload TEXT, listeners_count INTEGER, created_at TEXT',
         ] as $table=>$columns) {
@@ -68,6 +68,7 @@ final class PurchaseIntegrityTest extends CIUnitTestCase
 
     protected function tearDown(): void
     {
+        $this->removeEventFixture();
         foreach (array_reverse($this->tables) as $table) {
             $this->db->query('DROP TABLE ' . $this->db->prefixTable($table));
         }
@@ -105,6 +106,28 @@ final class PurchaseIntegrityTest extends CIUnitTestCase
     {
         return ['purchase_receipt_id' => $this->first('purchase_receipts')['id'], 'items' => [[
             'purchase_receipt_item_id' => $this->first('purchase_receipt_items')['id'], 'quantity' => $quantity]]];
+    }
+
+    public static function receiptChannels(): array { return [['web'],['api']]; }
+    /** @dataProvider receiptChannels */
+    public function testReceiptEventIsTransactionalInBothChannels(string $channel): void
+    {
+        if ($channel==='api') $receipt=$this->receive(1);
+        else {
+            $controller=new class extends \App\Controllers\PurchasesController {
+                protected function purchaseContext(string $requiredAccess='view') { return ['company'=>['id'=>'a']]; }
+                protected function currentUser(): ?array { return ['id'=>'operator','company_id'=>'a']; }
+            };
+            $request=service('request'); $request->setGlobal('post',['purchase_order_id'=>'o','items_order_item_id'=>['oi'],'items_quantity'=>[1]]);
+            $controller->initController($request,service('response'),service('logger'));
+            $controller->storeReceipt(); $receipt=$this->first('purchase_receipts');
+        }
+        $this->assertNotEmpty($receipt['id']);
+        $events=$this->db->table('integration_outbox')->where('company_id','a')->get()->getResultArray();
+        $this->assertCount(1,$events);
+        $this->assertSame('inventory.stock_received',$events[0]['event']);
+        $this->assertSame($receipt['id'],$events[0]['source_id']);
+        $this->assertSame(1,$this->db->table('integration_deliveries')->where('status','pending')->countAllResults());
     }
 
     public function testDuplicateReceiptLinesAndDraftOrderAreRejected(): void

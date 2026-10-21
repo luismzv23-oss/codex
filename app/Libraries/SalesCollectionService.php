@@ -244,6 +244,7 @@ class SalesCollectionService
             $payment['posted_at'] = date('Y-m-d H:i:s');
             $payment['confirmed_by'] = $userId;
             $payment['confirmation_note'] = $note;
+            \App\Libraries\Core\Events\BusinessEvents::receiptPayment($companyId,$id,$payment);
             $receipt['cash_session_id'] = $session['id'];
             $receipt['cash_register_id'] = $session['cash_register_id'];
             $changed = true;

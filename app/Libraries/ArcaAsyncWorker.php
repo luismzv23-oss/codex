@@ -1,193 +1,126 @@
 <?php
-
 namespace App\Libraries;
 
-use App\Libraries\ArcaService;
+use App\Models\{CompanyModel, SaleModel, SaleItemModel, SalesSettingModel, SalesDocumentTypeModel, SalesPointOfSaleModel, SalesArcaEventModel, IntegrationLogModel};
 
-/**
- * ArcaAsyncWorker — Asynchronous Worker & Queue Processor for ARCA / AFIP Invoicing.
- * Handles background CAE authorization, exponential retries, offline contingency, and audit event logging.
- */
+/** Adapter to the same fiscal engine and schema used by Sales. No independent SOAP payload. */
 class ArcaAsyncWorker
 {
     protected ArcaService $arcaService;
 
-    public function __construct()
+    public function __construct(?ArcaService $arcaService = null)
     {
-        $this->arcaService = new ArcaService();
+        $this->arcaService = $arcaService ?? new ArcaService();
     }
 
-    /**
-     * Queue a sales document for asynchronous fiscal authorization.
-     */
-    public function queueInvoice(string $companyId, string $saleId, array $saleData): bool
+    public function queueInvoice(string $companyId, string $saleId, array $saleData = []): bool
     {
-        $db = db_connect();
-        
-        $db->table('sales')->where('id', $saleId)->update([
-            'arca_status' => 'queued',
-            'updated_at'  => date('Y-m-d H:i:s'),
-        ]);
-
-        return $db->table('integration_logs')->insert([
-            'id'             => app_uuid(),
-            'company_id'     => $companyId,
-            'service_name'   => 'ARCA_ASYNC_QUEUE',
-            'action'         => 'queue_invoice',
-            'request_payload' => json_encode(['sale_id' => $saleId, 'sale_number' => $saleData['sale_number'] ?? '']),
-            'response_payload' => json_encode(['status' => 'queued']),
-            'status_code'    => 200,
-            'created_at'     => date('Y-m-d H:i:s'),
-        ]);
+        return (new InventoryIntegrityService())->transaction($companyId, function () use ($companyId, $saleId) {
+            $sale = $this->sale($companyId, $saleId);
+            if (!$sale || !in_array($sale['status'], ['confirmed', 'returned_partial', 'returned_total'], true) || !empty($sale['cae'])) return false;
+            if (in_array($sale['arca_status'], ['queued', 'retry', 'processing'], true)) return true;
+            // An ambiguous previous request must be consulted before another authorization.
+            if ($sale['arca_status'] === 'contingency') return false;
+            $this->save($companyId, $saleId, ['arca_status'=>'queued']);
+            $this->log($companyId, $saleId, 'queue_invoice', 'queued', []);
+            return true;
+        });
     }
 
-    /**
-     * Process all queued or retryable invoices in background job mode.
-     */
-    public function processBatch(int $limit = 20): array
+    public function processBatch(string $companyId, int $limit = 20): array
     {
-        $db = db_connect();
-        $pending = $db->table('sales')
-            ->whereIn('arca_status', ['queued', 'retry'])
-            ->orderBy('created_at', 'ASC')
-            ->limit($limit)
+        $pending = db_connect()->table('sales')->where('company_id', $companyId)
+            ->whereIn('arca_status', ['queued', 'retry'])->orderBy('created_at')->limit(max(1, min(100, $limit)))
             ->get()->getResultArray();
-
-        $processed = 0;
-        $successes = 0;
-        $errors = 0;
-        $details = [];
-
+        $summary = ['processed'=>0, 'successes'=>0, 'errors'=>0, 'details'=>[]];
         foreach ($pending as $sale) {
-            $processed++;
             $result = $this->authorizeSingleSale($sale);
-            if ($result['ok']) {
-                $successes++;
-            } else {
-                $errors++;
-            }
-            $details[] = $result;
+            $summary['processed']++;
+            $summary[$result['ok'] ? 'successes' : 'errors']++;
+            $summary['details'][] = $result;
         }
-
-        return [
-            'processed' => $processed,
-            'successes' => $successes,
-            'errors'    => $errors,
-            'details'   => $details,
-        ];
+        return $summary;
     }
 
-    /**
-     * Authorize a single sale document with ARCA.
-     */
     public function authorizeSingleSale(array $sale): array
     {
-        $db = db_connect();
-        $companyId = $sale['company_id'];
-        $saleId = $sale['id'];
-
-        $retryCount = (int) ($sale['arca_retry_count'] ?? 0);
-        $maxRetries = 5;
-
-        // Fetch company ARCA settings
-        $settingsRow = $db->table('company_settings')
-            ->where('company_id', $companyId)
-            ->get()->getRowArray();
-        $settings = json_decode($settingsRow['settings_json'] ?? '{}', true);
-
-        $validation = $this->arcaService->validateSettings($settings, $companyId);
-        if (!$validation['valid']) {
-            $this->markError($saleId, implode('; ', $validation['errors']), $retryCount + 1);
-            return ['ok' => false, 'sale_id' => $saleId, 'error' => 'Configuración ARCA inválida'];
-        }
-
-        try {
-            $items = $db->table('sale_items')->where('sale_id', $saleId)->get()->getResultArray();
-            [$sale] = PaymentFiscalPolicy::forSale($sale, $items);
-            // Build fiscal voucher payload
-            $voucher = [
-                'DocTipo'    => $sale['customer_doc_type'] ?? 96,
-                'DocNro'     => $sale['customer_doc_number'] ?? '0',
-                'CbteTipo'   => $sale['voucher_type'] ?? 6, // 1: Factura A, 6: Factura B, 11: Factura C
-                'PtoVta'     => $sale['pos_number'] ?? 1,
-                'CbteFch'    => date('Ymd', strtotime($sale['sale_date'] ?? date('Y-m-d'))),
-                'ImpTotal'   => ArcaService::fiscalTotal($sale),
-                'ImpNeto'    => (float) $sale['subtotal'],
-                'ImpIVA'     => (float) ($sale['tax_total'] ?? 0),
-                'ImpTotConc' => 0,
-                'ImpOpEx'    => 0,
-                'ImpTrib'    => 0,
-                'MonId'      => 'PES',
-                'MonCotiz'   => 1,
-            ];
-
-            // Attempt authorization via ArcaService
-            $response = $this->arcaService->authorizeVoucher($companyId, $settings, $voucher);
-
-            if (!empty($response['cae'])) {
-                $db->table('sales')->where('id', $saleId)->update([
-                    'cae'                 => $response['cae'],
-                    'cae_expiration_date' => $response['cae_due_date'] ?? null,
-                    'voucher_number'      => $response['voucher_number'] ?? $sale['voucher_number'],
-                    'arca_status'         => 'authorized',
-                    'arca_error'          => null,
-                    'updated_at'          => date('Y-m-d H:i:s'),
-                ]);
-
-                // Log audit document event
-                $db->table('document_events')->insert([
-                    'id'            => app_uuid(),
-                    'company_id'    => $companyId,
-                    'document_type' => 'sale',
-                    'document_id'   => $saleId,
-                    'event_type'    => 'ARCA_AUTHORIZED',
-                    'description'   => "CAE otorgado: {$response['cae']} para comprobante N° {$response['voucher_number']}",
-                    'created_at'    => date('Y-m-d H:i:s'),
-                ]);
-
-                return ['ok' => true, 'sale_id' => $saleId, 'cae' => $response['cae']];
-            } else {
-                $errMsg = $response['error'] ?? 'Respuesta ARCA sin CAE';
-                $this->markRetryOrContingency($saleId, $errMsg, $retryCount + 1, $maxRetries);
-                return ['ok' => false, 'sale_id' => $saleId, 'error' => $errMsg];
+        $companyId = (string) ($sale['company_id'] ?? '');
+        $saleId = (string) ($sale['id'] ?? '');
+        $claimed = (new InventoryIntegrityService())->transaction($companyId, function () use ($companyId, $saleId) {
+            $fresh = $this->sale($companyId, $saleId);
+            if (!$fresh || !in_array($fresh['arca_status'], ['queued', 'retry'], true) || !empty($fresh['cae'])) return null;
+            if (!in_array($fresh['status'], ['confirmed', 'returned_partial', 'returned_total'], true)) {
+                $this->save($companyId, $saleId, ['arca_status'=>'arca_error', 'arca_result_message'=>'El comprobante no está confirmado.']);
+                return null;
             }
-        } catch (\Throwable $e) {
-            $this->markRetryOrContingency($saleId, $e->getMessage(), $retryCount + 1, $maxRetries);
-            return ['ok' => false, 'sale_id' => $saleId, 'error' => $e->getMessage()];
+            $this->save($companyId, $saleId, ['arca_status'=>'processing']);
+            return $fresh;
+        });
+        if (!$claimed) return ['ok'=>false, 'sale_id'=>$saleId, 'error'=>'Comprobante no disponible para procesamiento.'];
+
+        $settings = (new SalesSettingModel())->where('company_id', $companyId)->first();
+        $company = (new CompanyModel())->find($companyId);
+        $document = (new SalesDocumentTypeModel())->where(['company_id'=>$companyId, 'id'=>$claimed['document_type_id']])->first();
+        $point = empty($claimed['point_of_sale_id']) ? [] : (new SalesPointOfSaleModel())->where(['company_id'=>$companyId, 'id'=>$claimed['point_of_sale_id']])->first();
+        if (!$settings || !$company || !$document || $point === null) {
+            $result = ['status'=>'arca_error', 'message'=>'Configuración fiscal o referencias de empresa incompletas.'];
+        } else {
+            try {
+                $settings = $this->arcaService->sanitizeSettings($settings, $companyId);
+                $items = (new SaleItemModel())->where('sale_id', $saleId)->orderBy('line_number')->findAll();
+                $result = $this->arcaService->authorizeSale($claimed, $document, $company, $settings, $items, $point);
+            } catch (\Throwable $e) {
+                // Unknown transport outcomes cannot safely be retried without fiscal consultation.
+                $result = ['status'=>'error', 'message'=>'No se pudo determinar el resultado fiscal. Consultá el comprobante antes de reintentar.'];
+            }
         }
+
+        return (new InventoryIntegrityService())->transaction($companyId, function () use ($companyId, $saleId, $result, $settings) {
+            $current = $this->sale($companyId, $saleId);
+            if (!$current) throw new \RuntimeException('Comprobante no disponible.');
+            $ok = !empty($result['cae']) || ($result['status'] ?? '') === 'No Aplica';
+            $attempts = db_connect()->table('integration_logs')->where(['company_id'=>$companyId, 'provider'=>'arca_async', 'service'=>'authorize', 'reference_id'=>$saleId])->countAllResults() + 1;
+            $status = $result['status'] ?? 'error';
+            if (!$ok && $status === 'error') $status = 'contingency';
+            elseif (!$ok && $status === 'rejected' && ($result['result_code'] ?? '') !== 'CFG001') $status = $attempts < 5 ? 'retry' : 'contingency';
+            elseif (!$ok) $status = 'arca_error';
+            $eventId = (new SalesArcaEventModel())->insert([
+                'company_id'=>$companyId, 'sale_id'=>$saleId, 'service_slug'=>$result['service_slug'] ?? 'arca',
+                'event_type'=>'authorize', 'environment'=>$settings['arca_environment'] ?? 'homologacion',
+                'status'=>$result['status'] ?? 'error', 'result_code'=>$result['result_code'] ?? null,
+                'message'=>$result['message'] ?? null, 'request_payload'=>json_encode($result['request_payload'] ?? []),
+                'response_payload'=>json_encode($result['response_payload'] ?? []), 'performed_at'=>date('Y-m-d H:i:s'),
+            ], true);
+            if (!$eventId) throw new \RuntimeException('No se pudo registrar el resultado fiscal.');
+            $changes = ['arca_status'=>$status, 'arca_service'=>$result['service_slug'] ?? null,
+                'arca_operation_mode'=>'automatic', 'arca_result_code'=>$result['result_code'] ?? null,
+                'arca_result_message'=>$result['message'] ?? null, 'arca_last_checked_at'=>date('Y-m-d H:i:s'), 'arca_request_id'=>$eventId];
+            if (!empty($result['cae'])) $changes += ['cae'=>$result['cae'], 'cae_due_date'=>$result['cae_due_date'] ?? null, 'arca_authorized_at'=>$result['authorized_at'] ?? date('Y-m-d H:i:s')];
+            // A concurrent fiscal consultation may already have recovered the CAE.
+            if (!empty($current['cae'])) return ['ok'=>true, 'sale_id'=>$saleId, 'cae'=>$current['cae']];
+            $this->save($companyId, $saleId, $changes);
+            $this->log($companyId, $saleId, 'authorize', $status, ['attempt'=>$attempts]);
+            if ($settings) (new SalesSettingModel())->update($settings['id'], ['arca_last_sync_at'=>date('Y-m-d H:i:s'), 'arca_last_error'=>$ok ? null : ($result['message'] ?? 'Error fiscal')]);
+            return ['ok'=>$ok, 'sale_id'=>$saleId, 'cae'=>$result['cae'] ?? null, 'error'=>$ok ? null : ($result['message'] ?? 'Error fiscal')];
+        });
     }
 
-    protected function markRetryOrContingency(string $saleId, string $error, int $newRetryCount, int $maxRetries): void
+    private function sale(string $companyId, string $saleId): ?array
     {
-        $db = db_connect();
-        $status = $newRetryCount >= $maxRetries ? 'contingency' : 'retry';
-
-        $db->table('sales')->where('id', $saleId)->update([
-            'arca_status'      => $status,
-            'arca_error'       => $error,
-            'arca_retry_count' => $newRetryCount,
-            'updated_at'       => date('Y-m-d H:i:s'),
-        ]);
-
-        $db->table('integration_logs')->insert([
-            'id'               => app_uuid(),
-            'company_id'       => null,
-            'service_name'     => 'ARCA_ASYNC_WORKER',
-            'action'           => 'authorize_failure',
-            'request_payload'  => json_encode(['sale_id' => $saleId, 'retry' => $newRetryCount]),
-            'response_payload' => json_encode(['error' => $error, 'next_status' => $status]),
-            'status_code'      => 500,
-            'created_at'       => date('Y-m-d H:i:s'),
-        ]);
+        return (new SaleModel())->where(['company_id'=>$companyId, 'id'=>$saleId])->first();
     }
 
-    protected function markError(string $saleId, string $error, int $newRetryCount): void
+    private function save(string $companyId, string $saleId, array $changes): void
     {
-        db_connect()->table('sales')->where('id', $saleId)->update([
-            'arca_status'      => 'arca_error',
-            'arca_error'       => $error,
-            'arca_retry_count' => $newRetryCount,
-            'updated_at'       => date('Y-m-d H:i:s'),
-        ]);
+        if (!(new SaleModel())->where('company_id', $companyId)->update($saleId, $changes)) throw new \RuntimeException('No se pudo guardar el estado fiscal.');
+    }
+
+    private function log(string $companyId, string $saleId, string $operation, string $status, array $data): void
+    {
+        if (!(new IntegrationLogModel())->insert([
+            'company_id'=>$companyId, 'provider'=>'arca_async', 'service'=>$operation,
+            'reference_type'=>'sale', 'reference_id'=>$saleId, 'status'=>$status,
+            'request_payload'=>json_encode($data), 'message'=>'Procesamiento fiscal asíncrono',
+        ])) throw new \RuntimeException('No se pudo registrar la integración fiscal.');
     }
 }

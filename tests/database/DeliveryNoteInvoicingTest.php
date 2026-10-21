@@ -5,11 +5,12 @@ use CodeIgniter\Test\CIUnitTestCase;
 
 final class DeliveryNoteInvoicingTest extends CIUnitTestCase
 {
+    use \Tests\Support\IntegrationEventsFixture;
     private array $tables = [];
 
     protected function setUp(): void
     {
-        parent::setUp(); helper(['app', 'url', 'auth']); $this->db = db_connect();
+        parent::setUp(); $this->installEventFixture(); helper(['app', 'url', 'auth']); $this->db = db_connect();
         $schemas = [
             'company_payment_methods' => 'id TEXT PRIMARY KEY, company_id TEXT, show_on_receipt INTEGER',
             'company_settings' => 'id TEXT PRIMARY KEY, company_id TEXT, key TEXT, value TEXT',
@@ -70,6 +71,7 @@ final class DeliveryNoteInvoicingTest extends CIUnitTestCase
     }
     protected function tearDown(): void
     {
+        $this->removeEventFixture();
         while ($this->db->transDepth) $this->db->transRollback();
         $this->db->query('PRAGMA foreign_keys=OFF');
         foreach (array_reverse($this->tables) as $table) $this->db->query('DROP TABLE ' . $this->db->prefixTable($table));
@@ -201,25 +203,24 @@ final class DeliveryNoteInvoicingTest extends CIUnitTestCase
         $r = $this->save($this->input()); $sale = $this->db->table('sales')->where('id', $r['invoice_id'])->get()->getRowArray(); $sale['cae'] = '123';
         $this->expectException(RuntimeException::class); (new DeliveryNoteInvoicingService())->assertInvoiceCanCancel('a', $sale);
     }
-    public function testActualWebConfirmationPostsOnlyInvoiceDebtAndNeverStock(): void
+    public static function confirmationChannels(): array { return [['web'],['api']]; }
+    /** @dataProvider confirmationChannels */
+    public function testActualConfirmationPostsOnlyInvoiceDebtAndNeverStock(string $channel): void
     {
         $this->db->table('sales_document_types')->where('id', 'invoice')->update(['impacts_receivable' => 1]);
         foreach (['receivable', 'revenue', 'iva_debito'] as $account) $this->db->table('company_settings')->insert(['id' => $account, 'company_id' => 'a', 'key' => 'account_' . $account, 'value' => $account]);
         $this->db->table('cash_sessions')->insert(['id' => 'session', 'company_id' => 'a', 'cash_register_id' => 'register', 'status' => 'open']);
         $result = $this->save($this->input());
         $this->db->table('sales')->where('id', $result['invoice_id'])->update(['cash_session_id' => 'session', 'cash_register_id' => 'register']);
-        $controller = new class extends \App\Controllers\SalesController {
-            protected function currentUser(): ?array { return ['id' => 'operator']; }
-        };
+        $controller = $channel==='web'
+            ? new class extends \App\Controllers\SalesController { protected function currentUser(): ?array { return ['id'=>'operator']; } }
+            : new class extends \App\Controllers\Api\V1\SalesController { protected function apiUser(): ?array { return ['id'=>'operator']; } };
         $controller->initController(service('request'), service('response'), service('logger'));
-        $method = new ReflectionMethod(\App\Controllers\SalesController::class, 'confirmSaleTransaction'); $method->setAccessible(true);
-        // Keep unrelated automation listeners out of this isolated transaction test.
-        $listeners = new ReflectionProperty(\App\Libraries\EventBus::class, 'listeners'); $listeners->setAccessible(true);
-        $initialized = new ReflectionProperty(\App\Libraries\EventBus::class, 'initialized'); $initialized->setAccessible(true);
-        $oldListeners = $listeners->getValue(); $oldInitialized = $initialized->getValue();
-        $listeners->setValue([]); $initialized->setValue(true);
-        try { $confirmed = $method->invoke($controller, 'a', $result['invoice_id']); }
-        finally { $listeners->setValue($oldListeners); $initialized->setValue($oldInitialized); }
+        $class=$channel==='web' ? \App\Controllers\SalesController::class : \App\Controllers\Api\V1\SalesController::class;
+        $method=new ReflectionMethod($class,'confirmSaleTransaction'); $method->setAccessible(true);
+        $confirmed=$method->invoke($controller,'a',$result['invoice_id']);
+        $this->assertSame(1,$this->db->table('integration_outbox')->where('event','sale.confirmed')->countAllResults());
+        $this->assertSame(2,$this->db->table('integration_deliveries')->where('status','pending')->countAllResults());
         $this->assertTrue($confirmed, is_string($confirmed) ? $confirmed : '');
         $this->assertSame('confirmed', $this->db->table('sales')->where('id', $result['invoice_id'])->get()->getRowArray()['status']);
         $debt = $this->db->table('sales_receivables')->get()->getRowArray();

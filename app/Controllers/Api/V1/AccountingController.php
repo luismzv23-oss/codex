@@ -41,7 +41,9 @@ class AccountingController extends BaseApiController
 
     public function postEntry(string $id)
     {
-        $this->accounting->postEntry($id);
+        if (!$this->accounting->postEntry((string) $this->apiCompanyId(), $id)) {
+            return $this->fail('Asiento no disponible o ya contabilizado.', 404);
+        }
         return $this->success(['posted' => true]);
     }
 
@@ -68,6 +70,10 @@ class AccountingController extends BaseApiController
     {
         $from = $this->request->getGet('from') ?? date('Y-m-01');
         $to   = $this->request->getGet('to') ?? date('Y-m-d');
-        return $this->success($this->accounting->accountLedger($accountId, $from, $to));
+        try {
+            return $this->success($this->accounting->accountLedger((string) $this->apiCompanyId(), $accountId, $from, $to));
+        } catch (\InvalidArgumentException $e) {
+            return $this->fail('Cuenta no disponible.', 404);
+        }
     }
 }

@@ -208,7 +208,9 @@ class AccountingController extends BaseController
         $ctx = $this->accountingContext();
         if ($ctx instanceof RedirectResponse) return $ctx;
 
-        $this->accounting->postEntry($id);
+        if (!$this->accounting->postEntry($ctx['company']['id'], $id)) {
+            return redirect()->to(site_url('contabilidad/diario'))->with('error', 'Asiento no disponible o ya contabilizado.');
+        }
         return redirect()->to(site_url('contabilidad/diario'))->with('message', 'Asiento contabilizado.');
     }
 
@@ -220,8 +222,9 @@ class AccountingController extends BaseController
 
         $from = $this->request->getGet('from') ?: date('Y-m-01');
         $to   = $this->request->getGet('to')   ?: date('Y-m-d');
-        $account = db_connect()->table('accounts')->where('id', $accountId)->get()->getRowArray();
-        $ledger = $this->accounting->accountLedger($accountId, $from, $to);
+        $account = db_connect()->table('accounts')->where(['id' => $accountId, 'company_id' => $ctx['company']['id']])->get()->getRowArray();
+        if (!$account) return redirect()->to(site_url('contabilidad/diario'))->with('error', 'Cuenta no disponible.');
+        $ledger = $this->accounting->accountLedger($ctx['company']['id'], $accountId, $from, $to);
 
         return view('accounting/ledger', $this->accountingViewData($ctx, [
             'pageTitle' => 'Mayor: ' . ($account['code'] ?? '') . ' ' . ($account['name'] ?? ''),

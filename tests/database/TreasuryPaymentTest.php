@@ -5,10 +5,11 @@ use Config\Services;
 
 final class TreasuryPaymentTest extends CIUnitTestCase
 {
+    use \Tests\Support\IntegrationEventsFixture;
     private array $tables=[];
     protected function setUp(): void
     {
-        parent::setUp(); helper(['app','url']); $this->db=db_connect(); $this->db->resetDataCache();
+        parent::setUp(); $this->installEventFixture(); helper(['app','url']); $this->db=db_connect(); $this->db->resetDataCache();
         foreach (['Company','CompanyPaymentMethod','Currency','Branch','SalesPointOfSale','CashRegister','CashSession','CashMovement','CashReconciliation','CashPaymentGateway','CashCheck','PurchasePayable','PurchasePayment','SupplierExchangeDifference','VoucherSequence'] as $name) {
             $class='App\\Models\\'.$name.'Model'; $model=new $class();
             $ref=new ReflectionClass($model); $prop=$ref->getProperty('allowedFields'); $prop->setAccessible(true);
@@ -23,7 +24,6 @@ final class TreasuryPaymentTest extends CIUnitTestCase
             'company_settings'=>'company_id TEXT, key TEXT, value TEXT',
             'journal_entries'=>'id TEXT PRIMARY KEY, company_id TEXT, entry_number INTEGER, entry_date TEXT, description TEXT, reference_type TEXT, reference_id TEXT, status TEXT, total_debit REAL, total_credit REAL, user_id TEXT, posted_at TEXT, created_at TEXT',
             'journal_entry_lines'=>'id TEXT PRIMARY KEY, journal_entry_id TEXT, account_id TEXT, description TEXT, debit REAL, credit REAL, created_at TEXT',
-            'tax_withholdings'=>'company_id TEXT, active INTEGER, applies_to TEXT',
             'automation_log'=>'id TEXT PRIMARY KEY, company_id TEXT, event TEXT, actions TEXT, actions_count INTEGER, created_at TEXT',
             'event_log'=>'id TEXT PRIMARY KEY, event TEXT, payload TEXT, listeners_count INTEGER, created_at TEXT',
         ] as $table=>$schema) {$this->db->query('CREATE TABLE '.$this->db->prefixTable($table).' ('.$schema.')');$this->tables[]=$table;}
@@ -49,6 +49,7 @@ final class TreasuryPaymentTest extends CIUnitTestCase
     }
     protected function tearDown(): void
     {
+        $this->removeEventFixture();
         foreach (array_reverse($this->tables) as $table) $this->db->query('DROP TABLE '.$this->db->prefixTable($table));
         $this->db->resetDataCache(); parent::tearDown();
     }

@@ -42,6 +42,16 @@ class EventBus
 
     public static function emit(string $event, array $data = []): array
     {
+        // Migrated events have exactly one dispatch path. Never also run legacy listeners.
+        $companyId=(string)($data['company_id'] ?? '');
+        $id=match ($event) {
+            'sale.confirmed','sale.cancelled' => \App\Libraries\Core\Events\BusinessEvents::sale($companyId,(string)($data['sale']['id'] ?? ''),$event==='sale.confirmed' ? 'confirmed' : 'cancelled'),
+            'inventory.stock_received' => \App\Libraries\Core\Events\BusinessEvents::stockReceived($companyId,(string)($data['receipt_id'] ?? '')),
+            'purchase.payment_made' => \App\Libraries\Core\Events\BusinessEvents::supplierPayment($companyId,(string)($data['payment_id'] ?? '')),
+            'sale.payment_received' => \App\Libraries\Core\Events\BusinessEvents::receiptPayment($companyId,(string)($data['receipt_id'] ?? ''),(array)($data['payment'] ?? [])),
+            default => null,
+        };
+        if ($id!==null) return [['event_id'=>$id,'status'=>'pending']];
         self::init();
         $results = [];
 

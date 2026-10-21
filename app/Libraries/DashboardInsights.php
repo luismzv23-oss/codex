@@ -75,7 +75,7 @@ class DashboardInsights
             ->join('inventory_products p', 'p.id=l.product_id AND p.company_id=l.company_id')
             ->join('inventory_warehouses w', 'w.id=l.warehouse_id AND w.company_id=l.company_id')
             ->join('companies c', 'c.id=l.company_id')
-            ->where('p.active', 1)->where('w.active', 1)
+            ->where('p.active', 1)->where('p.product_type', 'simple')->where('w.active', 1)
             ->select('p.id, p.name, p.sku, c.name AS company, w.name AS warehouse, SUM(l.quantity-l.reserved_quantity) AS available, MAX(COALESCE(l.min_stock,p.min_stock,0)) AS minimum', false)
             ->groupBy('p.id,p.name,p.sku,w.id,w.name,c.name')
             ->having('SUM(l.quantity-l.reserved_quantity) <= MAX(COALESCE(l.min_stock,p.min_stock,0))', null, false);

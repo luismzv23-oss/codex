@@ -143,6 +143,17 @@ if (auth_check() && !$isPopup) {
             align-items: center;
             justify-content: center;
         }
+        /* Draw add icons locally, including when the external icon font is unavailable. */
+        .btn .bi-plus-lg::before {
+            content: "";
+            display: inline-block;
+            width: 1em;
+            height: 1em;
+            vertical-align: -.125em;
+            background:
+                linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat,
+                linear-gradient(currentColor, currentColor) center / 2px 100% no-repeat;
+        }
         .popup-frame {
             width: 100%;
             min-height: 420px;

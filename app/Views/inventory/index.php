@@ -179,7 +179,7 @@
                         <a href="<?= site_url('inventario/productos/nuevo' . (!empty($companies) ? '?company_id=' . $selectedCompanyId . '&redirect_to=' . urlencode(site_url('inventario?company_id=' . $selectedCompanyId)) : '')) ?>"
                             class="btn btn-dark icon-btn" data-popup="true" data-popup-title="Producto"
                             data-popup-subtitle="Registrar productos inventariables para la empresa." title="Nuevo producto"
-                            aria-label="Nuevo producto"><i class="bi bi-plus-lg"></i></a>
+                            aria-label="Nuevo producto"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg></a>
                     <?php endif; ?>
 
                 </div>
@@ -254,17 +254,13 @@
                                         <?php endif; ?>
                                     </td>
                                     <td class="text-end">
-                                        <?php if ($context['canManage'] && (int) ($product['active'] ?? 1) === 1): ?>
-                                            <a href="<?= site_url('inventario/movimientos/nuevo?popup=1' . (!empty($companies) ? '&company_id=' . $selectedCompanyId : '') . '&product_id=' . $product['id'] . '&movement_type=ajuste&adjustment_mode=increase&reason=Ajuste%20manual%20de%20stock') ?>"
+                                        <?php if ($context['canConfigure']): ?>
+                                            <a href="<?= site_url('inventario/productos/' . $product['id'] . '/editar?' . http_build_query(['company_id' => $selectedCompanyId, 'redirect_to' => site_url('inventario?company_id=' . $selectedCompanyId)])) ?>"
                                                 class="btn btn-sm btn-outline-dark icon-btn" data-popup="true"
-                                                data-popup-title="Editar stock"
-                                                data-popup-subtitle="Ajustar stock del producto con trazabilidad."
-                                                title="Editar stock" aria-label="Editar stock"><i
+                                                data-popup-title="Producto"
+                                                data-popup-subtitle="Editar datos, precios y composición del producto."
+                                                title="Editar producto" aria-label="Editar producto"><i
                                                     class="bi bi-pencil-square"></i></a>
-                                        <?php elseif ($context['canManage']): ?>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary icon-btn opacity-50" disabled
-                                                title="Producto inactivo. Debe habilitarse desde Configuración de inventario para ajustar existencias."
-                                                aria-label="Producto inactivo"><i class="bi bi-pencil-square"></i></button>
                                         <?php endif; ?>
                                         <a href="<?= site_url('inventario/productos/' . $product['id'] . '/trazabilidad' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
                                             class="btn btn-sm btn-outline-secondary icon-btn" data-popup="true"
@@ -497,7 +493,7 @@
 
         const companyQuery = '<?= !empty($companies) ? '&company_id=' . $selectedCompanyId : '' ?>';
         const siteBase = '<?= rtrim(site_url(), '/') ?>';
-        const canManage = <?= $context['canManage'] ? 'true' : 'false' ?>;
+        const canConfigure = <?= $context['canConfigure'] ? 'true' : 'false' ?>;
 
         function escapeHtml(str) {
             if (!str) return '';
@@ -528,10 +524,9 @@
             }
 
             let manageBtn = '';
-            if (canManage && isActive) {
-                manageBtn = `<a href="${siteBase}/inventario/movimientos/nuevo?popup=1${companyQuery}&product_id=${item.id}&movement_type=ajuste&adjustment_mode=increase&reason=Ajuste%20manual%20de%20stock" class="btn btn-sm btn-outline-dark icon-btn" data-popup="true" data-popup-title="Editar stock" data-popup-subtitle="Ajustar stock del producto con trazabilidad." title="Editar stock" aria-label="Editar stock"><i class="bi bi-pencil-square"></i></a>`;
-            } else if (canManage) {
-                manageBtn = `<button type="button" class="btn btn-sm btn-outline-secondary icon-btn opacity-50" disabled title="Producto inactivo. Debe habilitarse desde Configuración de inventario para ajustar existencias." aria-label="Producto inactivo"><i class="bi bi-pencil-square"></i></button>`;
+            if (canConfigure) {
+                const editQuery = new URLSearchParams({company_id: '<?= esc($selectedCompanyId, 'js') ?>', redirect_to: siteBase + '/inventario?company_id=' + encodeURIComponent('<?= esc($selectedCompanyId, 'js') ?>')});
+                manageBtn = `<a href="${siteBase}/inventario/productos/${encodeURIComponent(item.id)}/editar?${editQuery}" class="btn btn-sm btn-outline-dark icon-btn" data-popup="true" data-popup-title="Producto" data-popup-subtitle="Editar datos, precios y composición del producto." title="Editar producto" aria-label="Editar producto"><i class="bi bi-pencil-square"></i></a>`;
             }
 
             const catBrand = ((item.category || '') + ' ' + (item.brand || '')).trim();

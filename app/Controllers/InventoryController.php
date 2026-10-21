@@ -868,6 +868,13 @@ class InventoryController extends BaseController
             return redirect()->back()->withInput()->with('error', 'Ya existe un producto con ese SKU en la empresa.');
         }
 
+        try {
+            $productRules = \App\Libraries\InventoryProductRules::normalize((array) $this->request->getPost());
+        } catch (\InvalidArgumentException $e) {
+            if ($this->isAjaxRequest()) return $this->ajaxError($e->getMessage(), 422);
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
+        }
+
         $imageName = null;
         $imageFile = $this->request->getFile('image');
 
@@ -884,8 +891,8 @@ class InventoryController extends BaseController
 
         $costPrice = (float) str_replace([' ', ','], ['', '.'], (string) $this->request->getPost('cost_price'));
         $salePrice = (float) str_replace([' ', ','], ['', '.'], (string) $this->request->getPost('sale_price'));
-        $minStock = (float) str_replace([' ', ','], ['', '.'], (string) $this->request->getPost('min_stock'));
-        $maxStock = (float) str_replace([' ', ','], ['', '.'], (string) $this->request->getPost('max_stock'));
+        $minStock = $productRules['min_stock'];
+        $maxStock = $productRules['max_stock'];
 
         $productId = $productModel->insert([
             'company_id' => $context['company']['id'],
@@ -894,10 +901,10 @@ class InventoryController extends BaseController
             'category' => trim((string) $this->request->getPost('category')),
             'brand' => trim((string) $this->request->getPost('brand')),
             'barcode' => trim((string) $this->request->getPost('barcode')),
-            'product_type' => trim((string) $this->request->getPost('product_type')) ?: 'simple',
+            'product_type' => $productRules['product_type'],
             'description' => trim((string) $this->request->getPost('description')),
             'image' => $imageName,
-            'unit' => trim((string) $this->request->getPost('unit')) ?: 'unidad',
+            'unit' => $productRules['unit'],
             'min_stock' => $minStock,
             'max_stock' => $maxStock,
             'cost_price' => $costPrice,
@@ -910,8 +917,8 @@ class InventoryController extends BaseController
 
         $this->syncKitItems($productId, $this->requestKitItems($context['company']['id'], $productId));
 
-        $initialWarehouseId = trim((string) $this->request->getPost('initial_warehouse_id'));
-        $initialStockRaw = $this->request->getPost('initial_stock');
+        $initialWarehouseId = $productRules['product_type'] === 'kit' ? '' : trim((string) $this->request->getPost('initial_warehouse_id'));
+        $initialStockRaw = $productRules['initial_stock'];
         $initialStock = $initialStockRaw !== null && $initialStockRaw !== '' ? (float) str_replace([' ', ','], ['', '.'], (string) $initialStockRaw) : 0.0;
 
         if ($initialWarehouseId === '' && $initialStock > 0) {
@@ -1067,6 +1074,26 @@ class InventoryController extends BaseController
             return redirect()->back()->withInput()->with('error', 'Ya existe un producto con ese SKU en la empresa.');
         }
 
+        try {
+            $productRules = \App\Libraries\InventoryProductRules::normalize((array) $this->request->getPost());
+        } catch (\InvalidArgumentException $e) {
+            if ($this->isAjaxRequest()) return $this->ajaxError($e->getMessage(), 422);
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
+        }
+
+        // A virtual kit cannot absorb existing physical stock or reservations.
+        if (($product['product_type'] ?? 'simple') !== 'kit' && $productRules['product_type'] === 'kit') {
+            $hasStock = db_connect()->table('inventory_stock_levels')
+                ->where(['company_id' => $context['company']['id'], 'product_id' => $id])
+                ->groupStart()->where('quantity !=', 0)->orWhere('reserved_quantity !=', 0)->groupEnd()
+                ->countAllResults() > 0;
+            if ($hasStock) {
+                $message = 'No podés convertir en kit un producto con existencias o reservas. Regularizá primero su stock.';
+                if ($this->isAjaxRequest()) return $this->ajaxError($message, 422);
+                return redirect()->back()->withInput()->with('error', $message);
+            }
+        }
+
         $imageName = $product['image'] ?? null;
         $imageFile = $this->request->getFile('image');
 
@@ -1090,8 +1117,8 @@ class InventoryController extends BaseController
 
         $costPrice = (float) str_replace([' ', ','], ['', '.'], (string) $this->request->getPost('cost_price'));
         $salePrice = (float) str_replace([' ', ','], ['', '.'], (string) $this->request->getPost('sale_price'));
-        $minStock = (float) str_replace([' ', ','], ['', '.'], (string) $this->request->getPost('min_stock'));
-        $maxStock = (float) str_replace([' ', ','], ['', '.'], (string) $this->request->getPost('max_stock'));
+        $minStock = $productRules['min_stock'];
+        $maxStock = $productRules['max_stock'];
 
         $payload = [
             'sku' => $sku,
@@ -1099,10 +1126,10 @@ class InventoryController extends BaseController
             'category' => trim((string) $this->request->getPost('category')),
             'brand' => trim((string) $this->request->getPost('brand')),
             'barcode' => trim((string) $this->request->getPost('barcode')),
-            'product_type' => trim((string) $this->request->getPost('product_type')) ?: 'simple',
+            'product_type' => $productRules['product_type'],
             'description' => trim((string) $this->request->getPost('description')),
             'image' => $imageName,
-            'unit' => trim((string) $this->request->getPost('unit')) ?: 'unidad',
+            'unit' => $productRules['unit'],
             'min_stock' => $minStock,
             'max_stock' => $maxStock,
             'cost_price' => $costPrice,
@@ -1117,10 +1144,10 @@ class InventoryController extends BaseController
         $this->syncProductMinimums($context['company']['id'], $id, (float) $payload['min_stock']);
         $this->syncKitItems($id, $this->requestKitItems($context['company']['id'], $id));
 
-        $initialWarehouseId = trim((string) $this->request->getPost('initial_warehouse_id'));
-        $initialStockRaw = $this->request->getPost('initial_stock');
+        $initialWarehouseId = $productRules['product_type'] === 'kit' ? '' : trim((string) $this->request->getPost('initial_warehouse_id'));
+        $initialStockRaw = $productRules['initial_stock'];
 
-        if ($initialWarehouseId === '' && $initialStockRaw !== null && $initialStockRaw !== '') {
+        if ($productRules['product_type'] !== 'kit' && $initialWarehouseId === '' && $initialStockRaw !== null && $initialStockRaw !== '') {
             $defaultWh = (new InventoryWarehouseModel())
                 ->where('company_id', $context['company']['id'])
                 ->where('is_default', 1)
@@ -2516,7 +2543,7 @@ class InventoryController extends BaseController
     {
         return array_slice(array_values(array_filter(
             $this->productStockRows($companyId),
-            static fn(array $row): bool => (bool) ($row['is_critical'] ?? false)
+            static fn(array $row): bool => ($row['product_type'] ?? 'simple') === 'simple' && (int) ($row['active'] ?? 0) === 1 && (bool) ($row['is_critical'] ?? false)
         )), 0, $limit);
     }
 
@@ -2703,6 +2730,8 @@ class InventoryController extends BaseController
             ->select('m.occurred_at, m.quantity, m.movement_type, p.name AS product_name, p.sku')
             ->join('inventory_products p', 'p.id = m.product_id')
             ->where('m.company_id', $companyId)
+            ->where('p.product_type', 'simple')
+            ->where('p.active', 1)
             ->where('m.quantity >=', $threshold)
             ->orderBy('m.occurred_at', 'DESC')
             ->limit(5)
@@ -2713,6 +2742,8 @@ class InventoryController extends BaseController
             ->select('p.name, p.sku, MAX(m.occurred_at) AS last_movement')
             ->join('inventory_movements m', 'm.product_id = p.id', 'left')
             ->where('p.company_id', $companyId)
+            ->where('p.product_type', 'simple')
+            ->where('p.active', 1)
             ->groupBy('p.id, p.name, p.sku')
             ->having('(MAX(m.occurred_at) IS NULL OR MAX(m.occurred_at) < ' . db_connect()->escape($rotationDate) . ')', null, false)
             ->limit(5)
@@ -2721,11 +2752,11 @@ class InventoryController extends BaseController
 
         return [
             'critical' => $this->criticalProducts($companyId, 6),
-            'out_of_stock' => array_values(array_filter($this->productStockRows($companyId), static fn(array $row): bool => (float) $row['total_stock'] <= 0)),
-            'overstock' => array_values(array_filter($this->productStockRows($companyId), static fn(array $row): bool => (bool) ($row['is_overstock'] ?? false))),
+            'out_of_stock' => array_values(array_filter($this->productStockRows($companyId), static fn(array $row): bool => ($row['product_type'] ?? 'simple') === 'simple' && (int) ($row['active'] ?? 0) === 1 && (float) $row['total_stock'] <= 0)),
+            'overstock' => array_values(array_filter($this->productStockRows($companyId), static fn(array $row): bool => ($row['product_type'] ?? 'simple') === 'simple' && (int) ($row['active'] ?? 0) === 1 && (bool) ($row['is_overstock'] ?? false))),
             'unusual' => $unusualMovements,
             'no_rotation' => $noRotation,
-            'reservations' => $this->activeReservations($companyId, null, 6),
+            'reservations' => $this->activeReservations($companyId, null, 6, true),
         ];
     }
 
@@ -2984,7 +3015,7 @@ class InventoryController extends BaseController
         return $builder->findAll();
     }
 
-    private function activeReservations(string $companyId, ?string $productId = null, int $limit = 20): array
+    private function activeReservations(string $companyId, ?string $productId = null, int $limit = 20, bool $simpleOnly = false): array
     {
         $builder = db_connect()->table('inventory_reservations r')
             ->select('r.*, p.name AS product_name, p.sku, w.name AS warehouse_name, w.code AS warehouse_code, u.name AS reserved_by_name')
@@ -2997,6 +3028,10 @@ class InventoryController extends BaseController
 
         if ($productId) {
             $builder->where('r.product_id', $productId);
+        }
+
+        if ($simpleOnly) {
+            $builder->where('p.product_type', 'simple')->where('p.active', 1);
         }
 
         return $builder->limit($limit)->get()->getResultArray();

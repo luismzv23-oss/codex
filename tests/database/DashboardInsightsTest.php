@@ -18,7 +18,7 @@ final class DashboardInsightsTest extends CIUnitTestCase
             'branches' => 'id TEXT PRIMARY KEY,company_id TEXT,name TEXT',
             'sales' => 'id TEXT PRIMARY KEY,company_id TEXT,branch_id TEXT,currency_code TEXT,status TEXT,document_code TEXT,issue_date TEXT,total REAL,cae TEXT,arca_status TEXT,sale_number TEXT',
             'sales_receivables' => 'id TEXT,company_id TEXT,sale_id TEXT,status TEXT,balance_amount REAL,due_date TEXT',
-            'inventory_products' => 'id TEXT PRIMARY KEY,company_id TEXT,name TEXT,sku TEXT,active INTEGER,min_stock REAL',
+            'inventory_products' => 'id TEXT PRIMARY KEY,company_id TEXT,name TEXT,sku TEXT,active INTEGER,min_stock REAL,product_type TEXT',
             'inventory_warehouses' => 'id TEXT PRIMARY KEY,company_id TEXT,name TEXT,active INTEGER',
             'inventory_stock_levels' => 'id TEXT,company_id TEXT,product_id TEXT,warehouse_id TEXT,quantity REAL,reserved_quantity REAL,min_stock REAL',
         ] as $table => $schema) {
@@ -28,7 +28,7 @@ final class DashboardInsightsTest extends CIUnitTestCase
         foreach (['a', 'b'] as $id) {
             $db->table('companies')->insert(['id' => $id, 'name' => 'Empresa ' . $id]);
             $db->table('branches')->insert(['id' => $id, 'company_id' => $id, 'name' => 'Sucursal ' . $id]);
-            $db->table('inventory_products')->insert(['id' => $id, 'company_id' => $id, 'name' => 'Producto ' . $id, 'sku' => $id, 'active' => 1, 'min_stock' => 5]);
+            $db->table('inventory_products')->insert(['id' => $id, 'company_id' => $id, 'name' => 'Producto ' . $id, 'sku' => $id, 'active' => 1, 'min_stock' => 5, 'product_type' => 'simple']);
             $db->table('inventory_warehouses')->insert(['id' => $id, 'company_id' => $id, 'name' => 'Depósito ' . $id, 'active' => 1]);
         }
         foreach ([['s1','a','ARS',100,'2026-09-15','confirmed'], ['s2','b','ARS',900,'2026-09-15','confirmed'], ['s3','a','USD',700,'2026-09-15','confirmed'], ['s4','a','ARS',500,'2026-09-15','draft'], ['s5','a','ARS',50,'2026-09-14','confirmed']] as [$id,$company,$currency,$total,$date,$status]) {
@@ -79,6 +79,21 @@ final class DashboardInsightsTest extends CIUnitTestCase
         $html = view('dashboard/insights_panel', ['insights'=>$data,'filters'=>$f,'superadmin'=>true]);
         $this->assertStringContainsString('Un período sin ventas registradas', $html);
         $this->assertStringContainsString('Sin base de comparación anterior', $html);
+    }
+
+    public function testStockAttentionOnlyIncludesActiveSimpleProducts(): void
+    {
+        $db=db_connect('tests');
+        foreach ([['kit',1,'kit'],['inactive',0,'simple'],['inactive-kit',0,'kit'],['base',1,'simple']] as [$id,$active,$type]) {
+            $db->table('inventory_products')->insert(['id'=>$id,'company_id'=>'a','name'=>$id,'sku'=>$id,'active'=>$active,'min_stock'=>5,'product_type'=>$type]);
+            $db->table('inventory_stock_levels')->insert(['id'=>$id,'company_id'=>'a','product_id'=>$id,'warehouse_id'=>'a','quantity'=>0,'reserved_quantity'=>0,'min_stock'=>5]);
+        }
+        foreach ([false,true] as $superadmin) {
+            $f=$this->insights->filters(['company_id'=>'a','from'=>'2026-09-15','to'=>'2026-09-15'],$superadmin,'a');
+            $data=$this->insights->load($f,$superadmin);
+            $this->assertSame(['base'],array_column($data['critical'],'id'));
+        }
+        $this->assertSame(6,$db->table('inventory_products')->countAllResults());
     }
 
     public function testAdministratorWithoutCompanyFailsClosed(): void

@@ -1,13 +1,16 @@
 <?= $this->extend('layouts/app') ?>
 
 <?= $this->section('content') ?>
+<?php $formProductType = old('product_type', $product['product_type'] ?? 'simple') === 'kit' ? 'kit' : 'simple'; ?>
+<script defer src="<?= esc(base_url('assets/js/inventory-product-form.js')) ?>"></script>
+<script defer src="<?= esc(base_url('assets/vendor/alpinejs/csp-3.17.4.min.js')) ?>"></script>
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body p-4">
         <div class="mb-3">
             <h2 class="h5 mb-1"><?= empty($product) ? 'Producto nuevo' : 'Editar producto' ?></h2>
             <p class="text-secondary mb-0">Completa los datos base del producto para control de stock y trazabilidad.</p>
         </div>
-        <form method="post" action="<?= esc($formAction) . ($isPopup ? '?popup=1' : '') ?>" class="row g-3" enctype="multipart/form-data">
+        <form method="post" action="<?= esc($formAction) . ($isPopup ? '?popup=1' : '') ?>" class="row g-3" enctype="multipart/form-data" x-data="inventoryProductForm" data-product-type="<?= esc($formProductType) ?>">
             <?= csrf_field() ?>
             <?php if ($isPopup): ?><input type="hidden" name="popup" value="1"><?php endif; ?>
             <?php if (! empty($companyId)): ?><input type="hidden" name="company_id" value="<?= esc($companyId) ?>"><?php endif; ?>
@@ -34,22 +37,25 @@
             </div>
             <div class="col-md-4">
                 <label class="form-label">Tipo de producto</label>
-                <select name="product_type" class="form-select">
+                <select name="product_type" class="form-select" x-model="productType" @change="applyType">
                     <option value="simple" <?= old('product_type', $product['product_type'] ?? 'simple') === 'simple' ? 'selected' : '' ?>>Simple</option>
                     <option value="kit" <?= old('product_type', $product['product_type'] ?? 'simple') === 'kit' ? 'selected' : '' ?>>Compuesto / Kit</option>
                 </select>
             </div>
             <div class="col-md-4">
                 <label class="form-label">Unidad</label>
-                <input type="text" name="unit" class="form-control" value="<?= esc(old('unit', $product['unit'] ?? 'unidad')) ?>">
+                <select name="unit" class="form-select" x-ref="unit" :value="unit" aria-label="Unidad según tipo de producto">
+                    <option value="unidad" :disabled="isKit" :hidden="isKit" <?= $formProductType === 'simple' ? 'selected' : '' ?>>Unidad</option>
+                    <option value="pack" :disabled="isSimple" :hidden="isSimple" <?= $formProductType === 'kit' ? 'selected' : '' ?>>pack</option>
+                </select>
             </div>
             <div class="col-md-4">
                 <label class="form-label">Stock minimo</label>
-                <input type="number" step="1" min="1" name="min_stock" class="form-control" value="<?= esc(old('min_stock', isset($product['min_stock']) ? number_format((float) $product['min_stock'], 2, '.', '') : '0.00')) ?>">
+                <input type="number" step="1" min="0" name="min_stock" class="form-control" x-ref="minimum" :readonly="isKit" value="<?= esc($formProductType === 'kit' ? '0' : old('min_stock', isset($product['min_stock']) ? number_format((float) $product['min_stock'], 2, '.', '') : '0.00')) ?>">
             </div>
             <div class="col-md-4">
                 <label class="form-label">Stock maximo</label>
-                <input type="number" step="1" min="1" name="max_stock" class="form-control" value="<?= esc(old('max_stock', isset($product['max_stock']) ? number_format((float) $product['max_stock'], 2, '.', '') : '0.00')) ?>">
+                <input type="number" step="1" min="0" name="max_stock" class="form-control" x-ref="maximum" :readonly="isKit" value="<?= esc($formProductType === 'kit' ? '0' : old('max_stock', isset($product['max_stock']) ? number_format((float) $product['max_stock'], 2, '.', '') : '0.00')) ?>">
             </div>
             <div class="col-md-4">
                 <label class="form-label">Precio unitario de compra</label>
@@ -62,7 +68,7 @@
 
             <div class="col-md-4">
                 <label class="form-label">Depósito para stock inicial</label>
-                <select name="initial_warehouse_id" class="form-select">
+                <select name="initial_warehouse_id" class="form-select" x-ref="warehouse" :disabled="isKit">
                     <option value="">Ninguno (sin stock inicial)</option>
                     <?php foreach ($warehouses ?? [] as $w): ?>
                         <option value="<?= esc($w['id']) ?>" <?= (string) old('initial_warehouse_id', (string) ($currentWarehouseId ?? '')) === (string) $w['id'] ? 'selected' : '' ?>><?= esc($w['name']) ?></option>
@@ -71,7 +77,7 @@
             </div>
             <div class="col-md-4">
                 <label class="form-label">Stock inicial</label>
-                <input type="number" step="1" min="1" name="initial_stock" class="form-control" value="<?= esc(old('initial_stock', isset($currentStock) ? number_format((float) $currentStock, 2, '.', '') : '0.00')) ?>">
+                <input type="number" step="1" min="0" name="initial_stock" class="form-control" x-ref="initialStock" :readonly="isKit" value="<?= esc($formProductType === 'kit' ? '0' : old('initial_stock', isset($currentStock) ? number_format((float) $currentStock, 2, '.', '') : '0.00')) ?>">
             </div>
 
             <div class="col-md-4">
@@ -145,7 +151,7 @@
             </div>
             <div class="col-12 d-flex gap-2 pt-2">
                 <button class="btn btn-dark icon-btn" title="Guardar" aria-label="Guardar"><i class="bi bi-check-lg"></i></button>
-                <button type="button" class="btn btn-outline-dark icon-btn" onclick="window.parent.postMessage({ type: 'codex-popup-close' }, window.location.origin)" title="Cerrar" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
+                <button type="button" class="btn btn-outline-dark icon-btn" @click="close" title="Cerrar" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
             </div>
         </form>
     </div>

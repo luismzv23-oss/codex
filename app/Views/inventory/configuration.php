@@ -209,7 +209,7 @@
                             <button type="button" class="btn btn-light rounded-pill px-3 text-secondary product-status-btn" data-status="inactive">Inactivos</button>
                             <button type="button" class="btn btn-light rounded-pill px-3 text-secondary product-status-btn" data-status="all">Todos</button>
                         </div>
-                        <a href="<?= site_url('inventario/productos/nuevo' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-dark icon-btn" data-popup="true" data-popup-title="Producto" data-popup-subtitle="Registrar un producto para control de stock." title="Nuevo producto" aria-label="Nuevo producto"><i class="bi bi-plus-lg"></i></a>
+                        <a href="<?= site_url('inventario/productos/nuevo' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-dark icon-btn" data-popup="true" data-popup-title="Producto" data-popup-subtitle="Registrar productos inventariables para la empresa." title="Nuevo producto" aria-label="Nuevo producto"><i class="bi bi-plus-lg"></i></a>
                     </div>
                 </div>
                 <div class="table-responsive">
@@ -234,7 +234,7 @@
                                     </td>
                                     <td class="text-end">
                                         <a href="<?= site_url('inventario/productos/' . $product['id'] . '/trazabilidad' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-sm btn-outline-secondary icon-btn" data-popup="true" data-popup-title="Trazabilidad del producto" data-popup-subtitle="Historial, stock por deposito y responsables." title="Ver trazabilidad" aria-label="Ver trazabilidad"><i class="bi bi-diagram-3"></i></a>
-                                        <a href="<?= site_url('inventario/productos/' . $product['id'] . '/editar' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-sm btn-outline-dark icon-btn" data-popup="true" data-popup-title="Producto" data-popup-subtitle="Editar datos del producto y sus minimos." title="Editar producto" aria-label="Editar producto"><i class="bi bi-pencil-square"></i></a>
+                                        <a href="<?= site_url('inventario/productos/' . $product['id'] . '/editar' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="btn btn-sm btn-outline-dark icon-btn" data-popup="true" data-popup-title="Producto" data-popup-subtitle="Editar datos, precios y composición del producto." title="Editar producto" aria-label="Editar producto"><i class="bi bi-pencil-square"></i></a>
                                         <form method="post" action="<?= site_url('inventario/productos/' . $product['id'] . '/toggle' . (! empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>" class="d-inline">
                                             <?= csrf_field() ?>
                                             <button class="btn btn-sm <?= (int) $product['active'] === 1 ? 'btn-outline-warning' : 'btn-outline-success' ?> icon-btn" title="<?= (int) $product['active'] === 1 ? 'Deshabilitar producto' : 'Habilitar producto' ?>" aria-label="<?= (int) $product['active'] === 1 ? 'Deshabilitar producto' : 'Habilitar producto' ?>"><i class="bi <?= (int) $product['active'] === 1 ? 'bi-pause-circle' : 'bi-play-circle' ?>"></i></button>
@@ -447,7 +447,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <td>${badgeHtml}</td>
             <td class="text-end">
                 <a href="${siteBase}/inventario/productos/${item.id}/trazabilidad${companyQuery}" class="btn btn-sm btn-outline-secondary icon-btn" data-popup="true" data-popup-title="Trazabilidad del producto" data-popup-subtitle="Historial, stock por deposito y responsables." title="Ver trazabilidad" aria-label="Ver trazabilidad"><i class="bi bi-diagram-3"></i></a>
-                <a href="${siteBase}/inventario/productos/${item.id}/editar${companyQuery}" class="btn btn-sm btn-outline-dark icon-btn" data-popup="true" data-popup-title="Producto" data-popup-subtitle="Editar datos del producto y sus minimos." title="Editar producto" aria-label="Editar producto"><i class="bi bi-pencil-square"></i></a>
+                <a href="${siteBase}/inventario/productos/${item.id}/editar${companyQuery}" class="btn btn-sm btn-outline-dark icon-btn" data-popup="true" data-popup-title="Producto" data-popup-subtitle="Editar datos, precios y composición del producto." title="Editar producto" aria-label="Editar producto"><i class="bi bi-pencil-square"></i></a>
                 <form method="post" action="${siteBase}/inventario/productos/${item.id}/toggle${companyQuery}" class="d-inline">
                     <input type="hidden" name="${csrfTokenName}" value="${csrfToken}">
                     <button class="btn btn-sm ${toggleBtnClass} icon-btn" title="${toggleTitle}" aria-label="${toggleTitle}"><i class="bi ${toggleIconClass}"></i></button>

@@ -1,6 +1,8 @@
-(() => {
+document.addEventListener('alpine:init', () => {
+    Alpine.data('salesWorkspace', () => ({
+        init() {
     'use strict';
-    const shell = [...document.querySelectorAll('.sales-shell')].find(el => !el.dataset.ready);
+    const shell = this.$el;
     if (!shell) return;
     shell.dataset.ready = '1';
     const live = shell.dataset.salesLive === '1';
@@ -118,4 +120,6 @@
         finally{busy=false;editingAction=false;buttons.forEach(el=>{el.disabled=false;});await refresh(true);if(message)status.textContent=message;}
     });
     const timer=setInterval(()=>{if(!shell.isConnected)clearInterval(timer);else refresh();},60000);
-})();
+        }
+    }));
+});

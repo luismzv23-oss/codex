@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__.'/../_support/UiPreview.php';
 use CodeIgniter\Test\CIUnitTestCase;
 
 final class AccountingDashboardViewTest extends CIUnitTestCase
@@ -22,7 +23,9 @@ final class AccountingDashboardViewTest extends CIUnitTestCase
             'forms/entry'=>['accounts'=>[$account], 'formAction'=>'/contabilidad/asientos'],
         ];
         foreach ($views as $name=>$data) {
-            $html = view('accounting/'.$name, array_merge($base,$data), ['saveData'=>false]);
+            service('request')->getUri()->setPath('/contabilidad');
+        $html = view('accounting/'.$name, array_merge($base,$data), ['saveData'=>false]);
+        if ($name === 'index') captureUiPreview('accounting',$html);
             $this->assertStringContainsString('accounting-shell', $html, $name);
             $this->assertStringContainsString('Empresa Demo', $html, $name);
             $this->assertStringContainsString('accounting-dashboard.js', $html, $name);

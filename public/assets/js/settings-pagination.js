@@ -1,4 +1,6 @@
-(() => {
+document.addEventListener('alpine:init', () => {
+ Alpine.data('settingsWorkspace', () => ({
+ init() {
     'use strict';
 
     function paginate(list, recordId = null) {
@@ -109,4 +111,6 @@
             return refreshCard(event, `settings-${list}-card`);
         }
     });
-})();
+ }
+ }));
+});

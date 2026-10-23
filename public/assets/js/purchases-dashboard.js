@@ -1,6 +1,8 @@
-(() => {
+document.addEventListener('alpine:init', () => {
+    Alpine.data('purchasesWorkspace', () => ({
+        init() {
     'use strict';
-    const shell = Array.from(document.querySelectorAll('.purchases-shell')).find(element => !element.dataset.purchasesReady);
+    const shell = this.$el;
     if (!shell) return;
     shell.dataset.purchasesReady = 'true';
     const content = shell.querySelector('#purchases-content');
@@ -156,4 +158,6 @@
     });
     shell.querySelector('[data-purchases-refresh]').addEventListener('click', () => refresh(true));
     const interval = setInterval(() => {if (!shell.isConnected) clearInterval(interval); else refresh();},60000);
-})();
+        }
+    }));
+});

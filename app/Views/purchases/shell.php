@@ -2,7 +2,7 @@
 <link rel="stylesheet" href="<?= base_url('assets/css/dashboard-insights.css') ?>">
 <link rel="stylesheet" href="<?= base_url('assets/css/inventory-dashboard.css') ?>">
 <link rel="stylesheet" href="<?= base_url('assets/css/purchases-dashboard.css') ?>">
-<div class="insight-shell inventory-shell purchases-shell" data-purchases-page="<?= $purchaseEditing ? 'form' : 'dashboard' ?>">
+<div class="insight-shell inventory-shell purchases-shell" x-data="purchasesWorkspace" data-purchases-page="<?= $purchaseEditing ? 'form' : 'dashboard' ?>">
 <?php $insidePopup = ($isPopup ?? false) || service('request')->getGet('popup') === '1'; ?>
 <?php if (!$insidePopup): ?>
 <header class="insight-hero">

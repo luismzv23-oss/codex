@@ -210,7 +210,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                             <h2 class="h5 mb-1">Buscar cliente</h2>
                             <p class="text-secondary mb-0">Busca por nombre o documento y selecciona el cliente.</p>
                         </div>
-                        <button type="button" class="btn btn-outline-dark icon-btn" data-bs-dismiss="modal"
+                        <button type="button" class="btn btn-outline-dark icon-btn" data-codex-dismiss="modal"
                             aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
                     </div>
                     <div class="modal-body p-4">
@@ -226,7 +226,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                             style="max-height: 360px;"></div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-outline-dark icon-btn" data-bs-dismiss="modal"
+                        <button type="button" class="btn btn-outline-dark icon-btn" data-codex-dismiss="modal"
                             title="Cancelar" aria-label="Cancelar"><i class="bi bi-x-lg"></i></button>
                     </div>
                 </div>
@@ -243,7 +243,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
                     <h2 class="h5 mb-1" id="kiosk-product-search-title">Buscar productos</h2>
                     <p class="text-secondary mb-0">Busca por código, nombre o marca. Marca uno o varios productos y pulsa ✓ para agregarlos.</p>
                 </div>
-                <button type="button" class="btn btn-outline-dark icon-btn ms-auto flex-shrink-0 align-self-start" data-bs-dismiss="modal" title="Cerrar" aria-label="Cerrar"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+                <button type="button" class="btn btn-outline-dark icon-btn ms-auto flex-shrink-0 align-self-start" data-codex-dismiss="modal" title="Cerrar" aria-label="Cerrar"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
             </div>
             <div class="modal-body p-4">
                 <label class="form-label" for="kiosk-search">Producto</label>
@@ -257,7 +257,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
             </div>
             <div class="modal-footer">
                 <span class="small text-secondary me-auto" id="kiosk-selected-count" role="status" aria-live="polite">0 seleccionados</span>
-                <button type="button" class="btn btn-outline-dark icon-btn" data-bs-dismiss="modal" title="Cancelar" aria-label="Cancelar"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+                <button type="button" class="btn btn-outline-dark icon-btn" data-codex-dismiss="modal" title="Cancelar" aria-label="Cancelar"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
                 <button type="button" class="btn btn-dark icon-btn" id="accept-kiosk-search" title="Agregar seleccionados" aria-label="Agregar seleccionados" disabled><i class="bi bi-check-lg" aria-hidden="true"></i></button>
             </div>
         </div>
@@ -291,7 +291,7 @@ $productCatalog = array_values(array_map(static function (array $product): array
         const acceptSearchButton = document.getElementById('accept-kiosk-search');
         const selectedCount = document.getElementById('kiosk-selected-count');
         const pendingProducts = new Map();
-        const resolveProductModal = () => window.bootstrap?.Modal.getOrCreateInstance(searchModalElement);
+        const resolveProductModal = () => window.CodexDialogs.getOrCreateInstance(searchModalElement);
         const focusProductSearch = () => (searchModalElement.classList.contains('show') ? searchField : openSearchButton).focus();
         const searchField = document.getElementById('kiosk-search');
         const resultsContainer = document.getElementById('kiosk-search-results');
@@ -794,8 +794,8 @@ $productCatalog = array_values(array_map(static function (array $product): array
             resolveProductModal()?.show();
             searchProducts();
         });
-        searchModalElement.addEventListener('shown.bs.modal', () => searchField.focus());
-        searchModalElement.addEventListener('hidden.bs.modal', () => {
+        searchModalElement.addEventListener('codex:dialog-shown', () => searchField.focus());
+        searchModalElement.addEventListener('codex:dialog-hidden', () => {
             pendingProducts.clear();
             scanBuffer = '';
             clearTimeout(scanTimer);
@@ -980,8 +980,8 @@ $productCatalog = array_values(array_map(static function (array $product): array
 
         // ── Customer Search Logic ────────────────────────────
         const resolveCustomerSearchModal = () => {
-            if (!window.bootstrap || !window.bootstrap.Modal) return null;
-            return window.bootstrap.Modal.getOrCreateInstance(customerSearchModalEl);
+            if (!window.CodexDialogs) return null;
+            return window.CodexDialogs.getOrCreateInstance(customerSearchModalEl);
         };
 
         paymentRows = window.createKioskPayments(document.getElementById('kiosk-payments'), <?= json_encode($paymentMethods, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, surchargeBase, updatePaymentSummary, {compact:true, gateways:<?= json_encode($paymentGateways ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, checks:<?= json_encode($paymentChecks ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, context:()=>({currency_code:document.querySelector('[name="currency_code"]')?.value || <?= json_encode($currencyCode ?? 'ARS') ?>, branch_id:<?= json_encode($paymentBranchId ?? null) ?>, point_of_sale_id:document.querySelector('[name="point_of_sale_id"]')?.value || <?= json_encode($paymentPointId ?? null) ?>})});

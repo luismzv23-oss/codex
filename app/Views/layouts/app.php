@@ -1,5 +1,7 @@
 <?php
 $request = service('request');
+// Approved rollout: light identity for dashboards and operational modules.
+$codexPilot = (bool) preg_match('~^(?:dashboard|inventario|ventas|compras|caja|contabilidad|impuestos|usuarios|empresas|sistemas|configuracion)(?:/|$)~', trim($request->getUri()->getPath(), '/'));
 $isPopup = !empty($isPopup) || $request->getGet('popup') === '1' || $request->getPost('popup') === '1';
 
 // Fetch accessible systems for quick switcher
@@ -37,7 +39,6 @@ if (auth_check() && !$isPopup) {
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
     <link href="<?= base_url('assets/css/app.css') ?>" rel="stylesheet">
     <link href="<?= base_url('assets/css/codex-assist.css') ?>" rel="stylesheet">
     <meta name="codex-api-base" content="<?= site_url('api/v1') ?>">
@@ -177,16 +178,24 @@ if (auth_check() && !$isPopup) {
         }
     </style>
     <link href="<?= base_url('assets/css/popup-forms.css') ?>" rel="stylesheet">
+    <?php if ($codexPilot): ?>
+    <script defer src="<?= base_url('assets/js/codex-ui.js') ?>"></script>
+    <link rel="stylesheet" href="<?= base_url('assets/css/codex-tokens.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('assets/css/codex-components.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('assets/css/codex-workspace.css') ?>">
+    <?php endif; ?>
+    <script defer src="<?= base_url('assets/js/codex-controls.js') ?>"></script>
+    <link rel="stylesheet" href="<?= base_url('assets/css/codex-controls.css') ?>">
 </head>
-<body class="<?= $isPopup ? 'popup-mode' : '' ?>">
+<body x-data="codexControls" data-codex-ui="<?= $codexPilot ? 'light' : 'legacy' ?>" class="<?= $isPopup ? 'popup-mode' : '' ?>">
     <?php if (! $isPopup): ?>
-        <nav class="navbar navbar-expand-lg bg-white bg-opacity-75 border-bottom sticky-top backdrop-blur">
+        <nav x-data="codexNavigation" class="navbar navbar-expand-lg bg-white bg-opacity-75 border-bottom sticky-top backdrop-blur">
             <div class="container">
                 <a class="navbar-brand fw-bold" href="<?= site_url('dashboard') ?>">Codex Core</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
+                <button class="navbar-toggler" type="button" @click="toggleMobile" :aria-expanded="mobileOpen" aria-controls="mainNav" aria-label="Abrir o cerrar navegación">
                     <span class="navbar-toggler-icon"></span>
                 </button>
-                <div class="collapse navbar-collapse" id="mainNav">
+                <div class="collapse navbar-collapse" id="mainNav" :class="mobileClass">
                     <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                         <?php if (auth_can('dashboard.view') && (auth_user()['role_slug'] ?? '') !== 'vendedor'): ?>
                             <li class="nav-item"><a class="nav-link d-flex align-items-center gap-2" href="<?= site_url('dashboard') ?>"><i class="bi bi-speedometer2 text-secondary"></i><span>Dashboard</span></a></li>
@@ -196,7 +205,7 @@ if (auth_check() && !$isPopup) {
                         <?php endif; ?>
                         <?php if (auth_can('systems.view') && (auth_user()['role_slug'] ?? '') !== 'vendedor'): ?>
                             <li class="nav-item dropdown">
-                                <a class="nav-link dropdown-toggle d-flex align-items-center gap-2" href="<?= site_url('sistemas') ?>" id="systemsNavDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <a class="nav-link dropdown-toggle d-flex align-items-center gap-2" href="<?= site_url('sistemas') ?>" id="systemsNavDropdown" role="button" data-codex-dropdown aria-expanded="false">
                                     <i class="bi bi-grid-3x3-gap-fill text-dark"></i><span>Sistemas</span>
                                 </a>
                                 <div class="dropdown-menu p-3 border-0 shadow-lg rounded-4 mt-2" aria-labelledby="systemsNavDropdown" style="width: 320px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(0,0,0,0.06) !important; z-index: 2000;">
@@ -230,7 +239,7 @@ if (auth_check() && !$isPopup) {
                             $compQuery = !empty($reqCompanyId) ? '?company_id=' . $reqCompanyId : '';
                             ?>
                             <li class="nav-item dropdown">
-                                <a class="nav-link dropdown-toggle d-flex align-items-center gap-2" href="<?= site_url('configuracion' . $compQuery) ?>" id="settingsNavDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <a class="nav-link dropdown-toggle d-flex align-items-center gap-2" href="<?= site_url('configuracion' . $compQuery) ?>" id="settingsNavDropdown" role="button" data-codex-dropdown aria-expanded="false">
                                     <i class="bi bi-gear-fill text-secondary"></i><span>Configuración</span>
                                 </a>
                                 <div class="dropdown-menu p-3 border-0 shadow-lg rounded-4 mt-2" aria-labelledby="settingsNavDropdown" style="width: 320px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(0,0,0,0.06) !important; z-index: 2000;">
@@ -256,7 +265,7 @@ if (auth_check() && !$isPopup) {
                         <!-- Lanzador de Módulos (Quick Switcher) -->
                         <?php if (!empty($switcherSystems)): ?>
                             <div class="dropdown me-1">
-                                <button class="btn btn-outline-dark dropdown-toggle d-flex align-items-center gap-2 px-3 py-1.5 rounded-3 shadow-sm" type="button" id="moduleSwitcherDropdown" data-bs-toggle="dropdown" aria-expanded="false" style="border: 1px solid rgba(0,0,0,0.12); font-weight: 500; font-size: 13.5px;">
+                                <button class="btn btn-outline-dark dropdown-toggle d-flex align-items-center gap-2 px-3 py-1.5 rounded-3 shadow-sm" type="button" id="moduleSwitcherDropdown" data-codex-dropdown aria-expanded="false" style="border: 1px solid rgba(0,0,0,0.12); font-weight: 500; font-size: 13.5px;">
                                     <i class="bi bi-grid-3x3-gap-fill text-dark"></i>
                                     <span>Módulos</span>
                                 </button>
@@ -290,7 +299,7 @@ if (auth_check() && !$isPopup) {
         </nav>
     <?php endif; ?>
 
-    <main class="<?= $isPopup ? 'popup-shell' . (!empty($popupWide) ? ' popup-shell-wide' : '') : 'container py-4' ?>">
+    <main <?php if ($codexPilot): ?>x-data="codexTablePages"<?php endif; ?> class="<?= $isPopup ? 'popup-shell' . (!empty($popupWide) ? ' popup-shell-wide' : '') : 'container py-4' ?>">
         <?php if (session()->getFlashdata('message')): ?>
             <div class="alert alert-success"><?= esc(session()->getFlashdata('message')) ?></div>
         <?php endif; ?>
@@ -308,7 +317,7 @@ if (auth_check() && !$isPopup) {
     </main>
 
     <?php if (! $isPopup): ?>
-        <div class="popup-overlay" id="codex-popup">
+        <div class="popup-overlay" id="codex-popup" <?php if ($codexPilot): ?>x-data="codexPopup" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="codex-popup-title"<?php endif; ?>>
             <div class="popup-card">
                 <div class="popup-head">
                     <div>
@@ -322,14 +331,8 @@ if (auth_check() && !$isPopup) {
         </div>
     <?php endif; ?>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            document.querySelectorAll('.select-search').forEach((el) => {
-                new TomSelect(el, { create: false, sortField: { field: "text", direction: "asc" } });
-            });
-        });
+
     </script>
     <?php if ($isPopup): ?>
         <script>
@@ -347,6 +350,7 @@ if (auth_check() && !$isPopup) {
         </script>
     <?php endif; ?>
     <?php if (! $isPopup): ?>
+        <?php if (!$codexPilot): ?>
         <script>
             (() => {
                 const overlay = document.getElementById('codex-popup');
@@ -518,6 +522,8 @@ if (auth_check() && !$isPopup) {
                 });
             })();
         </script>
+        <?php endif; ?>
+        <?php if (!$codexPilot): ?>
         <script>
             (() => {
                 const buildPagination = (table) => {
@@ -618,6 +624,7 @@ if (auth_check() && !$isPopup) {
                 document.querySelectorAll('table[data-codex-pagination]').forEach(buildPagination);
             })();
         </script>
+        <?php endif; ?>
         <script src="<?= base_url('assets/js/codex-assist-widget.js') ?>" defer></script>
     <?php endif; ?>
 
@@ -640,12 +647,13 @@ if (auth_check() && !$isPopup) {
                         <i class="bi bi-box-arrow-down me-1"></i>Ir a cerrar caja
                     </a>
                     <a href="<?= site_url('logout') ?>" class="btn btn-outline-danger">Salir de todas formas</a>
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-outline-secondary" data-codex-dismiss="modal">Cancelar</button>
                 </div>
             </div>
         </div>
     </div>
     <?php endif; ?>
 <script src="<?= base_url('assets/js/logout-cash-check.js') ?>" defer></script>
+<script defer src="<?= base_url('assets/vendor/alpinejs/csp-3.17.4.min.js') ?>"></script>
 </body>
 </html>

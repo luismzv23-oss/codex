@@ -1,0 +1,8 @@
+/* Shared identity. Public/login keep their existing dark palette. */
+:root {
+ --cx-bg:#f4f7fb; --cx-surface:#fff; --cx-ink:#172238; --cx-muted:#52627a;
+ --cx-line:#dce4ef; --cx-primary:#77f1e4; --cx-primary-hover:#56dfd1;
+ --cx-link:#087f83; --cx-violet:#7560c9; --cx-soft:#eafbf8;
+ --cx-radius:16px; --cx-control-radius:10px; --cx-shadow:0 6px 24px #17223808;
+ --cx-font:'Manrope',system-ui,sans-serif; --cx-space:8px;
+}

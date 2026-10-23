@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__.'/../_support/UiPreview.php';
 use App\Libraries\PurchasesDashboard;
 use CodeIgniter\Test\CIUnitTestCase;
 
@@ -73,7 +74,9 @@ final class PurchasesDashboardTest extends CIUnitTestCase
         $company = ['id'=>'demo','name'=>'Empresa Demo'];
         $base = ['pageTitle'=>'Compras','context'=>['company'=>$company,'canManage'=>true], 'companies'=>[$company], 'selectedCompanyId'=>'demo','companyId'=>'demo'];
         $data = PurchasesDashboard::prepare($base + $this->emptyData(), ['supplier_id'=>'','from'=>'2026-10-01','to'=>'2026-10-03']);
+        service('request')->getUri()->setPath('/compras');
         $html = view('purchases/index',$data,['saveData'=>false]);
+        captureUiPreview('purchases',$html);
         $this->assertSame(6,substr_count($html,'class="insight-kpi '));
         $this->assertSame(7,substr_count($html,'data-purchases-table'));
         $this->assertStringContainsString('purchases-filters',$html);

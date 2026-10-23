@@ -1,4 +1,6 @@
-﻿(() => {
+document.addEventListener('alpine:init', () => {
+ Alpine.data('cashWorkspace', () => ({
+ init() {
     // One refresh path updates KPIs, register states, operators and actions together.
     const refresh = () => {
         if (document.hidden || document.querySelector('.modal.show, dialog[open]')) return;
@@ -13,4 +15,6 @@
     // A seller may have opened/closed the register in another tab or window.
     window.addEventListener('focus', refresh);
     document.addEventListener('visibilitychange', refresh);
-})();
+ }
+ }));
+});

@@ -340,7 +340,7 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
                     <h2 class="h5 mb-1">Buscar productos</h2>
                     <p class="text-secondary mb-0">Busca por codigo, nombre o marca y selecciona los productos a agregar.</p>
                 </div>
-                <button type="button" class="btn btn-outline-dark icon-btn" data-bs-dismiss="modal" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
+                <button type="button" class="btn btn-outline-dark icon-btn" data-codex-dismiss="modal" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
             </div>
             <div class="modal-body p-4">
                 <div class="mb-3">
@@ -353,7 +353,7 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
                 <div id="sale-search-results" class="list-group border rounded-4 overflow-auto" style="max-height: 360px;"></div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline-dark icon-btn" data-bs-dismiss="modal" title="Cancelar" aria-label="Cancelar"><i class="bi bi-x-lg"></i></button>
+                <button type="button" class="btn btn-outline-dark icon-btn" data-codex-dismiss="modal" title="Cancelar" aria-label="Cancelar"><i class="bi bi-x-lg"></i></button>
                 <button type="button" class="btn btn-dark icon-btn" id="accept-sale-search" title="Aceptar" aria-label="Aceptar"><i class="bi bi-check-lg"></i></button>
             </div>
         </div>
@@ -367,7 +367,7 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
                     <h2 class="h5 mb-1">Buscar cliente</h2>
                     <p class="text-secondary mb-0">Busca por nombre o documento y selecciona el cliente.</p>
                 </div>
-                <button type="button" class="btn btn-outline-dark icon-btn" data-bs-dismiss="modal" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
+                <button type="button" class="btn btn-outline-dark icon-btn" data-codex-dismiss="modal" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
             </div>
             <div class="modal-body p-4">
                 <div class="mb-3">
@@ -380,7 +380,7 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
                 <div id="customer-search-results" class="list-group border rounded-4 overflow-auto" style="max-height: 360px;"></div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline-dark icon-btn" data-bs-dismiss="modal" title="Cancelar" aria-label="Cancelar"><i class="bi bi-x-lg"></i></button>
+                <button type="button" class="btn btn-outline-dark icon-btn" data-codex-dismiss="modal" title="Cancelar" aria-label="Cancelar"><i class="bi bi-x-lg"></i></button>
             </div>
         </div>
     </div>
@@ -428,17 +428,17 @@ $taxCatalog = array_values(array_map(static function (array $tax): array {
     if (!body || !paymentsBody || !warehouseField || !globalDiscount || !searchField || !resultsContainer || !resultsCount || !openSearchButton || !searchModalElement || !acceptSearchButton || !customerSelect || !customerNameField || !customerDocField || !clearCustomerBtn || !openCustomerSearchButton || !customerSearchField || !customerResultsContainer || !customerResultsCount || !customerSearchModalElement) return;
 
     const resolveSearchModal = () => {
-        if (!window.bootstrap || !window.bootstrap.Modal) {
+        if (!window.CodexDialogs) {
             return null;
         }
-        return window.bootstrap.Modal.getOrCreateInstance(searchModalElement);
+        return window.CodexDialogs.getOrCreateInstance(searchModalElement);
     };
 
     const resolveCustomerSearchModal = () => {
-        if (!window.bootstrap || !window.bootstrap.Modal) {
+        if (!window.CodexDialogs) {
             return null;
         }
-        return window.bootstrap.Modal.getOrCreateInstance(customerSearchModalElement);
+        return window.CodexDialogs.getOrCreateInstance(customerSearchModalElement);
     };
 
     const setSelectValue = (name, value) => {

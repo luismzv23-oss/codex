@@ -58,28 +58,28 @@
 <div class="sales-tabs-container mb-3">
     <ul class="nav nav-pills sales-custom-pills" id="diarios-tab" role="tablist">
         <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="ventas-tab" data-bs-toggle="pill" data-bs-target="#tab-ventas" type="button" role="tab" aria-controls="tab-ventas" aria-selected="true">
+            <button class="nav-link active" id="ventas-tab" data-codex-toggle="pill" data-codex-target="#tab-ventas" type="button" role="tab" aria-controls="tab-ventas" aria-selected="true">
                 <i class="bi bi-receipt"></i>
                 <span>Comprobantes y Facturación</span>
                 <span class="tab-badge"><?= count($sales) ?></span>
             </button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="presupuestos-tab" data-bs-toggle="pill" data-bs-target="#tab-presupuestos" type="button" role="tab" aria-controls="tab-presupuestos" aria-selected="false">
+            <button class="nav-link" id="presupuestos-tab" data-codex-toggle="pill" data-codex-target="#tab-presupuestos" type="button" role="tab" aria-controls="tab-presupuestos" aria-selected="false">
                 <i class="bi bi-file-earmark-text"></i>
                 <span>Presupuestos</span>
                 <span class="tab-badge"><?= count($quotes ?? []) ?></span>
             </button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="pedidos-tab" data-bs-toggle="pill" data-bs-target="#tab-pedidos" type="button" role="tab" aria-controls="tab-pedidos" aria-selected="false">
+            <button class="nav-link" id="pedidos-tab" data-codex-toggle="pill" data-codex-target="#tab-pedidos" type="button" role="tab" aria-controls="tab-pedidos" aria-selected="false">
                 <i class="bi bi-cart-check"></i>
                 <span>Pedidos</span>
                 <span class="tab-badge"><?= count($orders ?? []) ?></span>
             </button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="remitos-tab" data-bs-toggle="pill" data-bs-target="#tab-remitos" type="button" role="tab" aria-controls="tab-remitos" aria-selected="false">
+            <button class="nav-link" id="remitos-tab" data-codex-toggle="pill" data-codex-target="#tab-remitos" type="button" role="tab" aria-controls="tab-remitos" aria-selected="false">
                 <i class="bi bi-truck"></i>
                 <span>Remitos de Entrega</span>
                 <span class="tab-badge"><?= count($deliveryNotes ?? []) ?></span>

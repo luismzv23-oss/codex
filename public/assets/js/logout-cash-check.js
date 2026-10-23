@@ -16,7 +16,7 @@
             if (!response.ok) throw new Error();
             const data = await response.json();
             if (typeof data.open !== 'boolean') throw new Error();
-            if (data.open) bootstrap.Modal.getOrCreateInstance(document.getElementById('openCashModal')).show();
+            if (data.open) window.CodexDialogs.getOrCreateInstance(document.getElementById('openCashModal')).show();
             else window.location.assign(button.dataset.logoutUrl);
         } catch (_) {
             window.alert('No se pudo verificar el estado de tu caja. Vuelve a intentar salir.');

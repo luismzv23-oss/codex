@@ -2,7 +2,7 @@
 
 <?= $this->section('content') ?>
 <link rel="stylesheet" href="<?= base_url('assets/css/settings-workspace.css') ?>">
-<div class="settings-workspace">
+<div class="settings-workspace" x-data="settingsWorkspace">
 <style>
     [data-settings-pagination] > [hidden] { display: none !important; }
     .settings-pagination { border-top: 1px solid var(--bs-border-color, #dee2e6); }

@@ -1,6 +1,8 @@
-(() => {
+document.addEventListener('alpine:init', () => {
+    Alpine.data('accountingWorkspace', () => ({
+        init() {
     'use strict';
-    const shell = Array.from(document.querySelectorAll('.accounting-shell')).find(element => !element.dataset.accountingReady);
+    const shell = this.$el;
     if (!shell) return;
     shell.dataset.accountingReady = 'true';
     const content = shell.querySelector('#accounting-content');
@@ -93,4 +95,6 @@
     }
     shell.querySelector('[data-accounting-refresh]').addEventListener('click', () => refresh(true));
     const interval = setInterval(() => {if (!shell.isConnected) clearInterval(interval); else refresh();},60000);
-})();
+        }
+    }));
+});

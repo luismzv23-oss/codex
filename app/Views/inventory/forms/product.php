@@ -3,7 +3,6 @@
 <?= $this->section('content') ?>
 <?php $formProductType = old('product_type', $product['product_type'] ?? 'simple') === 'kit' ? 'kit' : 'simple'; ?>
 <script defer src="<?= esc(base_url('assets/js/inventory-product-form.js')) ?>"></script>
-<script defer src="<?= esc(base_url('assets/vendor/alpinejs/csp-3.17.4.min.js')) ?>"></script>
 <div class="card border-0 shadow-sm rounded-4">
     <div class="card-body p-4">
         <div class="mb-3">
@@ -16,59 +15,59 @@
             <?php if (! empty($companyId)): ?><input type="hidden" name="company_id" value="<?= esc($companyId) ?>"><?php endif; ?>
             <?php if (! empty($redirectTo)): ?><input type="hidden" name="redirect_to" value="<?= esc($redirectTo) ?>"><?php endif; ?>
             <div class="col-md-4">
-                <label class="form-label">SKU</label>
-                <input type="text" name="sku" class="form-control text-uppercase" value="<?= esc(old('sku', $product['sku'] ?? '')) ?>" required>
+                <label class="form-label" for="product-sku">SKU</label>
+                <input id="product-sku" type="text" name="sku" class="form-control text-uppercase" value="<?= esc(old('sku', $product['sku'] ?? '')) ?>" required>
             </div>
             <div class="col-md-8">
-                <label class="form-label">Producto</label>
-                <input type="text" name="name" class="form-control" value="<?= esc(old('name', $product['name'] ?? '')) ?>" required>
+                <label class="form-label" for="product-name">Producto</label>
+                <input id="product-name" type="text" name="name" class="form-control" value="<?= esc(old('name', $product['name'] ?? '')) ?>" required>
             </div>
             <div class="col-md-4">
-                <label class="form-label">Categoria</label>
-                <input type="text" name="category" class="form-control" value="<?= esc(old('category', $product['category'] ?? '')) ?>">
+                <label class="form-label" for="product-category">Categoria</label>
+                <input id="product-category" type="text" name="category" class="form-control" value="<?= esc(old('category', $product['category'] ?? '')) ?>">
             </div>
             <div class="col-md-4">
-                <label class="form-label">Marca</label>
-                <input type="text" name="brand" class="form-control" value="<?= esc(old('brand', $product['brand'] ?? '')) ?>">
+                <label class="form-label" for="product-brand">Marca</label>
+                <input id="product-brand" type="text" name="brand" class="form-control" value="<?= esc(old('brand', $product['brand'] ?? '')) ?>">
             </div>
             <div class="col-md-4">
-                <label class="form-label">Codigo de barras</label>
-                <input type="text" name="barcode" class="form-control" value="<?= esc(old('barcode', $product['barcode'] ?? '')) ?>">
+                <label class="form-label" for="product-barcode">Codigo de barras</label>
+                <input id="product-barcode" type="text" name="barcode" class="form-control" value="<?= esc(old('barcode', $product['barcode'] ?? '')) ?>">
             </div>
             <div class="col-md-4">
-                <label class="form-label">Tipo de producto</label>
-                <select name="product_type" class="form-select" x-model="productType" @change="applyType">
+                <label class="form-label" for="product-product_type">Tipo de producto</label>
+                <select id="product-product_type" name="product_type" class="form-select" x-model="productType" @change="applyType">
                     <option value="simple" <?= old('product_type', $product['product_type'] ?? 'simple') === 'simple' ? 'selected' : '' ?>>Simple</option>
                     <option value="kit" <?= old('product_type', $product['product_type'] ?? 'simple') === 'kit' ? 'selected' : '' ?>>Compuesto / Kit</option>
                 </select>
             </div>
             <div class="col-md-4">
-                <label class="form-label">Unidad</label>
-                <select name="unit" class="form-select" x-ref="unit" :value="unit" aria-label="Unidad según tipo de producto">
+                <label class="form-label" for="product-unit">Unidad</label>
+                <select id="product-unit" name="unit" class="form-select" x-ref="unit" :value="unit" aria-label="Unidad según tipo de producto">
                     <option value="unidad" :disabled="isKit" :hidden="isKit" <?= $formProductType === 'simple' ? 'selected' : '' ?>>Unidad</option>
                     <option value="pack" :disabled="isSimple" :hidden="isSimple" <?= $formProductType === 'kit' ? 'selected' : '' ?>>pack</option>
                 </select>
             </div>
             <div class="col-md-4">
-                <label class="form-label">Stock minimo</label>
-                <input type="number" step="1" min="0" name="min_stock" class="form-control" x-ref="minimum" :readonly="isKit" value="<?= esc($formProductType === 'kit' ? '0' : old('min_stock', isset($product['min_stock']) ? number_format((float) $product['min_stock'], 2, '.', '') : '0.00')) ?>">
+                <label class="form-label" for="product-min_stock">Stock minimo</label>
+                <input id="product-min_stock" type="number" step="1" min="0" name="min_stock" class="form-control" x-ref="minimum" :readonly="isKit" value="<?= esc($formProductType === 'kit' ? '0' : old('min_stock', isset($product['min_stock']) ? number_format((float) $product['min_stock'], 2, '.', '') : '0.00')) ?>">
             </div>
             <div class="col-md-4">
-                <label class="form-label">Stock maximo</label>
-                <input type="number" step="1" min="0" name="max_stock" class="form-control" x-ref="maximum" :readonly="isKit" value="<?= esc($formProductType === 'kit' ? '0' : old('max_stock', isset($product['max_stock']) ? number_format((float) $product['max_stock'], 2, '.', '') : '0.00')) ?>">
+                <label class="form-label" for="product-max_stock">Stock maximo</label>
+                <input id="product-max_stock" type="number" step="1" min="0" name="max_stock" class="form-control" x-ref="maximum" :readonly="isKit" value="<?= esc($formProductType === 'kit' ? '0' : old('max_stock', isset($product['max_stock']) ? number_format((float) $product['max_stock'], 2, '.', '') : '0.00')) ?>">
             </div>
             <div class="col-md-4">
-                <label class="form-label">Precio unitario de compra</label>
-                <input type="number" step="0.01" min="0" name="cost_price" class="form-control" value="<?= esc(old('cost_price', isset($product['cost_price']) ? number_format((float) $product['cost_price'], 2, '.', '') : '0.00')) ?>">
+                <label class="form-label" for="product-cost_price">Precio unitario de compra</label>
+                <input id="product-cost_price" type="number" step="0.01" min="0" name="cost_price" class="form-control" value="<?= esc(old('cost_price', isset($product['cost_price']) ? number_format((float) $product['cost_price'], 2, '.', '') : '0.00')) ?>">
             </div>
             <div class="col-md-4">
-                <label class="form-label">Precio unitario de venta</label>
-                <input type="number" step="0.01" min="0" name="sale_price" class="form-control" value="<?= esc(old('sale_price', isset($product['sale_price']) ? number_format((float) $product['sale_price'], 2, '.', '') : '0.00')) ?>">
+                <label class="form-label" for="product-sale_price">Precio unitario de venta</label>
+                <input id="product-sale_price" type="number" step="0.01" min="0" name="sale_price" class="form-control" value="<?= esc(old('sale_price', isset($product['sale_price']) ? number_format((float) $product['sale_price'], 2, '.', '') : '0.00')) ?>">
             </div>
 
             <div class="col-md-4">
-                <label class="form-label">Depósito para stock inicial</label>
-                <select name="initial_warehouse_id" class="form-select" x-ref="warehouse" :disabled="isKit">
+                <label class="form-label" for="product-initial_warehouse_id">Depósito para stock inicial</label>
+                <select id="product-initial_warehouse_id" name="initial_warehouse_id" class="form-select" x-ref="warehouse" :disabled="isKit">
                     <option value="">Ninguno (sin stock inicial)</option>
                     <?php foreach ($warehouses ?? [] as $w): ?>
                         <option value="<?= esc($w['id']) ?>" <?= (string) old('initial_warehouse_id', (string) ($currentWarehouseId ?? '')) === (string) $w['id'] ? 'selected' : '' ?>><?= esc($w['name']) ?></option>
@@ -76,41 +75,41 @@
                 </select>
             </div>
             <div class="col-md-4">
-                <label class="form-label">Stock inicial</label>
-                <input type="number" step="1" min="0" name="initial_stock" class="form-control" x-ref="initialStock" :readonly="isKit" value="<?= esc($formProductType === 'kit' ? '0' : old('initial_stock', isset($currentStock) ? number_format((float) $currentStock, 2, '.', '') : '0.00')) ?>">
+                <label class="form-label" for="product-initial_stock">Stock inicial</label>
+                <input id="product-initial_stock" type="number" step="1" min="0" name="initial_stock" class="form-control" x-ref="initialStock" :readonly="isKit" value="<?= esc($formProductType === 'kit' ? '0' : old('initial_stock', isset($currentStock) ? number_format((float) $currentStock, 2, '.', '') : '0.00')) ?>">
             </div>
 
             <div class="col-md-4">
-                <label class="form-label">Control de lote</label>
-                <select name="lot_control" class="form-select">
+                <label class="form-label" for="product-lot_control">Control de lote</label>
+                <select id="product-lot_control" name="lot_control" class="form-select">
                     <option value="0" <?= (string) old('lot_control', (string) ($product['lot_control'] ?? '0')) === '0' ? 'selected' : '' ?>>No</option>
                     <option value="1" <?= (string) old('lot_control', (string) ($product['lot_control'] ?? '0')) === '1' ? 'selected' : '' ?>>Si</option>
                 </select>
             </div>
             <div class="col-md-4">
-                <label class="form-label">Control de serie</label>
-                <select name="serial_control" class="form-select">
+                <label class="form-label" for="product-serial_control">Control de serie</label>
+                <select id="product-serial_control" name="serial_control" class="form-select">
                     <option value="0" <?= (string) old('serial_control', (string) ($product['serial_control'] ?? '0')) === '0' ? 'selected' : '' ?>>No</option>
                     <option value="1" <?= (string) old('serial_control', (string) ($product['serial_control'] ?? '0')) === '1' ? 'selected' : '' ?>>Si</option>
                 </select>
             </div>
             <div class="col-md-4">
-                <label class="form-label">Control de vencimiento</label>
-                <select name="expiration_control" class="form-select">
+                <label class="form-label" for="product-expiration_control">Control de vencimiento</label>
+                <select id="product-expiration_control" name="expiration_control" class="form-select">
                     <option value="0" <?= (string) old('expiration_control', (string) ($product['expiration_control'] ?? '0')) === '0' ? 'selected' : '' ?>>No</option>
                     <option value="1" <?= (string) old('expiration_control', (string) ($product['expiration_control'] ?? '0')) === '1' ? 'selected' : '' ?>>Si</option>
                 </select>
             </div>
             <div class="col-md-4">
-                <label class="form-label">Estado</label>
-                <select name="active" class="form-select">
+                <label class="form-label" for="product-active">Estado</label>
+                <select id="product-active" name="active" class="form-select">
                     <option value="1" <?= (string) old('active', (string) ($product['active'] ?? '1')) === '1' ? 'selected' : '' ?>>Activo</option>
                     <option value="0" <?= (string) old('active', (string) ($product['active'] ?? '1')) === '0' ? 'selected' : '' ?>>Inactivo</option>
                 </select>
             </div>
             <div class="col-12">
-                <label class="form-label">Descripcion</label>
-                <textarea name="description" class="form-control" rows="3"><?= esc(old('description', $product['description'] ?? '')) ?></textarea>
+                <label class="form-label" for="product-description">Descripcion</label>
+                <textarea id="product-description" name="description" class="form-control" rows="3"><?= esc(old('description', $product['description'] ?? '')) ?></textarea>
             </div>
             <div class="col-12">
                 <div class="border rounded-4 p-3">
@@ -125,12 +124,12 @@
                         <?php if ($rows === []): $rows = [[null, null], [null, null], [null, null]]; endif; ?>
                         <?php foreach ($rows as $row): ?>
                             <div class="col-md-8">
-                                <select name="component_product_id[]" class="form-select select-search" placeholder="Buscar por código o nombre" aria-label="Buscar componente por código o nombre">
+                                <div x-data="codexSearchSelect" class="codex-search-select"><select name="component_product_id[]" class="form-select select-search" placeholder="Buscar por código o nombre" aria-label="Buscar componente por código o nombre">
                                     <option value="">Componente</option>
                                     <?php foreach ($componentOptions as $component): ?>
                                         <option value="<?= esc($component['id']) ?>" <?= (string) ($row[0] ?? '') === (string) $component['id'] ? 'selected' : '' ?>><?= esc($component['sku'] . ' - ' . $component['name']) ?></option>
                                     <?php endforeach; ?>
-                                </select>
+                                </select></div>
                             </div>
                             <div class="col-md-4">
                                 <input type="number" step="1" min="1" name="component_quantity[]" class="form-control" placeholder="Cantidad" value="<?= esc($row[1] !== null && $row[1] !== '' ? number_format((float) $row[1], 2, '.', '') : '') ?>">
@@ -149,10 +148,7 @@
                 <input type="file" name="image" class="form-control" accept="image/*">
                 <div class="form-text">JPG, PNG, WEBP o GIF. Maximo 2 MB. Si seleccionas una nueva imagen reemplazara la actual.</div>
             </div>
-            <div class="col-12 d-flex gap-2 pt-2">
-                <button class="btn btn-dark icon-btn" title="Guardar" aria-label="Guardar"><i class="bi bi-check-lg"></i></button>
-                <button type="button" class="btn btn-outline-dark icon-btn" @click="close" title="Cerrar" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
-            </div>
+            <?= view('components/form_actions') ?>
         </form>
     </div>
 </div>

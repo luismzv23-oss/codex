@@ -2,7 +2,7 @@
 <link rel="stylesheet" href="<?= base_url('assets/css/dashboard-insights.css') ?>">
 <link rel="stylesheet" href="<?= base_url('assets/css/inventory-dashboard.css') ?>">
 <link rel="stylesheet" href="<?= base_url('assets/css/taxes-dashboard.css') ?>">
-<div class="insight-shell inventory-shell taxes-shell" data-tax-page="<?= esc($selectedCompanyId) ?>">
+<div class="insight-shell inventory-shell taxes-shell" x-data="taxesWorkspace" data-tax-page="<?= esc($selectedCompanyId) ?>">
 <?php if (!(($isPopup ?? false) || service('request')->getGet('popup') === '1')): ?>
 <header class="insight-hero">
     <div><div class="insight-eyebrow"><span class="insight-orbit"></span> CODEX / IMPUESTOS</div><h1>Impuestos</h1>

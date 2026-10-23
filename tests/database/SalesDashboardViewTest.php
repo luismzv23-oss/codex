@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__.'/../_support/UiPreview.php';
 use CodeIgniter\Test\CIUnitTestCase;
 
 final class SalesDashboardViewTest extends CIUnitTestCase
@@ -9,7 +10,9 @@ final class SalesDashboardViewTest extends CIUnitTestCase
         $company=['id'=>'demo','name'=>'Empresa Demo'];
         $summary=array_fill_keys(['drafts','confirmed','cancelled','returned','standard','kiosk','total_amount','receivable_balance','receivable_pending'],0);
         $data=['isPopup'=>false,'pageTitle'=>'Ventas','context'=>['company'=>$company,'canManage'=>true], 'user'=>['role_slug'=>'admin'], 'companies'=>[$company], 'selectedCompanyId'=>'demo','summary'=>$summary,'filters'=>[],'customers'=>[],'sales'=>[],'priceLists'=>[],'promotions'=>[]];
+        service('request')->getUri()->setPath('/ventas');
         $html=view('sales/index',$data,['saveData'=>false]);
+        captureUiPreview('sales',$html);
         $this->assertSame(6,substr_count($html,'class="insight-kpi '));
         $this->assertStringContainsString('data-sales-table',$html);
         $this->assertStringContainsString('sales-filters',$html);

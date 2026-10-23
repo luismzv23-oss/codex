@@ -1,4 +1,6 @@
-(() => {
+document.addEventListener('alpine:init', () => {
+ Alpine.data('usersDirectory', () => ({
+ init() {
     const root = document.getElementById('users-directory');
     if (!root) return;
     const rows = [...root.querySelectorAll('[data-user-row]')];
@@ -45,4 +47,6 @@
     }));
     document.getElementById('users-pagination').hidden = false;
     render();
-})();
+ }
+ }));
+});

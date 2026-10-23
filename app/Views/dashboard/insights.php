@@ -1,7 +1,7 @@
 <?= $this->extend('layouts/app') ?>
 <?= $this->section('content') ?>
 <link rel="stylesheet" href="<?= base_url('assets/css/dashboard-insights.css') ?>">
-<div class="insight-shell" id="insight-dashboard">
+<div class="insight-shell" x-data="executiveDashboard" id="insight-dashboard">
     <header class="insight-hero">
         <div>
             <div class="insight-eyebrow"><span class="insight-orbit"></span> CODEX / INTELIGENCIA DE NEGOCIO</div>
@@ -11,7 +11,7 @@
         </div>
         <div class="insight-hero-status"><span class="insight-live-dot"></span> Actualización cada 60 s<br><small id="insight-updated">Última lectura <?= esc($insights['updated']) ?></small></div>
     </header>
-    <form id="insight-filters" class="insight-filters" action="<?= site_url('dashboard') ?>" method="get">
+    <form id="insight-filters" @submit.prevent="applyFilters" @change="changePeriod" class="insight-filters" action="<?= site_url('dashboard') ?>" method="get">
         <?php if ($superadmin): ?>
         <label>Empresa<select name="company_id" class="form-select"><option value="">Todas las empresas</option><?php foreach ($companies as $company): ?><option value="<?= esc($company['id']) ?>" <?= $filters['company_id'] === $company['id'] ? 'selected' : '' ?>><?= esc($company['name']) ?></option><?php endforeach; ?></select></label>
         <?php endif; ?>
@@ -21,7 +21,7 @@
         <label>Moneda<select name="currency" class="form-select"><?php foreach ($currencyOptions as $currency): ?><option <?= $currency === $filters['currency'] ? 'selected' : '' ?> value="<?= esc($currency) ?>"><?= esc($currency) ?></option><?php endforeach; ?></select></label>
         <div class="insight-filter-actions">
             <button class="btn insight-action" title="Aplicar filtros y actualizar" aria-label="Aplicar filtros y actualizar"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i></button>
-            <button type="button" id="insight-pause" class="btn insight-action" title="Pausar actualización automática" aria-label="Pausar actualización automática" aria-pressed="false"><i class="bi bi-pause" aria-hidden="true"></i></button>
+            <button type="button" id="insight-pause" @click="togglePause" class="btn insight-action" title="Pausar actualización automática" aria-label="Pausar actualización automática" aria-pressed="false"><i class="bi bi-pause" aria-hidden="true"></i></button>
         </div>
     </form>
     <div id="insight-notice" role="status" aria-live="polite" class="insight-notice" hidden></div>

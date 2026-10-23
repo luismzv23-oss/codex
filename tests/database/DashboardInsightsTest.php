@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__.'/../_support/UiPreview.php';
 
 use App\Libraries\DashboardInsights;
 use CodeIgniter\Test\CIUnitTestCase;
@@ -61,6 +62,9 @@ final class DashboardInsightsTest extends CIUnitTestCase
         $this->assertCount(0, $data['critical']);
         $this->assertEquals(2, $data['fiscal']);
         $html = view('dashboard/insights_panel', ['insights'=>$data,'filters'=>$f,'superadmin'=>false]);
+        helper(['app','auth','url']);
+        service('request')->getUri()->setPath('/dashboard');
+        captureUiPreview('dashboard',view('dashboard/insights',['insights'=>$data,'filters'=>$f,'superadmin'=>false,'companies'=>[['id'=>'a','name'=>'Demo']],'currencyOptions'=>['ARS'],'user'=>['name'=>'Prueba']],['saveData'=>false]));
         $this->assertStringContainsString('Ventas por sucursal', $html);
         $this->assertStringNotContainsString('Empresa b', $html);
     }

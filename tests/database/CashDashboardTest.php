@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__.'/../_support/UiPreview.php';
 use App\Libraries\CashDashboard;
 use CodeIgniter\Test\CIUnitTestCase;
 
@@ -36,6 +37,9 @@ final class CashDashboardTest extends CIUnitTestCase
         $this->assertEquals(0,$empty['count']);
         $this->assertEquals(0,$empty['open']);
         $html=view('cash/dashboard',['dashboard'=>$d]);
+        helper(['app','auth','url']);
+        service('request')->getUri()->setPath('/caja');
+        captureUiPreview('cash',view('cash/index',['dashboard'=>$d,'companies'=>[['id'=>'a','name'=>'Demo']],'context'=>['canManage'=>true],'selectedCompanyId'=>'a','selectedRegisterId'=>'','selectedVendorId'=>'','registers'=>[],'sessions'=>[],'movements'=>[],'checks'=>[],'reconciliations'=>[],'sessionVendors'=>[],'activeSessionsMap'=>[]],['saveData'=>false]));
         $this->assertStringContainsString('Flujo neto',$html);
         $this->assertStringContainsString('70,00',$html);
     }

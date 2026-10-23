@@ -52,4 +52,31 @@ final class InventoryDashboardTest extends CIUnitTestCase
         }
     }
 
+    public function testPilotViewRetainsRoutesAndUsesOneAlpineRuntime(): void {
+        helper(['url','form','auth','app']);
+        service('request')->getUri()->setPath('/inventario');
+        service('request')->setGlobal('get', []);
+        service('request')->setGlobal('post', []);
+        $products=[];
+        for ($i=1;$i<=12;$i++) $products[] = ['id'=>'p'.$i,'sku'=>'SKU'.$i,'name'=>'Producto de prueba '.$i,'category'=>'Bebidas','brand'=>'Demo','unit'=>'unidad','total_stock'=>$i,'reserved_stock'=>0,'available_stock'=>$i,'min_stock'=>2,'max_stock'=>100,'active'=>1,'is_critical'=>$i<=2,'is_overstock'=>$i===12];
+        $html=view('inventory/index',[
+            'dashboard'=>(new InventoryDashboard())->build('a',['from'=>'2026-10-03','to'=>'2026-10-03']),
+            'context'=>['company'=>['id'=>'a','name'=>'Empresa de prueba','currency_code'=>'ARS'],'canManage'=>true,'canConfigure'=>true],
+            'companies'=>[],'selectedCompanyId'=>'a','products'=>$products,'alerts'=>[],
+            'activeReservations'=>[],'warehouses'=>[],'recentMovements'=>[],
+        ]);
+        $this->assertStringContainsString('data-codex-ui="light"',$html);
+        $this->assertStringContainsString('x-data="inventoryWorkspace"',$html);
+        $this->assertStringContainsString('x-data="codexPopup"',$html);
+        $this->assertSame(1,substr_count($html,'csp-3.17.4.min.js'));
+        $this->assertStringContainsString('inventario/productos/p1/editar',$html);
+        $this->assertStringContainsString('inventario/productos/nuevo',$html);
+        $this->assertStringNotContainsString('const openPopup =',$html);
+        if (getenv('INVENTORY_FORM_PREVIEW') === '1') {
+            $previewDir=WRITEPATH.'private/ui-pilot/';
+            if (!is_dir($previewDir)) mkdir($previewDir,0700,true);
+            file_put_contents($previewDir.'inventory-workspace-preview.html',$html);
+        }
+    }
+
 }

@@ -58,13 +58,13 @@
                             <?php if (!empty($fromReceiptItems)): ?>
                                 <?php foreach ($fromReceiptItems as $i => $item): ?>
                                     <tr>
-                                        <td><select name="items_product_id[]" class="form-select select-search">
+                                        <td><div x-data="codexSearchSelect" class="codex-search-select"><select name="items_product_id[]" class="form-select select-search">
                                                 <option value="">Sin producto</option><?php foreach ($products as $product): ?>
                                                     <option value="<?= esc($product['id']) ?>"
                                                         <?= ($item['product_id'] === $product['id']) ? 'selected' : '' ?>>
                                                         <?= esc($product['sku'] . ' - ' . $product['name']) ?></option>
                                                 <?php endforeach; ?>
-                                            </select></td>
+                                            </select></div></td>
                                         <td><input type="text" name="items_description[]" class="form-control"
                                                 value="<?= esc($item['description'] ?? '') ?>"></td>
                                         <td><input type="number" step="0.01" min="0" name="items_quantity[]"
@@ -78,12 +78,12 @@
                             <?php else: ?>
                                 <?php for ($i = 0; $i < 4; $i++): ?>
                                     <tr>
-                                        <td><select name="items_product_id[]" class="form-select select-search">
+                                        <td><div x-data="codexSearchSelect" class="codex-search-select"><select name="items_product_id[]" class="form-select select-search">
                                                 <option value="">Sin producto</option><?php foreach ($products as $product): ?>
                                                     <option value="<?= esc($product['id']) ?>">
                                                         <?= esc($product['sku'] . ' - ' . $product['name']) ?></option>
                                                 <?php endforeach; ?>
-                                            </select></td>
+                                            </select></div></td>
                                         <td><input type="text" name="items_description[]" class="form-control"></td>
                                         <td><input type="number" step="0.01" min="0" name="items_quantity[]"
                                                 class="form-control" value="0"></td>

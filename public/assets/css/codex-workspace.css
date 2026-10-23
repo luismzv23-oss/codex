@@ -1,0 +1,71 @@
+/* Clear authenticated workspace: the same turquoise/blue/violet identity. */
+body[data-codex-ui="light"] {background:var(--cx-bg);color:var(--cx-ink);font-family:var(--cx-font)}
+[data-codex-ui="light"] .insight-shell {--ink:var(--cx-ink);--muted:var(--cx-muted);--line:var(--cx-line);--violet:var(--cx-violet)}
+[data-codex-ui="light"] .insight-shell .insight-hero {
+ color:var(--cx-ink);background:linear-gradient(110deg,#e5faf6,#eef5fc 60%,#f0ecfb);
+ border:1px solid var(--cx-line);box-shadow:none;padding:28px;border-radius:20px;
+}
+[data-codex-ui="light"] .insight-shell .insight-hero :is(p,.insight-identity span) {color:var(--cx-muted)!important}
+[data-codex-ui="light"] .insight-eyebrow {color:var(--cx-link)}
+[data-codex-ui="light"] .insight-orbit {border-color:var(--cx-link)}
+[data-codex-ui="light"] .insight-shell .insight-hero .btn {background:#fff;color:var(--cx-ink);border-color:var(--cx-line);backdrop-filter:none}
+[data-codex-ui="light"] .insight-shell .insight-hero .btn:hover {background:var(--cx-soft);border-color:var(--cx-link)}
+[data-codex-ui="light"] .insight-kpi {border:1px solid var(--cx-line);background:#fff;color:var(--cx-ink);box-shadow:var(--cx-shadow)}
+[data-codex-ui="light"] .insight-kpi-primary {background:var(--cx-soft);color:var(--cx-ink)}
+[data-codex-ui="light"] .insight-kpi-primary :is(span,.insight-kpi-label) {color:var(--cx-link)}
+[data-codex-ui="light"] .insight-kpi-alert {background:#fff6e8}
+[data-codex-ui="light"] #inventory-products-card .table td:last-child {white-space:nowrap}
+[data-codex-ui="light"] #inventory-products-card .table td:nth-child(2) {min-width:170px}
+[data-codex-ui="light"] #inventory-products-card .table td:not(:nth-child(2)) {white-space:nowrap}
+[data-codex-ui="light"] .insight-filters {gap:12px}
+[data-codex-ui="light"] .insight-filters label {font-size:12px}
+[data-codex-ui="light"] .insight-filters :is(.form-control,.form-select) {font-size:13px}
+[data-codex-ui="light"] .popup-shell {max-width:1180px}
+@media(min-width:1200px) {
+ [data-codex-ui="light"] .inventory-shell>.row>.col-xl-4 {width:25%}
+ [data-codex-ui="light"] .inventory-shell>.row>.col-xl-8 {width:75%}
+ [data-codex-ui="light"] main.container {max-width:1560px;width:calc(100% - 48px)}
+}
+@media(max-width:600px) {
+ [data-codex-ui="light"] .insight-shell .insight-hero {padding:20px;gap:16px;align-items:flex-start;flex-direction:column}
+ [data-codex-ui="light"] .insight-filters {padding:16px}
+ [data-codex-ui="light"] .card-body {padding:16px!important}
+ [data-codex-ui="light"] .icon-btn {min-width:44px;min-height:44px}
+ [data-codex-ui="light"] .codex-pagination__controls {flex-wrap:wrap}
+}
+
+/* Clear headers across operational modules. */
+[data-codex-ui="light"] .insight-hero :is(.insight-hero-status,.insight-hero-status small) {color:var(--cx-muted)}
+[data-codex-ui="light"] .insight-hero h1 {color:var(--cx-ink)}
+[data-codex-ui="light"] .insight-shell .insight-hero p {color:var(--cx-muted)!important}
+[data-codex-ui="light"] .insight-shell .insight-tag {background:#eef7f8;color:var(--cx-link)}
+[data-codex-ui="light"] .insight-shell .insight-kpi-primary strong {color:var(--cx-link)}
+[data-codex-ui="light"] .insight-shell .insight-kpi :is(.insight-comparison,.insight-kpi-label) {color:var(--cx-muted)}
+[data-codex-ui="light"] .insight-shell .insight-hero .btn-dark {background:var(--cx-primary);color:var(--cx-ink)}
+
+/* Administration shares the same clear identity as operational workspaces. */
+[data-codex-ui="light"] :is(.companies-directory,.systems-workspace,.settings-workspace,.users-directory) {color:var(--cx-ink);max-width:1560px;margin-inline:auto}
+[data-codex-ui="light"] :is(.companies-heading,.systems-heading,.settings-heading) {
+ background:linear-gradient(110deg,#e5faf6,#eef5fc 60%,#f0ecfb);border:1px solid var(--cx-line);
+ border-radius:20px;padding:28px;margin-bottom:24px;gap:20px;align-items:center;
+}
+[data-codex-ui="light"] :is(.companies-heading,.systems-heading,.settings-heading) h1 {color:var(--cx-ink);font-size:clamp(25px,2.5vw,38px);font-weight:800;letter-spacing:-1px}
+[data-codex-ui="light"] :is(.companies-eyebrow,.systems-eyebrow,.settings-eyebrow) {color:var(--cx-link)}
+[data-codex-ui="light"] :is(.companies-heading,.systems-heading,.settings-heading) p {color:var(--cx-muted)}
+[data-codex-ui="light"] :is(.companies-panel,.users-panel,.systems-module) {background:var(--cx-surface);border-color:var(--cx-line);box-shadow:var(--cx-shadow)}
+[data-codex-ui="light"] :is(.companies-avatar,.users-avatar,.systems-context,.settings-context,.companies-context) {background:var(--cx-soft);color:var(--cx-link);border-color:var(--cx-line)}
+[data-codex-ui="light"] :is(.systems-workspace,.settings-workspace) .codex-pagination__btn.is-active {color:var(--cx-ink);background:var(--cx-primary);border-color:var(--cx-primary)}
+[data-codex-ui="light"] :is(.users-table-wrap,.table-responsive) {max-width:100%;overflow-x:auto}
+@media(max-width:600px) {
+ [data-codex-ui="light"] :is(.companies-heading,.systems-heading,.settings-heading) {padding:20px;flex-wrap:wrap;align-items:flex-start}
+}
+
+/* Override historical per-directory button palettes with shared tokens. */
+[data-codex-ui="light"] :is(.companies-directory,.systems-workspace,.settings-workspace,.users-directory) .btn-dark,
+[data-codex-ui="light"] :is(.companies-directory,.systems-workspace,.settings-workspace,.users-directory) .codex-pagination__btn.is-active {
+ background:var(--cx-primary);border-color:var(--cx-primary);color:var(--cx-ink);
+}
+[data-codex-ui="light"] :is(.companies-directory,.systems-workspace,.settings-workspace,.users-directory) .btn-dark:hover {background:var(--cx-primary-hover);border-color:var(--cx-primary-hover);color:var(--cx-ink)}
+[data-codex-ui="light"] :is(.companies-directory,.systems-workspace,.settings-workspace,.users-directory) .btn:focus-visible {outline:3px solid var(--cx-link);outline-offset:3px}
+[data-codex-ui="light"] :is(.companies-directory,.systems-workspace,.settings-workspace,.users-directory) .btn-outline-dark:hover {background:var(--cx-soft);border-color:var(--cx-link);color:var(--cx-ink)}
+[data-codex-ui="light"] .settings-workspace :is(.list-group-item .text-secondary,.settings-pagination .small) {color:var(--cx-muted)!important}

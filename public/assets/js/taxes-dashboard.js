@@ -1,6 +1,8 @@
-(() => {
+document.addEventListener('alpine:init', () => {
+    Alpine.data('taxesWorkspace', () => ({
+        init() {
     'use strict';
-    const shell = Array.from(document.querySelectorAll('.taxes-shell')).find(element => !element.dataset.taxReady);
+    const shell = this.$el;
     if (!shell) return;
     shell.dataset.taxReady = 'true';
     const content = shell.querySelector('#tax-content');
@@ -91,4 +93,6 @@
     shell.querySelector('[data-tax-refresh]')?.addEventListener('click', () => refresh(true));
     window.addEventListener('codex:item-saved', () => {if (!dirty) refresh(true);});
     const interval = setInterval(() => {if (!shell.isConnected) clearInterval(interval); else refresh();},60000);
-})();
+        }
+    }));
+});

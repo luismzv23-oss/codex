@@ -1,10 +1,11 @@
 <?= $this->extend('layouts/app') ?>
 
 <?= $this->section('content') ?>
-<div class="row g-4">
+<link rel="stylesheet" href="<?= base_url('assets/css/dashboard-insights.css') ?>">
+<div class="row g-4 insight-shell">
     <div class="col-12">
-        <div class="p-4 rounded-4 bg-white shadow-sm border">
-            <div class="d-flex justify-content-between align-items-start gap-3">
+        <div class="insight-hero">
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 w-100">
                 <div>
                     <p class="small text-uppercase text-secondary mb-2">ERP</p>
                     <h1 class="h2 mb-2">Bienvenido, <?= esc($user['name'] ?? '') ?></h1>

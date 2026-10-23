@@ -16,7 +16,7 @@ $query = http_build_query(['company_id' => $selectedCompanyId]);
 <link rel="stylesheet" href="<?= base_url('assets/css/dashboard-insights.css') ?>">
 <link rel="stylesheet" href="<?= base_url('assets/css/inventory-dashboard.css') ?>">
 <link rel="stylesheet" href="<?= base_url('assets/css/accounting-dashboard.css') ?>">
-<div class="insight-shell inventory-shell accounting-shell" data-accounting-page="<?= esc($section) ?>">
+<div class="insight-shell inventory-shell accounting-shell" x-data="accountingWorkspace" data-accounting-page="<?= esc($section) ?>">
 <?php $insidePopup = ($isPopup ?? false) || service('request')->getGet('popup') === '1'; ?>
 <?php if (!$insidePopup): ?>
 <header class="insight-hero">

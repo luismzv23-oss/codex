@@ -146,13 +146,19 @@ final class InventoryProductFormTest extends CIUnitTestCase
     {
         $p = $this->create();
         $request=service('request'); $request->setGlobal('get',['popup'=>'1']); $request->setGlobal('post',[]);
+        $request->getUri()->setPath('/inventario/productos/nuevo');
         $html=view('inventory/forms/product',['product'=>$p,'formAction'=>site_url('inventario/productos'),'companyId'=>'a','isPopup'=>true,'componentOptions'=>[],'warehouses'=>[],'currentStock'=>7]);
+        $this->assertStringContainsString('data-codex-ui="light"',$html);
         $this->assertStringContainsString('x-data="inventoryProductForm"',$html);
         $this->assertStringContainsString('data-product-type="kit"',$html);
         $this->assertStringContainsString('name="initial_stock"',$html);
         $this->assertStringNotContainsString('type="text" name="unit"',$html);
         $this->assertSame(1,substr_count($html,'csp-3.17.4.min.js'));
-        if (getenv('INVENTORY_FORM_PREVIEW') === '1') file_put_contents(WRITEPATH.'inventory-product-preview.html',$html);
+        if (getenv('INVENTORY_FORM_PREVIEW') === '1') {
+            $previewDir=WRITEPATH.'private/ui-pilot/';
+            if (!is_dir($previewDir)) mkdir($previewDir,0700,true);
+            file_put_contents($previewDir.'inventory-product-preview.html',$html);
+        }
         foreach (['inventory/index.php','inventory/configuration.php'] as $view) $this->assertStringContainsString('inventario/productos/nuevo',file_get_contents(APPPATH.'Views/'.$view));
     }
 }

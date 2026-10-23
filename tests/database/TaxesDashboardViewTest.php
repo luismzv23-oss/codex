@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__.'/../_support/UiPreview.php';
 use CodeIgniter\Test\CIUnitTestCase;
 
 final class TaxesDashboardViewTest extends CIUnitTestCase
@@ -17,7 +18,9 @@ final class TaxesDashboardViewTest extends CIUnitTestCase
     public function testIndicatorsTablesTotalsAndExportFilters(): void
     {
         helper(['app','auth','url']);
+        service('request')->getUri()->setPath('/impuestos');
         $html = view('taxes/index',$this->data(),['saveData'=>false]);
+        captureUiPreview('taxes',$html);
         $this->assertSame(6,substr_count($html,'class="insight-kpi '));
         $this->assertSame(3,substr_count($html,'data-tax-table'));
         $this->assertStringContainsString('data-tax-total',$html);

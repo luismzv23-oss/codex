@@ -16,7 +16,7 @@ $isSuperadmin = (auth_user()['role_slug'] ?? '') === 'superadmin';
 ?>
 <link rel="stylesheet" href="<?= base_url('assets/css/dashboard-insights.css') ?>">
 <link rel="stylesheet" href="<?= base_url('assets/css/users-directory.css') ?>">
-<div class="insight-shell users-directory" id="users-directory">
+<div class="insight-shell users-directory" x-data="usersDirectory" id="users-directory">
 <header class="insight-hero">
     <div>
         <div class="insight-eyebrow"><span class="insight-orbit"></span> CODEX / EQUIPO Y ACCESOS</div>

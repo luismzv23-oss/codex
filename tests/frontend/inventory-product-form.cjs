@@ -6,14 +6,14 @@ const {pathToFileURL} = require('node:url');
 const {execFileSync} = require('node:child_process');
 const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '../..');
-const source = fs.readFileSync(path.join(root, 'writable/inventory-product-preview.html'), 'utf8');
+const source = fs.readFileSync(path.join(root, 'writable/private/ui-pilot/inventory-product-preview.html'), 'utf8');
 const form = source.match(/<form\b[\s\S]*?<\/form>/)[0];
 const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-inventory-form-'));
 const scriptURL = name => pathToFileURL(path.join(root, 'public', name)).href;
 const html = `<!doctype html><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' file:; style-src 'unsafe-inline'">
 <script>window.testErrors=[]; addEventListener('error',e=>testErrors.push(e.message));</script>
-<script defer src="${scriptURL('assets/js/inventory-product-form.js')}"></script>
+<script defer src="${scriptURL('assets/js/codex-controls.js')}"></script><script defer src="${scriptURL('assets/js/inventory-product-form.js')}"></script>
 <script defer src="${scriptURL('assets/vendor/alpinejs/csp-3.17.4.min.js')}"></script>
 ${form}<pre id="result"></pre>
 <script>

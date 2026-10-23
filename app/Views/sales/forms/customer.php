@@ -11,7 +11,7 @@ $customers = $customers ?? [];
         <!-- Navigation Tabs -->
         <ul class="nav nav-tabs mb-4" id="customerTab" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="form-tab" data-bs-toggle="tab" data-bs-target="#form-tab-pane" type="button" role="tab" aria-controls="form-tab-pane" aria-selected="true">
+                <button class="nav-link active" id="form-tab" data-codex-toggle="tab" data-codex-target="#form-tab-pane" type="button" role="tab" aria-controls="form-tab-pane" aria-selected="true">
                     <?php if (!empty($customer)): ?>
                         <i class="bi bi-pencil-square me-1"></i> Editar cliente
                     <?php else: ?>
@@ -20,7 +20,7 @@ $customers = $customers ?? [];
                 </button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="list-tab" data-bs-toggle="tab" data-bs-target="#list-tab-pane" type="button" role="tab" aria-controls="list-tab-pane" aria-selected="false">
+                <button class="nav-link" id="list-tab" data-codex-toggle="tab" data-codex-target="#list-tab-pane" type="button" role="tab" aria-controls="list-tab-pane" aria-selected="false">
                     <i class="bi bi-people me-1"></i> Listado de clientes
                 </button>
             </li>
@@ -181,7 +181,7 @@ $customers = $customers ?? [];
                         <p class="text-secondary mb-0">Base de clientes de la empresa.</p>
                     </div>
                     <div class="d-flex align-items-center gap-2" style="max-width: 350px; width: 100%;">
-                        <button type="button" class="btn btn-outline-success btn-sm icon-btn" title="Exportar a Excel" data-bs-toggle="modal" data-bs-target="#exportExcelModal" aria-label="Exportar a Excel">
+                        <button type="button" class="btn btn-outline-success btn-sm icon-btn" title="Exportar a Excel" data-codex-toggle="modal" data-codex-target="#exportExcelModal" aria-label="Exportar a Excel">
                             <i class="bi bi-file-earmark-excel"></i>
                         </button>
                         <div class="flex-grow-1">
@@ -250,7 +250,7 @@ $customers = $customers ?? [];
         <div class="modal-content rounded-4 border-0 shadow">
             <div class="modal-header border-0 pb-0">
                 <h5 class="modal-title fw-bold" id="exportExcelModalLabel">Exportar clientes a Excel</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close" data-codex-dismiss="modal" aria-label="Close"></button>
             </div>
             <form action="<?= site_url('ventas/clientes/exportar') ?>" method="post">
                 <?= csrf_field() ?>
@@ -298,7 +298,7 @@ $customers = $customers ?? [];
                     </div>
                 </div>
                 <div class="modal-footer border-0 pt-0">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-light" data-codex-dismiss="modal">Cancelar</button>
                     <button type="submit" class="btn btn-success"><i class="bi bi-file-earmark-excel me-1"></i> Exportar a Excel</button>
                 </div>
             </form>

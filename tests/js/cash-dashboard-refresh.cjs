@@ -13,7 +13,8 @@ const window = {
     reloadCashData: () => { requests++; },
     addEventListener: (type, handler) => { handlers[type] = handler; },
 };
-vm.runInNewContext(readFileSync('public/assets/js/cash-dashboard.js', 'utf8'), {document, window});
+vm.runInNewContext(readFileSync('public/assets/js/cash-dashboard.js', 'utf8'), {document, window, Alpine: {data: (_name, factory) => factory().init()}});
+handlers['alpine:init']();
 handlers.click({target: {closest: () => ({})}, preventDefault() {}});
 assert.equal(requests, 1, 'Manual refresh uses the full-table refresh exactly once');
 handlers.focus();

@@ -1,4 +1,9 @@
-(() => {
+document.addEventListener('alpine:init', () => {
+ Alpine.data('executiveDashboard', () => ({
+  applyFilters() { return this._refresh(true); },
+  changePeriod(event) { this._change(event); },
+  togglePause() { this._toggle(); },
+  init() {
     const form = document.getElementById('insight-filters');
     if (!form) return;
     const content = document.getElementById('insight-content');
@@ -38,8 +43,8 @@
             notice.hidden = false;
         } finally { if (version === generation) content.removeAttribute('aria-busy'); }
     }
-    form.addEventListener('submit', event => { event.preventDefault(); refresh(true); });
-    form.addEventListener('change', event => {
+    this._refresh = refresh;
+    this._change = event => {
         if (event.target === period && period.value !== 'custom') {
             const to = new Date(), from = new Date();
             if (period.value === 'month') from.setDate(1);
@@ -47,17 +52,21 @@
             form.elements.from.value = day(from); form.elements.to.value = day(to);
         } else if (event.target.name === 'from' || event.target.name === 'to') period.value = 'custom';
         if (event.target !== period || period.value !== 'custom') refresh(true);
-    });
-    pause.addEventListener('click', () => {
+    };
+    this._toggle = () => {
         paused = !paused;
         pause.setAttribute('aria-pressed', String(paused));
         const label = paused ? 'Reanudar actualización automática' : 'Pausar actualización automática';
         pause.setAttribute('aria-label', label); pause.title = label;
         pause.innerHTML = `<i class="bi bi-${paused ? 'play' : 'pause'}" aria-hidden="true"></i>`;
         if (!paused) refresh(); else updated.textContent += ' · pausada';
-    });
-    setInterval(() => {
+    };
+    this._timer = setInterval(() => {
         const unchanged = new URLSearchParams(new FormData(form)).toString() === applied.toString();
         if (!paused && unchanged && !document.hidden && !content.contains(document.activeElement)) refresh();
     }, 60000);
-})();
+    this._dispose = () => { generation++; request?.abort(); clearInterval(this._timer); };
+  },
+  destroy() { this._dispose?.(); }
+ }));
+});

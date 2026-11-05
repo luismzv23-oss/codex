@@ -44,7 +44,8 @@
                     name="due_date" class="form-control"></div>
             <div class="col-12">
                 <div class="table-responsive">
-                    <table class="table align-middle mb-0">
+                    <table class="table align-middle mb-0 purchase-items-table">
+                        <colgroup><col class="col-product"><col class="col-description"><col class="col-field"><col class="col-field"><col class="col-field"></colgroup>
                         <thead>
                             <tr>
                                 <th>Producto</th>
@@ -58,7 +59,7 @@
                             <?php if (!empty($fromReceiptItems)): ?>
                                 <?php foreach ($fromReceiptItems as $i => $item): ?>
                                     <tr>
-                                        <td><select name="items_product_id[]" class="form-select select-search">
+                                        <td><select name="items_product_id[]" class="form-select purchase-product-search" aria-label="Buscar producto por código o nombre">
                                                 <option value="">Sin producto</option><?php foreach ($products as $product): ?>
                                                     <option value="<?= esc($product['id']) ?>"
                                                         <?= ($item['product_id'] === $product['id']) ? 'selected' : '' ?>>
@@ -78,7 +79,7 @@
                             <?php else: ?>
                                 <?php for ($i = 0; $i < 4; $i++): ?>
                                     <tr>
-                                        <td><select name="items_product_id[]" class="form-select select-search">
+                                        <td><select name="items_product_id[]" class="form-select purchase-product-search" aria-label="Buscar producto por código o nombre">
                                                 <option value="">Sin producto</option><?php foreach ($products as $product): ?>
                                                     <option value="<?= esc($product['id']) ?>">
                                                         <?= esc($product['sku'] . ' - ' . $product['name']) ?></option>
@@ -107,5 +108,34 @@
         </form>
     </div>
 </div>
+<style>
+    /* Requested split: Producto 44, Descripcion 10, Cant./Costo/IVA 10 each (scaled to the full row width). */
+    .purchase-items-table { table-layout: fixed; width: 100%; min-width: 720px; }
+    .purchase-items-table .col-product { width: 44%; }
+    .purchase-items-table .col-description,
+    .purchase-items-table .col-field { width: 10%; }
+    .purchase-items-table .ts-wrapper { width: 100%; }
+    .purchase-items-table .ts-control .item { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+    /* Dropdown is attached to <body> so the table's overflow does not clip it. */
+    .purchase-product-dropdown { min-width: 26rem; max-width: calc(100vw - 2rem); }
+    .purchase-product-dropdown .option { white-space: normal; line-height: 1.3; }
+</style>
+<script>
+    // Tom Select is loaded by the layout after this script, so initialize once the page is ready.
+    document.addEventListener('DOMContentLoaded', () => {
+        if (!window.TomSelect) return;
+        document.querySelectorAll('.purchase-product-search').forEach((select) => {
+            new TomSelect(select, {
+                create: false,
+                sortField: { field: 'text', direction: 'asc' },
+                dropdownParent: 'body',
+                dropdownClass: 'ts-dropdown purchase-product-dropdown',
+                placeholder: 'Buscar por código o nombre',
+                onInitialize() { this.control.title = this.getItem(this.getValue())?.textContent?.trim() || ''; },
+                onChange() { this.control.title = this.getItem(this.getValue())?.textContent?.trim() || ''; },
+            });
+        });
+    });
+</script>
 <?= view('purchases/end') ?>
 <?= $this->endSection() ?>

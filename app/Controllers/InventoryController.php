@@ -3,6 +3,13 @@
 namespace App\Controllers;
 
 use App\Libraries\InventoryIntegrityService;
+use App\Libraries\InventoryProductKpi;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use App\Libraries\Core\{ActorContext, CompanyContext, AccessException};
 
 use App\Models\BranchModel;
@@ -270,6 +277,131 @@ class InventoryController extends BaseController
             'trazabilidad-' . $product['sku'] . '.pdf',
             'landscape'
         );
+    }
+
+    public function productTraceabilityXlsx(string $id)
+    {
+        $context = $this->inventoryContext('view');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+        $companyId = $context['company']['id'];
+        $product = $this->ownedProduct($companyId, $id);
+        if (! $product) {
+            return redirect()->to($this->inventoryRoute('inventario', $companyId))->with('error', 'Producto no disponible.');
+        }
+
+        $date = static fn($value): string => $value ? date('d/m/Y H:i', strtotime((string) $value)) : '-';
+        $book = new Spreadsheet();
+        $book->removeSheetByIndex(0);
+
+        $this->xlsxSheet($book, 'Resumen', ['Campo', 'Valor'], [
+            ['Empresa', $context['company']['name'] ?? ''],
+            ['SKU', $product['sku']],
+            ['Producto', $product['name']],
+            ['Unidad', $product['unit']],
+            ['Categoria', $product['category'] ?? '-'],
+            ['Marca', $product['brand'] ?? '-'],
+            ['Tipo', $product['product_type'] ?? 'simple'],
+            ['Estado', (int) $product['active'] === 1 ? 'Activo' : 'Inactivo'],
+            ['Stock minimo', (float) $product['min_stock']],
+            ['Stock maximo', (float) ($product['max_stock'] ?? 0)],
+            ['Generado', date('d/m/Y H:i')],
+        ]);
+        $this->xlsxSheet($book, 'Stock por deposito', ['Deposito', 'Codigo', 'Tipo', 'Stock', 'Reservado', 'Disponible', 'Minimo', 'Estado'],
+            array_map(static fn(array $r): array => [$r['name'], $r['code'], $r['type'], (float) $r['quantity'], (float) $r['reserved_quantity'], (float) $r['available_quantity'], (float) $r['min_stock'], (int) $r['active'] === 1 ? 'Activo' : 'Inactivo'],
+                $this->productWarehouseStock($companyId, $id)));
+        $this->xlsxSheet($book, 'Ubicaciones', ['Deposito', 'Ubicacion', 'Codigo', 'Zona', 'Rack', 'Nivel', 'Stock', 'Disponible'],
+            array_map(static fn(array $r): array => [$r['warehouse_name'], $r['name'], $r['code'], $r['zone'] ?: '-', $r['rack'] ?: '-', $r['level'] ?: '-', (float) $r['quantity'], (float) $r['available_quantity']],
+                $this->productLocationStock($companyId, $id)));
+        $this->xlsxSheet($book, 'Reservas activas', ['Deposito', 'Cantidad', 'Referencia', 'Responsable', 'Fecha'],
+            array_map(static fn(array $r): array => [$r['warehouse_name'], (float) $r['quantity'], $r['reference'] ?: '-', $r['reserved_by_name'], $date($r['reserved_at'])],
+                $this->activeReservations($companyId, $id, 100)));
+        $this->xlsxSheet($book, 'Lotes', ['Lote', 'Deposito', 'Ubicacion', 'Vence', 'Saldo'],
+            array_map(static fn(array $r): array => [$r['lot_number'], $r['warehouse_name'], $r['location_name'] ?: 'Sin ubicacion', $r['expiration_date'] ?: '-', (float) $r['quantity_balance']],
+                $this->lotRows($companyId, $id)));
+        $this->xlsxSheet($book, 'Series', ['Serie', 'Deposito', 'Ubicacion', 'Estado', 'Lote'],
+            array_map(static fn(array $r): array => [$r['serial_number'], $r['warehouse_name'] ?: '-', $r['location_name'] ?: 'Sin ubicacion', $r['status'], $r['lot_number'] ?: '-'],
+                $this->serialRows($companyId, $id)));
+        $kitItems = $this->kitItemRows($id);
+        if ($kitItems !== []) {
+            $this->xlsxSheet($book, 'Composicion kit', ['SKU', 'Componente', 'Cantidad'],
+                array_map(static fn(array $r): array => [$r['component_sku'], $r['component_name'], (float) $r['quantity']], $kitItems));
+        }
+        $this->xlsxSheet($book, 'Capas de costo', ['Tipo', 'Deposito', 'Ubicacion', 'Cantidad', 'Restante', 'Costo unitario', 'Costo total', 'Fecha'],
+            array_map(static fn(array $r): array => [$r['layer_type'], $r['warehouse_name'] ?: '-', $r['location_name'] ?: 'Sin ubicacion', (float) $r['quantity'], (float) $r['remaining_quantity'], (float) $r['unit_cost'], (float) $r['total_cost'], $date($r['occurred_at'])],
+                $this->costLayerRows($companyId, $id, 200)));
+        $this->xlsxSheet($book, 'Movimientos', ['Fecha', 'Tipo', 'Modo ajuste', 'Cantidad', 'Costo unitario', 'Costo total', 'Origen', 'Ubicacion origen', 'Destino', 'Ubicacion destino', 'Responsable', 'Motivo', 'Documento', 'Lote', 'Serie', 'Vence'],
+            array_map(static fn(array $r): array => [$date($r['occurred_at']), ucfirst($r['movement_type']), $r['adjustment_mode'] ?: '-', (float) $r['quantity'], $r['unit_cost'] !== null ? (float) $r['unit_cost'] : null, $r['total_cost'] !== null ? (float) $r['total_cost'] : null, $r['source_name'] ?: '-', $r['source_location_name'] ?: '-', $r['destination_name'] ?: '-', $r['destination_location_name'] ?: '-', $r['user_name'], $r['reason'] ?: '-', $r['source_document'] ?: '-', $r['lot_number'] ?: '-', $r['serial_number'] ?: '-', $r['expiration_date'] ?: '-'],
+                $this->kardexRows($companyId, ['product_id' => $id], 1000)));
+
+        $book->setActiveSheetIndex(0);
+
+        return $this->renderXlsx($book, 'trazabilidad-' . $product['sku'] . '.xlsx');
+    }
+
+    public function productKpiPdf(string $id)
+    {
+        $data = $this->productKpiData($id);
+        if ($data instanceof RedirectResponse) {
+            return $data;
+        }
+
+        return $this->renderPdf('inventory/pdf/product_kpi', $data, 'kpi-' . $data['product']['sku'] . '.pdf');
+    }
+
+    public function productKpiXlsx(string $id)
+    {
+        $data = $this->productKpiData($id);
+        if ($data instanceof RedirectResponse) {
+            return $data;
+        }
+        $kpi = $data['kpi'];
+        $period = date('d/m/Y', strtotime($kpi['period']['from'])) . ' al ' . date('d/m/Y', strtotime($kpi['period']['to']));
+
+        $book = new Spreadsheet();
+        $book->removeSheetByIndex(0);
+        $rows = [
+            ['General', 'Empresa', $data['company']['name'] ?? ''],
+            ['General', 'Producto', $data['product']['sku'] . ' - ' . $data['product']['name']],
+            ['General', 'Periodo', $period . ' (' . $kpi['period']['days'] . ' dias)'],
+            ['General', 'Generado', $data['generatedAt']],
+        ];
+        foreach (InventoryProductKpi::rows($kpi) as [$section, $label, $value, $kind]) {
+            $rows[] = [$section, $label, $kind === 'text' || $value === null ? ($value ?? '-') : (float) $value];
+        }
+        $this->xlsxSheet($book, 'KPI', ['Seccion', 'Indicador', 'Valor'], $rows);
+
+        $warehouseRows = array_map(static fn(array $r): array => [$r['name'], $r['code'], $r['quantity'], $r['reserved'], $r['available'], $r['in'], $r['out'], $r['value']], $kpi['warehouses']);
+        $t = $kpi['totals'];
+        $warehouseRows[] = ['TOTAL', '', $t['quantity'], $t['reserved'], $t['available'], $t['in'], $t['out'], $t['value']];
+        $sheet = $this->xlsxSheet($book, 'Por deposito', ['Deposito', 'Codigo', 'Stock', 'Reservado', 'Disponible', 'Entradas', 'Salidas', 'Valor'], $warehouseRows);
+        $sheet->getStyle('A' . (count($warehouseRows) + 1) . ':H' . (count($warehouseRows) + 1))->getFont()->setBold(true);
+
+        $book->setActiveSheetIndex(0);
+
+        return $this->renderXlsx($book, 'kpi-' . $data['product']['sku'] . '.xlsx');
+    }
+
+    private function productKpiData(string $id)
+    {
+        $context = $this->inventoryContext('view');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+        $companyId = $context['company']['id'];
+        $product = $this->ownedProduct($companyId, $id);
+        if (! $product) {
+            return redirect()->to($this->inventoryRoute('inventario', $companyId))->with('error', 'Producto no disponible.');
+        }
+        [$from, $to] = InventoryProductKpi::period($this->request->getGet('from'), $this->request->getGet('to'));
+
+        return [
+            'company' => $context['company'],
+            'product' => $product,
+            'kpi' => (new InventoryProductKpi())->build($companyId, $product, $from, $to),
+            'generatedAt' => date('d/m/Y H:i'),
+        ];
     }
 
     public function editSettingsForm()
@@ -2808,6 +2940,57 @@ class InventoryController extends BaseController
             ->setHeader('Content-Type', 'application/pdf')
             ->setHeader('Content-Disposition', 'inline; filename="' . $filename . '"')
             ->setBody($dompdf->output());
+    }
+
+    private function xlsxSheet(Spreadsheet $book, string $title, array $headers, array $rows): Worksheet
+    {
+        $sheet = $book->createSheet();
+        $sheet->setTitle(mb_substr($title, 0, 31));
+        foreach (array_values($headers) as $c => $label) {
+            $sheet->setCellValueExplicit(Coordinate::stringFromColumnIndex($c + 1) . '1', (string) $label, DataType::TYPE_STRING);
+        }
+        if ($rows === []) {
+            $sheet->setCellValueExplicit('A2', 'Sin registros.', DataType::TYPE_STRING);
+        }
+        foreach (array_values($rows) as $r => $row) {
+            foreach (array_values($row) as $c => $value) {
+                $cell = Coordinate::stringFromColumnIndex($c + 1) . ($r + 2);
+                if (is_int($value) || is_float($value)) {
+                    // Real numbers stay numeric so Excel can sum/filter them.
+                    $sheet->setCellValueExplicit($cell, $value, DataType::TYPE_NUMERIC);
+                    $sheet->getStyle($cell)->getNumberFormat()->setFormatCode('#,##0.00');
+                } elseif ($value !== null) {
+                    $sheet->setCellValueExplicit($cell, (string) $value, DataType::TYPE_STRING);
+                }
+            }
+        }
+
+        $lastColumn = Coordinate::stringFromColumnIndex(count($headers));
+        $header = $sheet->getStyle('A1:' . $lastColumn . '1');
+        $header->getFont()->setBold(true);
+        $header->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('F3EEE8');
+        $sheet->freezePane('A2');
+        for ($i = 1; $i <= count($headers); $i++) {
+            $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($i))->setAutoSize(true);
+        }
+
+        return $sheet;
+    }
+
+    private function renderXlsx(Spreadsheet $book, string $filename)
+    {
+        $stream = fopen('php://memory', 'w+b');
+        (new Xlsx($book))->save($stream);
+        rewind($stream);
+        $body = stream_get_contents($stream);
+        fclose($stream);
+        $book->disconnectWorksheets();
+
+        return $this->response
+            ->setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            ->setHeader('Content-Disposition', 'attachment; filename="' . $filename . '"')
+            ->setHeader('Cache-Control', 'max-age=0')
+            ->setBody($body);
     }
 
     private function branchOptions(string $companyId): array

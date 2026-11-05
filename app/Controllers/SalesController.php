@@ -95,6 +95,11 @@ class SalesController extends BaseController
         }
 
         $filters = $this->salesFilters();
+        // Without an explicit range, show the current month instead of the whole history.
+        if ($filters['date_from'] === '' && $filters['date_to'] === '') {
+            $filters['date_from'] = date('Y-m-01');
+            $filters['date_to'] = date('Y-m-d');
+        }
         $companyId = $context['company']['id'];
 
         return view('sales/daily', [

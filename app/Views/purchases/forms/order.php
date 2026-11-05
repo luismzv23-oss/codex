@@ -30,7 +30,8 @@ $productCatalog = array_values(array_map(static function (array $product): array
                         <button type="button" class="btn btn-outline-dark icon-btn" id="purchase-add-item"><i class="bi bi-plus-lg"></i></button>
                     </div>
                     <div class="table-responsive">
-                        <table class="table align-middle">
+                        <table class="table align-middle purchase-items-table">
+                            <colgroup><col class="col-product"><col class="col-field"><col class="col-field"><col class="col-field"><col class="col-field"><col class="col-actions"></colgroup>
                             <thead><tr><th>Producto</th><th>Cant.</th><th>Costo</th><th>IVA %</th><th>Total</th><th></th></tr></thead>
                             <tbody id="purchase-items-body"></tbody>
                         </table>
@@ -41,14 +42,33 @@ $productCatalog = array_values(array_map(static function (array $product): array
         </form>
     </div>
 </div>
+<style>
+    /* Product gets most of the row so SKU + name are readable; numeric fields stay compact. */
+    #purchase-order-form .purchase-items-table { table-layout: fixed; width: 100%; min-width: 720px; }
+    #purchase-order-form .purchase-items-table .col-product { width: 44%; }
+    #purchase-order-form .purchase-items-table .col-field { width: 12%; }
+    #purchase-order-form .purchase-items-table .col-actions { width: 8%; }
+    #purchase-order-form .purchase-items-table .ts-wrapper { width: 100%; }
+    #purchase-order-form .purchase-items-table .ts-control .item { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+    /* Dropdown is attached to <body>, so it is styled globally via its own class. */
+    .purchase-product-dropdown { min-width: 26rem; max-width: calc(100vw - 2rem); }
+    .purchase-product-dropdown .option { white-space: normal; line-height: 1.3; }
+</style>
 <script>
 (() => {
-    const products = <?= json_encode($productCatalog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    const products = <?= json_encode($productCatalog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) ?>;
     const body = document.getElementById('purchase-items-body');
     const addButton = document.getElementById('purchase-add-item');
     if (!body || !addButton) return;
 
-    const options = () => products.map((product) => `<option value="${product.id}" data-cost="${Number(product.cost || 0).toFixed(2)}">${product.sku} - ${product.name}</option>`).join('');
+    const fillOptions = (select) => {
+        select.add(new Option('', ''));
+        products.forEach((product) => {
+            const option = new Option(`${product.sku} - ${product.name}`, product.id);
+            option.dataset.cost = Number(product.cost || 0).toFixed(2);
+            select.add(option);
+        });
+    };
     const syncRow = (row) => {
         const select = row.querySelector('.purchase-product');
         const quantity = row.querySelector('.purchase-quantity');
@@ -65,22 +85,35 @@ $productCatalog = array_values(array_map(static function (array $product): array
 
     const addRow = () => {
         const row = document.createElement('tr');
-        row.innerHTML = `<td><select name="items_product_id[]" class="form-select purchase-product select-search">${options()}</select><input type="hidden" name="items_description[]" value=""></td><td><input type="number" step="0.01" min="0.01" name="items_quantity[]" class="form-control purchase-quantity" value="1.00"></td><td><input type="number" step="0.01" min="0" name="items_unit_cost[]" class="form-control purchase-cost" value="0.00"></td><td><input type="number" step="0.01" min="0" name="items_tax_rate[]" class="form-control purchase-rate" value="21.00"></td><td class="purchase-total">0.00</td><td class="text-end"><button type="button" class="btn btn-outline-dark icon-btn purchase-remove"><i class="bi bi-x-lg"></i></button></td>`;
+        row.innerHTML = `<td><select name="items_product_id[]" class="form-select purchase-product purchase-product-search" required aria-label="Buscar producto por código o nombre"></select><input type="hidden" name="items_description[]" value=""></td><td><input type="number" step="0.01" min="0.01" name="items_quantity[]" class="form-control purchase-quantity" value="1.00"></td><td><input type="number" step="0.01" min="0" name="items_unit_cost[]" class="form-control purchase-cost" value="0.00"></td><td><input type="number" step="0.01" min="0" name="items_tax_rate[]" class="form-control purchase-rate" value="21.00"></td><td class="purchase-total">0.00</td><td class="text-end"><button type="button" class="btn btn-outline-dark icon-btn purchase-remove"><i class="bi bi-x-lg"></i></button></td>`;
+        const select = row.querySelector('.purchase-product-search');
+        fillOptions(select);
         body.appendChild(row);
-        
-        // Initialize TomSelect for the newly created select
-        const newSelect = row.querySelector('.select-search');
-        if (newSelect) {
-            new TomSelect(newSelect, { create: false, sortField: { field: "text", direction: "asc" } });
+
+        // Initialized here only (not via the layout's .select-search hook) so each row gets exactly one instance.
+        if (window.TomSelect) {
+            new TomSelect(select, {
+                create: false,
+                sortField: { field: 'text', direction: 'asc' },
+                dropdownParent: 'body',
+                dropdownClass: 'ts-dropdown purchase-product-dropdown',
+                placeholder: 'Buscar por código o nombre',
+                onChange() {
+                    // Full name on hover in case a long name is truncated in the field.
+                    this.control.title = this.getItem(this.getValue())?.textContent || '';
+                },
+            });
         }
 
-        row.querySelectorAll('select,input').forEach((field) => field.addEventListener('input', () => syncRow(row)));
+        row.querySelectorAll('input').forEach((field) => field.addEventListener('input', () => syncRow(row)));
+        select.addEventListener('change', () => syncRow(row));
         row.querySelector('.purchase-remove').addEventListener('click', () => row.remove());
         syncRow(row);
     };
 
     addButton.addEventListener('click', addRow);
-    addRow();
+    // Tom Select is loaded by the layout after this script; wait for it before building the first row.
+    document.addEventListener('DOMContentLoaded', () => addRow());
 })();
 </script>
 <?= view('purchases/end') ?>

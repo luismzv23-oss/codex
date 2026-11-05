@@ -43,7 +43,41 @@
                 <p class="text-secondary mb-0">Trazabilidad completa por deposito, responsable, fecha, reserva y motivo del movimiento.</p>
             </div>
             <?php if (! empty($companyId)): ?>
-                <a href="<?= site_url('inventario/productos/' . $product['id'] . '/trazabilidad-pdf?company_id=' . $companyId) ?>" class="btn btn-outline-danger icon-btn flex-shrink-0" title="PDF de trazabilidad" aria-label="PDF de trazabilidad" target="_blank"><i class="bi bi-file-earmark-pdf"></i></a>
+                <?php $exportBase = site_url('inventario/productos/' . $product['id']); ?>
+                <div class="d-flex align-items-start gap-2 flex-shrink-0">
+                    <a href="<?= $exportBase . '/trazabilidad-pdf?company_id=' . esc($companyId, 'url') ?>" class="btn btn-outline-danger icon-btn" title="PDF de trazabilidad" aria-label="PDF de trazabilidad" target="_blank"><i class="bi bi-file-earmark-pdf"></i></a>
+                    <a href="<?= $exportBase . '/trazabilidad-xlsx?company_id=' . esc($companyId, 'url') ?>" class="btn btn-outline-success icon-btn" title="Excel de trazabilidad" aria-label="Excel de trazabilidad" download><i class="bi bi-file-earmark-excel"></i></a>
+                    <div class="dropdown">
+                        <button type="button" class="btn btn-outline-primary icon-btn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" title="Analisis KPI del producto" aria-label="Analisis KPI del producto"><i class="bi bi-graph-up"></i></button>
+                        <div class="dropdown-menu dropdown-menu-end p-3 shadow-sm" style="min-width: 17rem;" id="kpi-export" data-base="<?= esc($exportBase) ?>" data-company="<?= esc($companyId) ?>">
+                            <div class="fw-semibold mb-2">Analisis KPI totalizado</div>
+                            <div class="row g-2 mb-3">
+                                <div class="col-6"><label class="form-label small text-secondary mb-1" for="kpi-from">Desde</label><input type="date" class="form-control form-control-sm" id="kpi-from" value="<?= date('Y-m-d', strtotime('-29 days')) ?>"></div>
+                                <div class="col-6"><label class="form-label small text-secondary mb-1" for="kpi-to">Hasta</label><input type="date" class="form-control form-control-sm" id="kpi-to" value="<?= date('Y-m-d') ?>"></div>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-sm btn-outline-danger flex-fill" data-kpi-format="pdf"><i class="bi bi-file-earmark-pdf me-1"></i>PDF</button>
+                                <button type="button" class="btn btn-sm btn-outline-success flex-fill" data-kpi-format="xlsx"><i class="bi bi-file-earmark-excel me-1"></i>Excel</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <script>
+                    (() => {
+                        const box = document.getElementById('kpi-export');
+                        box.querySelectorAll('[data-kpi-format]').forEach((button) => button.addEventListener('click', () => {
+                            const url = new URL(box.dataset.base + '/kpi-' + button.dataset.kpiFormat, window.location.origin);
+                            url.searchParams.set('company_id', box.dataset.company);
+                            url.searchParams.set('from', document.getElementById('kpi-from').value);
+                            url.searchParams.set('to', document.getElementById('kpi-to').value);
+                            if (button.dataset.kpiFormat === 'pdf') {
+                                window.open(url.toString(), '_blank');
+                            } else {
+                                window.location.href = url.toString();
+                            }
+                        }));
+                    })();
+                </script>
             <?php endif; ?>
         </div>
 

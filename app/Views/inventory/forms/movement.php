@@ -14,8 +14,8 @@
             <?php if (! empty($companyId)): ?><input type="hidden" name="company_id" value="<?= esc($companyId) ?>"><?php endif; ?>
             <div class="col-md-6">
                 <label class="form-label">Producto</label>
-                <select name="product_id" id="movement-product-id" class="form-select" required>
-                    <option value="">Seleccionar</option>
+                <select name="product_id" id="movement-product-id" class="form-select select-search" placeholder="Buscar por código o nombre" aria-label="Buscar producto por código o nombre" required>
+                    <option value=""></option>
                     <?php foreach ($products as $product): ?>
                         <option value="<?= esc($product['id']) ?>"
                             data-cost-price="<?= esc(isset($product['cost_price']) ? number_format((float) $product['cost_price'], 2, '.', '') : '0.00') ?>"

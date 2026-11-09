@@ -744,17 +744,18 @@ class AccountingService
     {
         $db = db_connect();
 
-        // 1. Seed accounts if none exist
+        // 1. Seed accounts if none exist (in the company's base currency)
         $existingAccounts = $db->table('accounts')->where('company_id', $companyId)->countAllResults();
         if ($existingAccounts === 0) {
             $accounts = $this->standardArgentineChart();
             $now = date('Y-m-d H:i:s');
+            $currency = (string) ($db->table('companies')->select('currency_code')->where('id', $companyId)->get()->getRowArray()['currency_code'] ?? '') ?: 'ARS';
             foreach ($accounts as $account) {
                 $db->table('accounts')->insert(array_merge($account, [
                     'id'            => app_uuid(),
                     'company_id'    => $companyId,
                     'active'        => 1,
-                    'currency_code' => 'ARS',
+                    'currency_code' => $currency,
                     'created_at'    => $now,
                 ]));
             }
@@ -796,7 +797,9 @@ class AccountingService
             'goods_received'  => 'Bienes de Cambio',
             'inventory'       => 'Bienes de Cambio', // Map both goods_received and inventory to 'Bienes de Cambio'
             'cash_difference' => 'Diferencia de Cambio',
-            'revaluation'     => 'Resultado por Tenencia'
+            'revaluation'     => 'Resultado por Tenencia',
+            'perceptions_payable'  => 'Percepciones a Depositar',
+            'withholdings_payable' => 'Retenciones a Depositar',
         ];
 
         foreach ($mappingsToFind as $mapKey => $accountName) {
@@ -836,6 +839,68 @@ class AccountingService
                 }
             }
         }
+    }
+
+    /** Integration functions a company maps to accounts (key => label shown in the setup). */
+    public static function mappingKeys(): array
+    {
+        return [
+            'cash' => 'Caja', 'bank' => 'Banco', 'check_clearing' => 'Cheques / valores a depositar', 'card_clearing' => 'Tarjetas por acreditar',
+            'qr_clearing' => 'Billeteras / QR por acreditar', 'receivable' => 'Clientes (deudores por ventas)', 'customer_advances' => 'Anticipos de clientes',
+            'iva_credito' => 'IVA crédito fiscal', 'inventory' => 'Inventario (bienes de cambio)', 'goods_received' => 'Mercadería recibida',
+            'payable' => 'Proveedores', 'iva_debito' => 'IVA débito fiscal', 'perceptions_payable' => 'Percepciones practicadas a depositar',
+            'withholdings_payable' => 'Retenciones practicadas a depositar', 'revenue' => 'Ventas', 'expense' => 'Costo de mercaderías vendidas',
+            'cash_difference' => 'Diferencia de cambio', 'revaluation' => 'Resultado por tenencia',
+        ];
+    }
+
+    /** Current mapping (key => account id) for the setup screen. */
+    public function accountMapping(string $companyId): array
+    {
+        return $this->getAccountMapping($companyId);
+    }
+
+    /** Maps an integration function to a postable, active account of the company in its base currency. */
+    public function saveMapping(string $companyId, string $key, string $accountId): void
+    {
+        if (! array_key_exists($key, self::mappingKeys())) {
+            throw new \RuntimeException('Función contable no válida.');
+        }
+        $db = db_connect();
+        $account = $db->table('accounts')->where('company_id', $companyId)->where('id', $accountId)->get()->getRowArray();
+        if (! $account || ! (int) $account['active'] || (int) $account['is_group'] === 1 || ! (int) $account['accepts_entries']) {
+            throw new \RuntimeException('Elige una cuenta activa de movimiento de esta empresa para ' . self::mappingKeys()[$key] . '.');
+        }
+        $currency = (string) ($db->table('companies')->select('currency_code')->where('id', $companyId)->get()->getRowArray()['currency_code'] ?? '');
+        if ($currency !== '' && ($account['currency_code'] ?? $currency) !== $currency) {
+            throw new \RuntimeException('La cuenta debe estar en la moneda base de la empresa.');
+        }
+        $settingKey = 'account_' . $key;
+        $now = date('Y-m-d H:i:s');
+        $existing = $db->table('company_settings')->where('company_id', $companyId)->where('key', $settingKey)->get()->getRowArray();
+        if ($existing) {
+            $db->table('company_settings')->where('id', $existing['id'])->update(['value' => $accountId, 'updated_at' => $now]);
+        } else {
+            $db->table('company_settings')->insert(['id' => app_uuid(), 'company_id' => $companyId, 'key' => $settingKey, 'value' => $accountId, 'created_at' => $now, 'updated_at' => $now]);
+        }
+    }
+
+    /** Opens the fiscal period of a calendar year (idempotent). */
+    public function openFiscalPeriod(string $companyId, int $year): array
+    {
+        if ($year < 2000 || $year > 2100) {
+            throw new \RuntimeException('Año de ejercicio no válido.');
+        }
+        $db = db_connect();
+        $existing = $db->table('fiscal_periods')->where('company_id', $companyId)->where('start_date', "{$year}-01-01")->get()->getRowArray();
+        if ($existing) {
+            return $existing;
+        }
+        $row = ['id' => app_uuid(), 'company_id' => $companyId, 'name' => "Ejercicio {$year}", 'start_date' => "{$year}-01-01",
+            'end_date' => "{$year}-12-31", 'status' => 'open', 'created_at' => date('Y-m-d H:i:s')];
+        $db->table('fiscal_periods')->insert($row);
+
+        return $row;
     }
 
     /**

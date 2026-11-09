@@ -221,6 +221,16 @@ $routes->post('compras/importaciones/(:segment)/recepcion/vincular', 'PurchaseIm
     $routes->post('usuarios/(:segment)/toggle', 'UsersController::toggle/$1', ['filter' => 'permission:users.manage']);
     $routes->post('usuarios/(:segment)/eliminar', 'UsersController::delete/$1', ['filter' => 'permission:users.manage']);
 
+    // Asistente de alta de empresa: superadmin (pasos 1-3 y cualquier empresa) y admin de la empresa (pasos 4-9).
+    $routes->get('empresas/asistente', 'CompanyOnboardingController::index', ['filter' => 'permission:companies.manage']);
+    $routes->get('empresas/(:segment)/asistente', 'CompanyOnboardingController::index/$1', ['filter' => 'permission:companies.manage']);
+    $routes->get('configuracion/asistente', 'CompanyOnboardingController::own', ['filter' => 'permission:settings.manage']);
+    $routes->get('asistente-empresa/datos', 'CompanyOnboardingController::data', ['filter' => 'permission:companies.manage']);
+    $routes->post('asistente-empresa', 'CompanyOnboardingController::create', ['filter' => 'permission:companies.manage']);
+    $routes->get('asistente-empresa/(:segment)/datos', 'CompanyOnboardingController::data/$1', ['filter' => 'permission:settings.view']);
+    $routes->post('asistente-empresa/(:segment)/paso/(:num)', 'CompanyOnboardingController::save/$1/$2', ['filter' => 'permission:settings.view']);
+    $routes->post('asistente-empresa/(:segment)/omitir/(:num)', 'CompanyOnboardingController::skip/$1/$2', ['filter' => 'permission:settings.view']);
+    $routes->post('asistente-empresa/(:segment)/finalizar', 'CompanyOnboardingController::finish/$1', ['filter' => 'permission:settings.view']);
     $routes->get('empresas', 'CompaniesController::index', ['filter' => 'permission:companies.view']);
     $routes->get('empresas/nueva', 'CompaniesController::create', ['filter' => 'permission:companies.manage']);
     $routes->post('empresas', 'CompaniesController::store', ['filter' => 'permission:companies.manage']);

@@ -20,6 +20,7 @@ class SalesDocumentTypeModel extends BaseUuidModel
         'requires_customer',
         'sort_order',
         'is_default',
+        'afip_code',
         'active',
         'created_at',
         'updated_at',

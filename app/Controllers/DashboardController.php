@@ -151,6 +151,11 @@ class DashboardController extends BaseController
             'recentIntegrations' => $recentIntegrations,
             'readiness' => $readiness,
             'user' => $this->currentUser(),
+            'setupPending' => $this->roleSlug() === 'admin' && $this->companyId() ? (function () {
+                $state = (new \App\Libraries\CompanyOnboardingService())->state((string) $this->companyId());
+
+                return $state['tracked'] && $state['status'] !== 'completed' ? $state : null;
+            })() : null,
         ]);
     }
 
@@ -291,92 +296,12 @@ class DashboardController extends BaseController
             $companyId = $this->resolveDashboardCompanyId();
         }
 
-        $checks = [];
-        if (! $companyId) {
-            return [
-                'status' => 'blocked',
-                'score' => 0,
-                'blocking' => ['No hay empresa seleccionada para evaluar readiness.'],
-                'warnings' => [],
-                'ok' => [],
-                'checks' => [],
-            ];
-        }
-
-        $company = (new CompanyModel())->find($companyId);
-        $salesSettings = (new SalesSettingModel())->where('company_id', $companyId)->first();
-        $currencyCount = db_connect()->table('currencies')->where('company_id', $companyId)->where('active', 1)->countAllResults();
-        $branchCount = db_connect()->table('branches')->where('company_id', $companyId)->where('active', 1)->countAllResults();
-        $userCount = db_connect()->table('users')->where('company_id', $companyId)->where('active', 1)->countAllResults();
-        $warehouseCount = db_connect()->table('inventory_warehouses')->where('company_id', $companyId)->where('active', 1)->countAllResults();
-        $productCount = db_connect()->table('inventory_products')->where('company_id', $companyId)->where('active', 1)->countAllResults();
-        $documentCount = db_connect()->table('sales_document_types')->where('company_id', $companyId)->where('active', 1)->countAllResults();
-        $pointOfSaleCount = db_connect()->table('sales_points_of_sale')->where('company_id', $companyId)->where('active', 1)->countAllResults();
-        $systemCount = db_connect()->table('company_systems')->where('company_id', $companyId)->where('active', 1)->countAllResults();
-        $cashRegisterCount = db_connect()->table('cash_registers')->where('company_id', $companyId)->where('active', 1)->countAllResults();
-        $openCashCount = db_connect()->table('cash_sessions')->where('company_id', $companyId)->where('status', 'open')->countAllResults();
-        $arcaEvents = db_connect()->table('sales_arca_events')->where('company_id', $companyId)->countAllResults();
-
-        $checks[] = ['label' => 'Empresa activa', 'ok' => (bool) ($company && (int) ($company['active'] ?? 0) === 1), 'critical' => true];
-        $checks[] = ['label' => 'Monedas activas configuradas', 'ok' => $currencyCount > 0, 'critical' => true];
-        $checks[] = ['label' => 'Sucursales activas', 'ok' => $branchCount > 0, 'critical' => true];
-        $checks[] = ['label' => 'Usuarios activos', 'ok' => $userCount > 0, 'critical' => true];
-        $checks[] = ['label' => 'Sistemas asignados', 'ok' => $systemCount > 0, 'critical' => true];
-        $checks[] = ['label' => 'Depositos activos', 'ok' => $warehouseCount > 0, 'critical' => true];
-        $checks[] = ['label' => 'Productos activos', 'ok' => $productCount > 0, 'critical' => false];
-        $checks[] = ['label' => 'Comprobantes activos', 'ok' => $documentCount > 0, 'critical' => true];
-        $checks[] = ['label' => 'Puntos de venta activos', 'ok' => $pointOfSaleCount > 0, 'critical' => true];
-        $checks[] = ['label' => 'Cajas definidas', 'ok' => $cashRegisterCount > 0, 'critical' => false];
-        $checks[] = ['label' => 'Caja operativa abierta', 'ok' => $openCashCount > 0, 'critical' => false];
-        $checks[] = ['label' => 'Configuracion ARCA completa', 'ok' => $this->arcaReady($salesSettings), 'critical' => false];
-        $checks[] = ['label' => 'Bitacora ARCA inicial', 'ok' => $arcaEvents > 0, 'critical' => false];
-
-        $blocking = [];
-        $warnings = [];
-        $ok = [];
-
-        foreach ($checks as $check) {
-            if ($check['ok']) {
-                $ok[] = $check['label'];
-                continue;
-            }
-
-            if ($check['critical']) {
-                $blocking[] = $check['label'];
-            } else {
-                $warnings[] = $check['label'];
-            }
-        }
-
-        $score = count($checks) > 0 ? (int) round((count($ok) / count($checks)) * 100) : 0;
-        $status = $blocking !== [] ? 'blocked' : ($warnings !== [] ? 'warning' : 'ready');
-
-        return [
-            'status' => $status,
-            'score' => $score,
-            'blocking' => $blocking,
-            'warnings' => $warnings,
-            'ok' => $ok,
-            'checks' => $checks,
-            'company' => $company,
-        ];
+        return (new \App\Libraries\ReadinessService())->evaluate($companyId);
     }
 
     private function arcaReady(?array $settings): bool
     {
-        if (! $settings || (int) ($settings['arca_enabled'] ?? 0) !== 1) {
-            return false;
-        }
-
-        $certificatePath = trim((string) ($settings['certificate_path'] ?? ''));
-        $privateKeyPath = trim((string) ($settings['private_key_path'] ?? ''));
-        $cuit = trim((string) ($settings['arca_cuit'] ?? ''));
-
-        return $cuit !== ''
-            && $certificatePath !== ''
-            && $privateKeyPath !== ''
-            && is_file($certificatePath)
-            && is_file($privateKeyPath);
+        return \App\Libraries\ReadinessService::arcaReady($settings);
     }
 
     private function qaChecklist(?string $companyId, bool $isSuperadmin): array

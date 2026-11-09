@@ -4,6 +4,37 @@ namespace App\Libraries;
 
 class ArcaService
 {
+    /** AFIP "CbteTipo" per sales document code. */
+    public const AFIP_VOUCHER_TYPES = ['FACTURA_A' => 1, 'ND_A' => 2, 'NC_A' => 3, 'FACTURA_B' => 6, 'ND_B' => 7, 'NC_B' => 8,
+        'FACTURA_C' => 11, 'ND_C' => 12, 'NC_C' => 13, 'FACTURA_M' => 51];
+
+    /** Issuer VAT conditions offered in the company setup (value => label). */
+    public const ISSUER_VAT_CONDITIONS = ['Responsable Inscripto' => 'Responsable Inscripto', 'Monotributo' => 'Monotributo', 'Exento' => 'Exento'];
+
+    /**
+     * AFIP voucher type for a document: explicit afip_code, then the document code, then (tickets) the
+     * issuer VAT condition: Responsable Inscripto issues B (6), Monotributo/Exento issue C (11).
+     * Unknown cases keep the historical default 6.
+     */
+    public static function afipVoucherType(?array $documentType, array $settings = []): int
+    {
+        if (! empty($documentType['afip_code'])) {
+            return (int) $documentType['afip_code'];
+        }
+        $code = strtoupper(trim((string) ($documentType['code'] ?? '')));
+        if (isset(self::AFIP_VOUCHER_TYPES[$code])) {
+            return self::AFIP_VOUCHER_TYPES[$code];
+        }
+        if ($code === 'TICKET' || ($documentType['category'] ?? '') === 'ticket') {
+            $condition = mb_strtolower(trim((string) ($settings['arca_iva_condition'] ?? '')));
+            if (preg_match('/monotribut|exento/u', $condition)) {
+                return 11;
+            }
+        }
+
+        return 6;
+    }
+
     public function sanitizeSettings(array $settings, ?string $companyId = null): array
     {
         $settings['certificate_path'] = $this->normalizePath(trim((string) ($settings['certificate_path'] ?? '')));
@@ -483,7 +514,7 @@ class ArcaService
         $client = new \App\Libraries\Arca\WsfeClient($ticket, $cuit, $env);
 
         $ptoVta    = (int) ($pointOfSale['afip_pos_number'] ?? 1);
-        $cbteTipo  = (int) ($documentType['afip_code'] ?? 6);
+        $cbteTipo  = self::afipVoucherType($documentType, $settings ?? []);
         $lastNum   = $client->FECompUltimoAutorizado($ptoVta, $cbteTipo);
         $nextNum   = $lastNum + 1;
 
@@ -588,7 +619,7 @@ class ArcaService
         $client = new \App\Libraries\Arca\WsmtxcaClient($ticket, $cuit, $env);
 
         $ptoVta   = (int) ($pointOfSale['afip_pos_number'] ?? 1);
-        $cbteTipo = (int) ($documentType['afip_code'] ?? 6);
+        $cbteTipo = self::afipVoucherType($documentType, $settings ?? []);
         $lastNum  = $client->consultarUltimoComprobanteAutorizado($ptoVta, $cbteTipo);
         $nextNum  = $lastNum + 1;
 
@@ -777,7 +808,7 @@ class ArcaService
         $pointOfSale = !empty($sale['point_of_sale_id']) ? (new \App\Models\SalesPointOfSaleModel())->find($sale['point_of_sale_id']) : null;
 
         $ptoVta = (int) ($pointOfSale['afip_pos_number'] ?? 1);
-        $cbteTipo = (int) ($documentType['afip_code'] ?? 6);
+        $cbteTipo = self::afipVoucherType($documentType, $settings ?? []);
         $number = (int) ($sale['sale_number'] ?? 0);
 
         $serviceSlug = ($sale['arca_service'] ?? null);
@@ -1132,7 +1163,7 @@ class ArcaService
         array $sale, array $documentType, array $company, array $settings, array $items, array $pointOfSale, array $service
     ): array {
         $ptoVta    = (int) ($pointOfSale['afip_pos_number'] ?? 1);
-        $cbteTipo  = (int) ($documentType['afip_code'] ?? 6);
+        $cbteTipo  = self::afipVoucherType($documentType, $settings ?? []);
         $subtotal  = (float) ($sale['subtotal'] ?? 0);
         $taxTotal  = (float) ($sale['tax_total'] ?? 0);
         $total     = self::fiscalTotal($sale);

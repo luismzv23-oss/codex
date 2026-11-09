@@ -651,43 +651,6 @@ class SystemsController extends BaseController
 
     private function syncAdminAssignment(string $companyId, string $systemId, int $active): void
     {
-        $adminRole = (new RoleModel())->findBySlug('admin');
-
-        if (! $adminRole) {
-            return;
-        }
-
-        $adminUser = (new UserModel())
-            ->where('company_id', $companyId)
-            ->where('role_id', $adminRole['id'])
-            ->first();
-
-        if (! $adminUser) {
-            return;
-        }
-
-        $userSystemModel = new UserSystemModel();
-        $existing = $userSystemModel
-            ->where('user_id', $adminUser['id'])
-            ->where('system_id', $systemId)
-            ->first();
-
-        if ($existing) {
-            $userSystemModel->update($existing['id'], [
-                'company_id' => $companyId,
-                'access_level' => 'manage',
-                'active' => $active,
-            ]);
-
-            return;
-        }
-
-        $userSystemModel->insert([
-            'company_id' => $companyId,
-            'user_id' => $adminUser['id'],
-            'system_id' => $systemId,
-            'access_level' => 'manage',
-            'active' => $active,
-        ]);
+        (new \App\Libraries\CompanySystemsService())->syncAdminSystem($companyId, $systemId, $active);
     }
 }

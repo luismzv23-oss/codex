@@ -82,6 +82,10 @@ class UsersController extends BaseController
             'must_change_password' => $this->request->getPost('must_change_password') === '1' ? 1 : 0,
             'active' => $this->request->getPost('active') === '0' ? 0 : 1,
         ]);
+        // An admin created after the company systems must still receive their access.
+        if ($roleSlug === 'admin' && $companyId) {
+            (new \App\Libraries\CompanySystemsService())->syncAdmin($companyId);
+        }
 
         return $this->popupOrRedirect('/usuarios', 'Usuario creado correctamente.');
     }

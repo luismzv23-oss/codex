@@ -2,6 +2,14 @@
 
 <?= $this->section('content') ?>
 <div class="row g-4">
+    <?php if (! empty($setupPending)): ?>
+        <div class="col-12">
+            <div class="alert alert-warning d-flex justify-content-between align-items-center gap-3 mb-0 rounded-4" role="status">
+                <div><strong>Completá la configuración de tu empresa.</strong> Faltan pasos del alta (paso <?= (int) $setupPending['current'] ?> de 9): estructura, impuestos, medios de pago, facturación electrónica y contabilidad.</div>
+                <a href="<?= site_url('configuracion/asistente') ?>" class="btn btn-dark flex-shrink-0"><i class="bi bi-list-check me-1" aria-hidden="true"></i>Continuar</a>
+            </div>
+        </div>
+    <?php endif; ?>
     <div class="col-12">
         <div class="p-4 rounded-4 bg-white shadow-sm border">
             <div class="d-flex justify-content-between align-items-start gap-3">

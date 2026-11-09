@@ -2540,114 +2540,7 @@ class SalesController extends BaseController
 
     private function ensureSalesDefaults(string $companyId): void
     {
-        $branch = (new BranchModel())->where('company_id', $companyId)->where('code', 'MAIN')->first();
-        $sequenceModel = new VoucherSequenceModel();
-
-        foreach ([['document_type' => 'VENTA', 'prefix' => 'VTA'], ['document_type' => 'FACTURA', 'prefix' => 'FAC'], ['document_type' => 'TICKET', 'prefix' => 'TCK'], ['document_type' => 'NC', 'prefix' => 'NC'], ['document_type' => 'RECIBO', 'prefix' => 'REC']] as $row) {
-            if (!$sequenceModel->where('company_id', $companyId)->where('document_type', $row['document_type'])->first()) {
-                $sequenceModel->insert([
-                    'company_id' => $companyId,
-                    'branch_id' => $branch['id'] ?? null,
-                    'document_type' => $row['document_type'],
-                    'prefix' => $row['prefix'],
-                    'current_number' => 1,
-                    'active' => 1,
-                ]);
-            }
-        }
-
-        $customerModel = new CustomerModel();
-        if (!$customerModel->where('company_id', $companyId)->where('name', 'Consumidor Final')->first()) {
-            $customerModel->insert([
-                'company_id' => $companyId,
-                'branch_id' => $branch['id'] ?? null,
-                'name' => 'Consumidor Final',
-                'billing_name' => 'Consumidor Final',
-                'document_number' => 'CF',
-                'document_type' => 'DNI',
-                'tax_profile' => 'consumidor_final',
-                'vat_condition' => 'Consumidor Final',
-                'price_list_name' => 'Lista General',
-                'credit_limit' => 0,
-                'custom_discount_rate' => 0,
-                'payment_terms_days' => 0,
-                'active' => 1,
-            ]);
-        }
-
-        $priceListModel = new SalesPriceListModel();
-        if (!$priceListModel->where('company_id', $companyId)->where('is_default', 1)->first()) {
-            $priceListModel->insert([
-                'company_id' => $companyId,
-                'name' => 'Lista General',
-                'description' => 'Lista base del sistema de ventas.',
-                'is_default' => 1,
-                'active' => 1,
-            ]);
-        }
-
-        $this->salesSettings($companyId);
-        $this->ensureSalesDocumentDefaults($companyId, $branch['id'] ?? null);
-    }
-
-    private function ensureSalesDocumentDefaults(string $companyId, ?string $branchId): void
-    {
-        $documentTypeModel = new SalesDocumentTypeModel();
-        $pointOfSaleModel = new SalesPointOfSaleModel();
-        $defaultWarehouse = (new InventoryWarehouseModel())->where('company_id', $companyId)->where('active', 1)->orderBy('is_default', 'DESC')->orderBy('name', 'ASC')->first();
-
-        $definitions = [
-            ['code' => 'PRESUPUESTO', 'name' => 'Presupuesto', 'category' => 'quote', 'letter' => null, 'sequence_key' => 'PRESUPUESTO', 'default_prefix' => 'PRE', 'channel' => 'standard', 'impacts_stock' => 0, 'impacts_receivable' => 0, 'requires_customer' => 0, 'sort_order' => 1],
-            ['code' => 'PEDIDO', 'name' => 'Pedido', 'category' => 'order', 'letter' => null, 'sequence_key' => 'PEDIDO', 'default_prefix' => 'PED', 'channel' => 'standard', 'impacts_stock' => 0, 'impacts_receivable' => 0, 'requires_customer' => 1, 'sort_order' => 2],
-            ['code' => 'REMITO', 'name' => 'Remito', 'category' => 'delivery_note', 'letter' => null, 'sequence_key' => 'REMITO', 'default_prefix' => 'RTO', 'channel' => 'standard', 'impacts_stock' => 1, 'impacts_receivable' => 0, 'requires_customer' => 1, 'sort_order' => 3],
-            ['code' => 'FACTURA_A', 'name' => 'Factura A', 'category' => 'invoice', 'letter' => 'A', 'sequence_key' => 'FACTURA_A', 'default_prefix' => 'FCA', 'channel' => 'standard', 'impacts_stock' => 1, 'impacts_receivable' => 1, 'requires_customer' => 1, 'sort_order' => 4],
-            ['code' => 'FACTURA_B', 'name' => 'Factura B', 'category' => 'invoice', 'letter' => 'B', 'sequence_key' => 'FACTURA_B', 'default_prefix' => 'FCB', 'channel' => 'standard', 'impacts_stock' => 1, 'impacts_receivable' => 1, 'requires_customer' => 0, 'sort_order' => 5],
-            ['code' => 'FACTURA_C', 'name' => 'Factura C', 'category' => 'invoice', 'letter' => 'C', 'sequence_key' => 'FACTURA_C', 'default_prefix' => 'FCC', 'channel' => 'standard', 'impacts_stock' => 1, 'impacts_receivable' => 1, 'requires_customer' => 0, 'sort_order' => 6],
-            ['code' => 'FACTURA_M', 'name' => 'Factura M', 'category' => 'invoice', 'letter' => 'M', 'sequence_key' => 'FACTURA_M', 'default_prefix' => 'FCM', 'channel' => 'standard', 'impacts_stock' => 1, 'impacts_receivable' => 1, 'requires_customer' => 1, 'sort_order' => 7],
-            ['code' => 'TICKET', 'name' => 'Ticket Consumidor Final', 'category' => 'ticket', 'letter' => null, 'sequence_key' => 'TICKET', 'default_prefix' => 'TCK', 'channel' => 'kiosk', 'impacts_stock' => 1, 'impacts_receivable' => 0, 'requires_customer' => 0, 'sort_order' => 8],
-            ['code' => 'NC_A', 'name' => 'Nota de Credito A', 'category' => 'credit_note', 'letter' => 'A', 'sequence_key' => 'NC_A', 'default_prefix' => 'NCA', 'channel' => 'standard', 'impacts_stock' => 0, 'impacts_receivable' => 1, 'requires_customer' => 1, 'sort_order' => 9],
-            ['code' => 'NC_B', 'name' => 'Nota de Credito B', 'category' => 'credit_note', 'letter' => 'B', 'sequence_key' => 'NC_B', 'default_prefix' => 'NCB', 'channel' => 'standard', 'impacts_stock' => 0, 'impacts_receivable' => 1, 'requires_customer' => 1, 'sort_order' => 10],
-            ['code' => 'NC_C', 'name' => 'Nota de Credito C', 'category' => 'credit_note', 'letter' => 'C', 'sequence_key' => 'NC_C', 'default_prefix' => 'NCC', 'channel' => 'standard', 'impacts_stock' => 0, 'impacts_receivable' => 1, 'requires_customer' => 1, 'sort_order' => 11],
-            ['code' => 'ND_A', 'name' => 'Nota de Debito A', 'category' => 'debit_note', 'letter' => 'A', 'sequence_key' => 'ND_A', 'default_prefix' => 'NDA', 'channel' => 'standard', 'impacts_stock' => 0, 'impacts_receivable' => 1, 'requires_customer' => 1, 'sort_order' => 12],
-            ['code' => 'ND_B', 'name' => 'Nota de Debito B', 'category' => 'debit_note', 'letter' => 'B', 'sequence_key' => 'ND_B', 'default_prefix' => 'NDB', 'channel' => 'standard', 'impacts_stock' => 0, 'impacts_receivable' => 1, 'requires_customer' => 1, 'sort_order' => 13],
-            ['code' => 'ND_C', 'name' => 'Nota de Debito C', 'category' => 'debit_note', 'letter' => 'C', 'sequence_key' => 'ND_C', 'default_prefix' => 'NDC', 'channel' => 'standard', 'impacts_stock' => 0, 'impacts_receivable' => 1, 'requires_customer' => 1, 'sort_order' => 14],
-        ];
-
-        $documentTypeIds = [];
-        foreach ($definitions as $definition) {
-            $existing = $documentTypeModel->where('company_id', $companyId)->where('code', $definition['code'])->first();
-            if ($existing) {
-                $documentTypeIds[$definition['code']] = $existing['id'];
-                continue;
-            }
-
-            $documentTypeIds[$definition['code']] = $documentTypeModel->insert(array_merge($definition, [
-                'company_id' => $companyId,
-                'active' => 1,
-            ]), true);
-        }
-
-        $pointDefinitions = [
-            ['code' => 'PV-STD', 'name' => 'Punto de Venta Principal', 'channel' => 'standard', 'document_code' => 'FACTURA_B'],
-            ['code' => 'PV-KIOSCO', 'name' => 'Punto de Venta Kiosco', 'channel' => 'kiosk', 'document_code' => 'TICKET'],
-        ];
-
-        foreach ($pointDefinitions as $definition) {
-            if ($pointOfSaleModel->where('company_id', $companyId)->where('code', $definition['code'])->first()) {
-                continue;
-            }
-
-            $pointOfSaleModel->insert([
-                'company_id' => $companyId,
-                'branch_id' => $branchId,
-                'warehouse_id' => $defaultWarehouse['id'] ?? null,
-                'document_type_id' => $documentTypeIds[$definition['document_code']] ?? null,
-                'name' => $definition['name'],
-                'code' => $definition['code'],
-                'channel' => $definition['channel'],
-                'active' => 1,
-            ]);
-        }
+        (new \App\Libraries\CompanyProvisioningService())->sales($companyId);
     }
 
     private function documentTypeOptions(string $companyId, ?string $channel = null): array
@@ -4977,31 +4870,7 @@ class SalesController extends BaseController
 
     private function salesSettings(string $companyId): array
     {
-        $model = new SalesSettingModel();
-        $settings = $model->where('company_id', $companyId)->first();
-        if ($settings) {
-            $normalized = (new ArcaService())->sanitizeSettings($settings, $companyId);
-            if (($settings['token_cache_path'] ?? '') !== ($normalized['token_cache_path'] ?? '')) {
-                $model->update($settings['id'], ['token_cache_path' => $normalized['token_cache_path']]);
-                $settings['token_cache_path'] = $normalized['token_cache_path'];
-            }
-            return $settings;
-        }
-
-        $company = (new CompanyModel())->find($companyId);
-        $id = $model->insert([
-            'company_id' => $companyId,
-            'default_currency_code' => $company['currency_code'] ?? null,
-            'invoice_mode_standard_enabled' => 1,
-            'invoice_mode_kiosk_enabled' => 1,
-            'strict_company_currencies' => 1,
-            'profile' => 'argentina_arca',
-            'kiosk_document_label' => 'Ticket Consumidor Final',
-            'arca_auto_authorize' => 0,
-            'token_cache_path' => WRITEPATH . 'arca' . DIRECTORY_SEPARATOR . $companyId,
-        ], true);
-
-        return $model->find($id) ?? [];
+        return (new \App\Libraries\CompanyProvisioningService())->salesSettings($companyId);
     }
 
     private function arcaEventRows(string $companyId, int $limit = 10): array

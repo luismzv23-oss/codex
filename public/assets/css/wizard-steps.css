@@ -1,0 +1,28 @@
+.wizard-shell{--wizard-ink:#1b284b;--wizard-blue:#4264e8;--wizard-line:#dfe5f2;max-width:1200px;margin:auto;color:var(--wizard-ink)}
+.wizard-shell [hidden]{display:none!important}
+.wizard-head{display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:1.5rem 0}
+.wizard-head h1{font-size:clamp(1.5rem,3vw,2.1rem);margin:.35rem 0}.wizard-head p{color:#69758a;margin:0;max-width:60rem}
+.wizard-eyebrow{font-size:.7rem;letter-spacing:.15em;font-weight:700;color:#6476a3}
+.wizard-steps{list-style:none;display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:.4rem;padding:1rem;margin:0 0 1rem;background:#fff;border:1px solid var(--wizard-line);border-radius:1.25rem}
+.wizard-steps li{display:flex;flex-direction:column;align-items:center;gap:.35rem;font-size:.78rem;color:#78839a;text-align:center;cursor:pointer}
+.wizard-steps li>span{display:grid;place-items:center;border-radius:50%;width:1.8rem;height:1.8rem;background:#eef1f8;font-weight:600}
+.wizard-steps li[aria-current=step]{color:var(--wizard-blue);font-weight:700}.wizard-steps li[aria-current=step]>span{background:var(--wizard-blue);color:#fff}
+.wizard-steps li.is-done>span{background:#d9f2e6;color:#176943}.wizard-steps li.is-skipped>span{background:#fff4dc;color:#94650b}
+.wizard-steps li.is-locked{cursor:not-allowed;opacity:.55}
+.wizard-message{padding:1rem 1.25rem;border:1px solid #cddcf9;border-radius:1rem;background:#edf3ff;margin-bottom:1rem;overflow-wrap:anywhere}.wizard-message.is-error{background:#fff0ee;border-color:#f1c4bd;color:#8a302c}
+.wizard-card{background:#fff;border:1px solid var(--wizard-line);border-radius:1.25rem}
+.wizard-card-title{display:flex;justify-content:space-between;align-items:center;gap:.75rem;padding:1.25rem;border-bottom:1px solid var(--wizard-line)}.wizard-card-title h2{font-size:1.3rem;margin:.35rem 0 0}
+.wizard-chip{display:inline-flex;border-radius:2rem;padding:.35rem .75rem;background:#eef2fa;color:#637190;font-size:.78rem}
+.wizard-body{padding:1.25rem}
+.wizard-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}.wizard-grid .span-2{grid-column:1/-1}
+.wizard-field{display:block;margin:0}.wizard-field>span{display:block;font-size:.83rem;margin-bottom:.35rem}.wizard-field .form-control,.wizard-field .form-select{border-color:var(--wizard-line)}
+.wizard-field small{display:block;color:#71809a;font-size:.72rem;margin-top:.25rem}
+.wizard-help{font-size:.82rem;color:#71809a;line-height:1.5}
+.wizard-table{width:100%;font-size:.84rem;border-collapse:collapse;margin:.5rem 0 1rem}.wizard-table th{font-weight:600;color:#6c7892;text-align:left;border-bottom:1px solid var(--wizard-line);padding:.45rem .35rem}.wizard-table td{border-bottom:1px solid var(--wizard-line);padding:.4rem .35rem;vertical-align:middle}.wizard-table input.form-control,.wizard-table select{min-width:4.5rem}
+.wizard-modules{display:grid;grid-template-columns:repeat(auto-fill,minmax(14rem,1fr));gap:.6rem}.wizard-modules label{display:flex;gap:.6rem;align-items:start;padding:.8rem;border:1px solid var(--wizard-line);border-radius:.8rem;cursor:pointer}.wizard-modules small{display:block;color:#71809a}
+.wizard-checks{list-style:none;padding:0;margin:.5rem 0}.wizard-checks li{display:flex;gap:.5rem;align-items:center;padding:.3rem 0;font-size:.88rem}.wizard-checks .bi-check-circle-fill{color:#21845c}.wizard-checks .bi-x-circle-fill{color:#b43c35}.wizard-checks .bi-exclamation-circle-fill{color:#c58a12}
+.wizard-subheading{display:flex;justify-content:space-between;align-items:center;margin:1.25rem 0 .5rem}.wizard-subheading h3{font-size:1rem;margin:0}
+.wizard-actions{display:flex;justify-content:space-between;align-items:center;gap:.75rem;padding:1rem 1.25rem;border-top:1px solid var(--wizard-line)}
+.wizard-done{padding:1rem;border:1px solid #b8dfce;background:#ecf9f2;color:#176943;border-radius:.75rem;margin-bottom:1rem}
+@media(max-width:1000px){.wizard-steps{grid-template-columns:repeat(5,minmax(0,1fr))}}
+@media(max-width:640px){.wizard-steps{grid-template-columns:repeat(3,minmax(0,1fr))}.wizard-grid{grid-template-columns:minmax(0,1fr)}.wizard-head{align-items:start}.wizard-actions{flex-wrap:wrap}}

@@ -17,9 +17,20 @@ class CompaniesController extends BaseController
             $builder->where('id', $this->companyId());
         }
 
+        $companies = $builder->findAll();
+        $onboardingService = new \App\Libraries\CompanyOnboardingService();
+        $onboarding = [];
+        foreach ($companies as $company) {
+            $state = $onboardingService->state($company['id']);
+            if ($state['tracked']) {
+                $onboarding[$company['id']] = $state;
+            }
+        }
+
         return view('companies/index', [
             'pageTitle' => 'Empresas',
-            'companies' => $builder->findAll(),
+            'companies' => $companies,
+            'onboarding' => $onboarding,
             'canCreate' => $this->isSuperadmin(),
             'canDisable' => $this->isSuperadmin(),
         ]);
@@ -29,6 +40,10 @@ class CompaniesController extends BaseController
     {
         if (! $this->isSuperadmin()) {
             return redirect()->to('/empresas')->with('error', 'Solo superadmin puede crear empresas.');
+        }
+        // New companies are registered with the step-by-step wizard (the popup form is kept only for direct links).
+        if (! $this->isPopupRequest()) {
+            return redirect()->to('/empresas/asistente');
         }
 
         return view('companies/form', [

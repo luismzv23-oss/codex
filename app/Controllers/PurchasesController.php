@@ -697,13 +697,7 @@ class PurchasesController extends BaseController
 
     private function ensurePurchaseDefaults(string $companyId): void
     {
-        $branch = (new BranchModel())->where('company_id', $companyId)->where('code', 'MAIN')->first();
-        $sequenceModel = new VoucherSequenceModel();
-        foreach ([['OCOMPRA', 'OC'], ['RCOMPRA', 'REC'], ['DEVPROV', 'DVP'], ['PAGCP', 'CXP'], ['PAGPROV', 'PP']] as [$type, $prefix]) {
-            if (! $sequenceModel->where('company_id', $companyId)->where('document_type', $type)->first()) {
-                $sequenceModel->insert(['company_id' => $companyId, 'branch_id' => $branch['id'] ?? null, 'document_type' => $type, 'prefix' => $prefix, 'current_number' => 1, 'active' => 1]);
-            }
-        }
+        (new \App\Libraries\CompanyProvisioningService())->purchases($companyId);
 
         $system = (new SystemModel())->where('slug', 'compras')->first();
         if ($system && ($system['entry_url'] ?? '') !== 'compras') {

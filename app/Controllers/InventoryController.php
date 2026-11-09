@@ -2495,46 +2495,7 @@ class InventoryController extends BaseController
 
     private function ensureInventoryDefaults(string $companyId): void
     {
-        $company = (new CompanyModel())->find($companyId);
-        $settingsModel = new InventorySettingModel();
-
-        if (! $settingsModel->where('company_id', $companyId)->first()) {
-            $settingsModel->insert([
-                'company_id' => $companyId,
-                'alert_email' => $company['email'] ?? null,
-                'unusual_movement_threshold' => 100,
-                'no_rotation_days' => 30,
-                'allow_negative_stock' => 0,
-                'low_stock_alerts' => 1,
-                'internal_notifications' => 1,
-                'email_notifications' => 0,
-                'valuation_method' => 'weighted_average',
-                'negative_stock_scope' => 'global',
-                'allow_negative_on_sales' => 0,
-                'allow_negative_on_transfers' => 0,
-                'allow_negative_on_adjustments' => 0,
-            ]);
-        }
-
-        $warehouseModel = new InventoryWarehouseModel();
-
-        if (! $warehouseModel->where('company_id', $companyId)->first()) {
-            $mainBranch = (new BranchModel())
-                ->where('company_id', $companyId)
-                ->where('code', 'MAIN')
-                ->first();
-
-            $warehouseModel->insert([
-                'company_id' => $companyId,
-                'branch_id' => $mainBranch['id'] ?? null,
-                'name' => 'Deposito Central',
-                'code' => 'DEP-CENTRAL',
-                'type' => 'central',
-                'description' => 'Deposito inicial del sistema de inventario.',
-                'is_default' => 1,
-                'active' => 1,
-            ]);
-        }
+        (new \App\Libraries\CompanyProvisioningService())->inventory($companyId);
     }
 
     private function inventorySettings(string $companyId): array

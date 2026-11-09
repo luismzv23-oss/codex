@@ -66,7 +66,10 @@ class InvoiceExtractionNormalizer
             $code=(string)($line['supplier_code'] ?? '');
             if ($code && !empty($data['supplier_id'])) {
                 $link=db_connect()->table('supplier_product_links')->where('company_id',$companyId)->where('supplier_id',$data['supplier_id'])->where('supplier_code',$code)->get()->getRowArray();
-                if ($link && db_connect()->table('inventory_products')->where('company_id',$companyId)->where('id',$link['product_id'])->where('active',1)->countAllResults()) $line['product_id']=$link['product_id'];
+                if ($link && db_connect()->table('inventory_products')->where('company_id',$companyId)->where('id',$link['product_id'])->where('active',1)->countAllResults()) {
+                    $line['product_id']=$link['product_id'];
+                    if ((float)($link['units_per_package'] ?? 1)>0) $line['units_per_package']=$this->decimal((string)(float)($link['units_per_package'] ?? 1),4);
+                }
             }
             $items[]=$line;
         }

@@ -29,6 +29,17 @@ final class InvoiceTextInterpreterTest extends CIUnitTestCase
         $this->assertSame('2.125000',$fields['Items']['valueArray'][0]['valueObject']['Quantity']['valueString']);
         $this->assertArrayNotHasKey('confidence',$fields['InvoiceId']);
     }
+    public function testFooterTextAfterTotalsIsNotAppendedToTheLastLine(): void
+    {
+        $result=$this->parse(['Cod  Descripcion  Cant.  Precio Unit.  Importe',
+            '8670  A.MIN.FTE.DEL MILAGRO 2LX6 Pack FUENTE DEL  15.00  3744.63  56169.45','MILAGRO',
+            '5056  TALCA LIMA LIMON PT 1/2L DSC*12U Pack TALCA  2.00  6992.89  13985.78',
+            'Subtotal  70155.23','Total  70155.23','Rechazado Por:']);
+        $items=$result['documents'][0]['fields']['Items']['valueArray'];
+        $this->assertCount(2,$items);
+        $this->assertSame('A.MIN.FTE.DEL MILAGRO 2LX6 Pack FUENTE DEL MILAGRO',$items[0]['valueObject']['Description']['valueString']);
+        $this->assertSame('TALCA LIMA LIMON PT 1/2L DSC*12U Pack TALCA',$items[1]['valueObject']['Description']['valueString']);
+    }
     public function testConflictingTotalsAndUnlabeledCuitsAreLeftForManualReview(): void
     {
         $result=$this->parse(['FACTURA B 00002-00000003','CUIT: 30-12345678-9','CUIT: 30-71234567-8','TOTAL 100,00','TOTAL 200,00']);

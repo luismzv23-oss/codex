@@ -117,42 +117,22 @@ class PurchasesController extends BaseApiController
 
         $companyId = $context['company']['id'];
         $payload = $this->payload();
-        $supplierId = trim((string) ($payload['supplier_id'] ?? ''));
-        $warehouseId = trim((string) ($payload['warehouse_id'] ?? ''));
-        $items = $this->purchaseItemsPayload($companyId, (array) ($payload['items'] ?? []));
-
-        if (! $this->ownedSupplier($companyId, $supplierId) || ! $this->ownedWarehouse($companyId, $warehouseId)) {
-            return $this->fail('Debes seleccionar proveedor y deposito validos.', 422);
+        $flow = new \App\Libraries\PurchaseFlowService();
+        try {
+            $order = $flow->createOrder($companyId, [
+                'supplier_id' => trim((string) ($payload['supplier_id'] ?? '')),
+                'warehouse_id' => trim((string) ($payload['warehouse_id'] ?? '')),
+                'currency_code' => trim((string) ($payload['currency_code'] ?? '')),
+                'issued_at' => trim((string) ($payload['issued_at'] ?? '')),
+                'expected_at' => trim((string) ($payload['expected_at'] ?? '')),
+                'notes' => trim((string) ($payload['notes'] ?? '')),
+                'branch_id' => $this->apiFlowBranchId($companyId),
+            ], $flow->orderLines($companyId, (array) ($payload['items'] ?? [])), $this->apiUser()['id']);
+        } catch (\RuntimeException $e) {
+            return $this->fail($e->getMessage(), 422);
         }
 
-        if ($items === []) {
-            return $this->fail('Debes agregar al menos un producto a la orden.', 422);
-        }
-
-        $totals = $this->purchaseTotals($items);
-        $orderId = (new PurchaseOrderModel())->insert([
-            'company_id' => $companyId,
-            'branch_id' => $this->apiUser()['branch_id'] ?? null,
-            'supplier_id' => $supplierId,
-            'warehouse_id' => $warehouseId,
-            'order_number' => $this->nextSequenceNumber($companyId, 'OCOMPRA', 'OC'),
-            'status' => 'draft',
-            'currency_code' => trim((string) ($payload['currency_code'] ?? 'ARS')) ?: 'ARS',
-            'subtotal' => $totals['subtotal'],
-            'tax_total' => $totals['tax_total'],
-            'total' => $totals['total'],
-            'issued_at' => trim((string) ($payload['issued_at'] ?? '')) ?: date('Y-m-d H:i:s'),
-            'expected_at' => trim((string) ($payload['expected_at'] ?? '')) ?: null,
-            'notes' => trim((string) ($payload['notes'] ?? '')),
-            'created_by' => $this->apiUser()['id'],
-        ], true);
-
-        $itemModel = new PurchaseOrderItemModel();
-        foreach ($items as $item) {
-            $itemModel->insert(array_merge($item, ['purchase_order_id' => $orderId]));
-        }
-
-        return $this->success((new PurchaseOrderModel())->find($orderId), 201);
+        return $this->success($order, 201);
     }
 
     public function confirmOrder(string $id)
@@ -162,18 +142,11 @@ class PurchasesController extends BaseApiController
             return $this->fail($context['error'], $context['status']);
         }
 
-        $order = $this->ownedOrder($context['company']['id'], $id);
-        if (! $order || ($order['status'] ?? '') !== 'draft') {
-            return $this->fail('La orden no esta disponible para aprobacion.', 422);
+        try {
+            return $this->success((new \App\Libraries\PurchaseFlowService())->approveOrder($context['company']['id'], $id, $this->apiUser()['id']));
+        } catch (\RuntimeException $e) {
+            return $this->fail($e->getMessage(), 422);
         }
-
-        (new PurchaseOrderModel())->update($id, [
-            'status' => 'approved',
-            'approved_at' => date('Y-m-d H:i:s'),
-            'approved_by' => $this->apiUser()['id'],
-        ]);
-
-        return $this->success((new PurchaseOrderModel())->find($id));
     }
 
     public function receipts()
@@ -233,115 +206,20 @@ class PurchasesController extends BaseApiController
             return $this->fail('La orden seleccionada no es valida.', 422);
         }
 
-        $rows = $this->receiptItemsPayload($companyId, $orderId, (array) ($payload['items'] ?? []));
+        $flow = new \App\Libraries\PurchaseFlowService();
+        $rows = $flow->receiptLines($orderId, (array) ($payload['items'] ?? []));
         if ($rows === []) {
             return $this->fail('Debes recepcionar al menos una linea de producto.', 422);
         }
 
-        (new PurchaseIntegrityService())->validateReceipt($companyId, $order, $rows);
-
-        $db = db_connect();
-        $db->transStart();
-
-        $totals = $this->purchaseTotals($rows);
-        $receiptNumber = $this->nextSequenceNumber($companyId, 'RCOMPRA', 'REC', $order['branch_id'] ?? null);
-        $receiptId = (new PurchaseReceiptModel())->insert([
-            'company_id' => $companyId,
-            'branch_id' => $order['branch_id'] ?? null,
-            'supplier_id' => $order['supplier_id'],
-            'purchase_order_id' => $orderId,
-            'warehouse_id' => $order['warehouse_id'],
-            'receipt_number' => $receiptNumber,
+        $receipt = $flow->receive($companyId, $orderId, $rows, [
             'supplier_document' => trim((string) ($payload['supplier_document'] ?? '')),
-            'status' => 'registered',
-            'currency_code' => $order['currency_code'],
-            'subtotal' => $totals['subtotal'],
-            'tax_total' => $totals['tax_total'],
-            'total' => $totals['total'],
-            'issued_at' => trim((string) ($payload['issued_at'] ?? '')) ?: date('Y-m-d H:i:s'),
-            'received_at' => date('Y-m-d H:i:s'),
+            'issued_at' => trim((string) ($payload['issued_at'] ?? '')),
             'notes' => trim((string) ($payload['notes'] ?? '')),
-            'created_by' => $this->apiUser()['id'],
-        ], true);
+            'branch_id' => $this->apiFlowBranchId($companyId),
+        ], $this->apiUser()['id']);
 
-        $receiptItemModel = new PurchaseReceiptItemModel();
-        $orderItemModel = new PurchaseOrderItemModel();
-
-        foreach ($rows as $row) {
-            $receiptItemModel->insert(array_merge($row, ['purchase_receipt_id' => $receiptId]));
-            if (! empty($row['purchase_order_item_id'])) {
-                $orderItem = $orderItemModel->find($row['purchase_order_item_id']);
-                if ($orderItem) {
-                    $orderItemModel->update($orderItem['id'], [
-                        'received_quantity' => (float) ($orderItem['received_quantity'] ?? 0) + (float) $row['quantity'],
-                    ]);
-                }
-            }
-
-            $this->applyStockDelta($companyId, (string) $row['product_id'], (string) $order['warehouse_id'], (float) $row['quantity']);
-            $this->registerInventoryMovement([
-                'company_id' => $companyId,
-                'product_id' => $row['product_id'],
-                'movement_type' => 'ingreso',
-                'quantity' => $row['quantity'],
-                'unit_cost' => $row['unit_cost'],
-                'total_cost' => $row['line_total'] - $row['tax_amount'],
-                'destination_warehouse_id' => $order['warehouse_id'],
-                'performed_by' => $this->apiUser()['id'],
-                'reason' => 'recepcion_compra',
-                'source_document' => $receiptNumber,
-                'lot_number' => $row['lot_number'] ?? null,
-                'serial_number' => $row['serial_number'] ?? null,
-                'expiration_date' => $row['expiration_date'] ?? null,
-                'notes' => 'Recepcion de compra',
-            ]);
-
-            (new SupplierCostHistoryModel())->insert([
-                'company_id' => $companyId,
-                'supplier_id' => $order['supplier_id'],
-                'product_id' => $row['product_id'],
-                'purchase_receipt_id' => $receiptId,
-                'currency_code' => $order['currency_code'],
-                'exchange_rate' => 1,
-                'unit_cost' => (float) $row['unit_cost'],
-                'observed_at' => date('Y-m-d H:i:s'),
-            ]);
-        }
-
-        $pending = $orderItemModel->where('purchase_order_id', $orderId)->findAll();
-        $receivedTotal = 0.0;
-        $orderedTotal = 0.0;
-        foreach ($pending as $item) {
-            $receivedTotal += (float) ($item['received_quantity'] ?? 0);
-            $orderedTotal += (float) ($item['quantity'] ?? 0);
-        }
-
-        (new PurchaseOrderModel())->update($orderId, [
-            'status' => $receivedTotal >= $orderedTotal && $orderedTotal > 0 ? 'received_total' : 'received_partial',
-        ]);
-
-        (new PurchasePayableModel())->insert([
-            'company_id' => $companyId,
-            'supplier_id' => $order['supplier_id'],
-            'purchase_receipt_id' => $receiptId,
-            'payable_number' => $this->nextSequenceNumber($companyId, 'PAGCP', 'CXP', $order['branch_id'] ?? null),
-            'status' => $totals['total'] > 0 ? 'pending' : 'paid',
-            'currency_code' => $order['currency_code'],
-            'total_amount' => $totals['total'],
-            'paid_amount' => 0,
-            'balance_amount' => $totals['total'],
-            'due_date' => $this->payableDueDate((string) $order['supplier_id']),
-        ]);
-
-        service('accounting')->syncPurchaseReceipt($companyId, (string) $receiptId, $this->apiUser()['id']);
-        \App\Libraries\Core\Events\BusinessEvents::stockReceived($companyId, (string)$receiptId);
-
-        $db->transComplete();
-        if (! $db->transStatus()) {
-            return $this->fail('No se pudo registrar la recepcion.', 500);
-        }
-
-        return $this->success((new PurchaseReceiptModel())->find($receiptId), 201);
+        return $this->success($receipt, 201);
     }
 
     public function storeInvoice()
@@ -695,24 +573,6 @@ class PurchasesController extends BaseApiController
         ];
     }
 
-    private function purchaseItemsPayload(string $companyId, array $items): array
-    {
-        $rows = [];
-        foreach ($items as $item) {
-            $productId = trim((string) ($item['product_id'] ?? ''));
-            $quantity = (float) ($item['quantity'] ?? 0);
-            $unitCost = (float) ($item['unit_cost'] ?? 0);
-            $taxRate = (float) ($item['tax_rate'] ?? 0);
-            if (! $this->validCompanyProduct($companyId, $productId) || $quantity <= 0) {
-                continue;
-            }
-            $net = round($quantity * $unitCost, 2);
-            $taxAmount = round($net * ($taxRate / 100), 2);
-            $rows[] = ['product_id' => $productId, 'description' => trim((string) ($item['description'] ?? '')), 'quantity' => $quantity, 'received_quantity' => 0, 'unit_cost' => $unitCost, 'tax_rate' => $taxRate, 'tax_amount' => $taxAmount, 'line_total' => round($net + $taxAmount, 2)];
-        }
-        return $rows;
-    }
-
     private function purchaseInvoiceItemsPayload(string $companyId, array $items): array
     {
         $rows = [];
@@ -742,33 +602,6 @@ class PurchasesController extends BaseApiController
             ];
         }
 
-        return $rows;
-    }
-
-    private function receiptItemsPayload(string $companyId, string $orderId, array $items): array
-    {
-        $rows = [];
-        $orderItemModel = new PurchaseOrderItemModel();
-        foreach ($items as $item) {
-            $orderItemId = trim((string) ($item['purchase_order_item_id'] ?? ''));
-            $quantity = (float) ($item['quantity'] ?? 0);
-            if ($quantity == 0) { continue; }
-            if (! is_finite($quantity) || $quantity < 0) { throw new \RuntimeException('Cantidad invalida.'); }
-            $orderItem = $orderItemId !== '' ? $orderItemModel->find($orderItemId) : null;
-            if (! $orderItem || (string) ($orderItem['purchase_order_id'] ?? '') !== $orderId || $quantity <= 0) {
-                throw new \RuntimeException('La linea o cantidad solicitada no es valida.');
-            }
-            $pending = (float) ($orderItem['quantity'] ?? 0) - (float) ($orderItem['received_quantity'] ?? 0);
-            if ($quantity > $pending) {
-                throw new \RuntimeException('La linea o cantidad solicitada no es valida.');
-            }
-            $unitCost = (float) ($item['unit_cost'] ?? $orderItem['unit_cost'] ?? 0);
-            $taxRate = (float) ($item['tax_rate'] ?? $orderItem['tax_rate'] ?? 0);
-            if (! is_finite($unitCost) || ! is_finite($taxRate) || $unitCost < 0 || $taxRate < 0) { throw new \RuntimeException('Costo o impuesto invalido.'); }
-            $net = round($quantity * $unitCost, 2);
-            $taxAmount = round($net * ($taxRate / 100), 2);
-            $rows[] = ['purchase_order_item_id' => $orderItemId, 'product_id' => $orderItem['product_id'], 'quantity' => $quantity, 'unit_cost' => $unitCost, 'tax_rate' => $taxRate, 'tax_amount' => $taxAmount, 'line_total' => round($net + $taxAmount, 2), 'lot_number' => trim((string) ($item['lot_number'] ?? '')), 'serial_number' => trim((string) ($item['serial_number'] ?? '')), 'expiration_date' => trim((string) ($item['expiration_date'] ?? '')) ?: null];
-        }
         return $rows;
     }
 
@@ -802,6 +635,13 @@ class PurchasesController extends BaseApiController
         }
         return ['subtotal' => round($subtotal, 2), 'tax_total' => round($taxTotal, 2), 'total' => round($subtotal + $taxTotal, 2)];
     }
+    /** Operator branch for new purchase documents, only when the operator belongs to the company. */
+    private function apiFlowBranchId(string $companyId): ?string
+    {
+        $user = $this->apiUser();
+        return ($user['company_id'] ?? null) === $companyId ? ($user['branch_id'] ?? null) : null;
+    }
+
     private function nextSequenceNumber(string $companyId, string $documentType, string $defaultPrefix, ?string $branchId = null): string
     {
         $user = $this->apiUser();
@@ -837,13 +677,6 @@ class PurchasesController extends BaseApiController
     private function ownedPayable(string $companyId, string $id): ?array
     {
         return (new PurchasePayableModel())->where('company_id', $companyId)->where('id', $id)->first();
-    }
-
-    private function payableDueDate(string $supplierId): ?string
-    {
-        $supplier = (new SupplierModel())->find($supplierId);
-        $days = (int) ($supplier['payment_terms_days'] ?? 0);
-        return $days > 0 ? date('Y-m-d H:i:s', strtotime('+' . $days . ' days')) : date('Y-m-d H:i:s');
     }
 
     private function applyReturnToPayable(string $companyId, string $receiptId, float $returnTotal): void

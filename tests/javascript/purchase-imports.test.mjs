@@ -1,6 +1,28 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {totals,mergeSuggestions,highlightRect,normalizeImportItem,importDecimal} from '../../public/assets/js/purchase-import-utils.mjs';
+import {totals,mergeSuggestions,highlightRect,normalizeImportItem,importDecimal,stockLine,resumeStage,stepGate} from '../../public/assets/js/purchase-import-utils.mjs';
+test('Packages convert to stock units with the same cost rounding as the server',()=>{
+    assert.deepEqual(stockLine({quantity:'15',unit_cost:'7149.58',units_per_package:'6'}),{packages:15,units:6,quantity:90,unitCost:1191.5967,valid:true});
+    assert.deepEqual(stockLine({quantity:'2',unit_cost:'6992.89',units_per_package:'12'}),{packages:2,units:12,quantity:24,unitCost:582.7408,valid:true});
+    assert.equal(stockLine({quantity:'3',unit_cost:'10'}).quantity,3);
+    assert.equal(stockLine({quantity:'3',unit_cost:'10',units_per_package:'0'}).valid,false);
+});
+test('The assistant resumes on the first missing purchase document',()=>{
+    const draft=(extra={})=>({review_status:'ready',data:{purchase_kind:'goods'},...extra});
+    assert.equal(resumeStage(draft(),{steps:{}}),3);
+    assert.equal(resumeStage(draft(),{steps:{order:true}}),6);
+    assert.equal(resumeStage(draft(),{steps:{order:true,approval:true}}),7);
+    assert.equal(resumeStage(draft(),{steps:{order:true,approval:true,receipt:true}}),8);
+    assert.equal(resumeStage(draft({review_status:'registered'}),{steps:{}}),8);
+    assert.equal(resumeStage(draft({data:{purchase_kind:'service'}}),{steps:{}}),3);
+});
+test('Order, approval and receipt steps cannot be skipped for goods',()=>{
+    assert.equal(stepGate(5,'goods',{steps:{}}).ok,false);
+    assert.equal(stepGate(6,'goods',{steps:{order:true}}).ok,false);
+    assert.equal(stepGate(7,'goods',{steps:{order:true,approval:true}}).ok,false);
+    assert.equal(stepGate(7,'goods',{steps:{order:true,approval:true,receipt:true}}).ok,true);
+    assert.equal(stepGate(5,'service',{steps:{}}).ok,true);
+});
 test('Calculated import VAT replaces stale zero and decimal rounding matches the server',()=>{
     const item=normalizeImportItem({quantity:'15',unit_cost:'7149.580000',tax_rate:'21.0000',tax_amount:'0.00'});
     assert.equal(item.unit_cost,'7149.58');assert.equal(item.tax_amount,'');

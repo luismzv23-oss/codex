@@ -4,11 +4,18 @@
 
 En Compras, un admin o superadmin con gestión del módulo puede abrir el icono de nube «Cargar factura desde archivo». El acceso directo es /compras/importaciones?company_id=UUID.
 
-1. Arrastrar un PDF, JPG o PNG. Una factura por archivo; el PDF puede tener hasta 20 páginas. Máximo 10 MB.
-2. Con el motor local, la lectura se solicita automáticamente al subir el archivo o retomar una carga pendiente. El procesador se ejecuta cada minuto. El icono de estrellas permite reintentar; se puede continuar manualmente con la flecha.
-3. Revisar proveedor, CUIT del emisor y destinatario, tipo, punto del proveedor, numeración, fechas y moneda.
-4. Seleccionar si la mercadería tiene recepción existente, está pendiente de recibir, o se trata de servicios/gastos. Asociar productos y revisar conceptos, IVA y otros importes.
-5. Comparar el total calculado con el total del original, marcar la revisión y confirmar con el icono de doble comprobación.
+El asistente acompaña la compra completa, desde la factura del proveedor hasta el stock, generando cada documento del circuito con las mismas reglas de la pantalla de Compras (`PurchaseFlowService`). Cada documento se confirma por separado; si la carga se interrumpe, al reabrirla continúa en el primer documento pendiente.
+
+1. **Subir**: arrastrar un PDF, JPG o PNG. Una factura por archivo; el PDF puede tener hasta 20 páginas. Máximo 10 MB.
+2. **Leer**: con el motor local, la lectura se solicita automáticamente al subir el archivo o retomar una carga pendiente. El procesador se ejecuta cada minuto. El icono de estrellas permite reintentar; se puede continuar manualmente con la flecha.
+3. **Revisar**: proveedor, CUIT del emisor y destinatario, tipo, punto del proveedor, numeración, fechas y moneda.
+4. **Productos**: elegir el destino de la compra (*Mercadería: orden de compra, recepción y stock*, *Mercadería ya ingresada al stock* o *Servicios o gastos*), asociar cada concepto con su producto y sus **unidades por bulto** (15 bultos × 6 = 90 unidades de stock, costo por unidad = costo del bulto / 6 con 4 decimales), y revisar IVA y otros importes.
+5. **Orden de compra**: elegir el depósito y generar la orden desde la factura, o usar una orden aprobada del proveedor con cantidades pendientes. Si la mercadería ya se recepcionó desde Compras, se puede vincular esa recepción y se omiten los pasos 5 a 7.
+6. **Aprobación**: aprobar la orden.
+7. **Recepción**: indicar lo recibido (y lote, vencimiento o serie cuando el producto lo controla). Suma el stock en el depósito de la orden.
+8. **Factura**: comparar el total calculado con el original, marcar la revisión y registrar. La factura queda vinculada a la recepción.
+
+Para *Servicios o gastos* y *Mercadería ya ingresada al stock* los pasos 5 a 7 no aplican.
 
 Al terminar la lectura, las sugerencias completan solamente campos vacíos y el asistente avanza a la revisión. El icono de varita permite volver a aplicarlas. Los valores ya escritos no se sobrescriben. Cada campo detectado muestra su estado; al enfocarlo se resalta su ubicación cuando está disponible. El OCR local aporta coordenadas de la línea; el texto PDF nativo puede no tener una ubicación disponible. En PDF se puede cambiar de página con los iconos del visor.
 
@@ -20,7 +27,14 @@ El icono de documento de la lista de facturas abre los datos registrados y el or
 
 Subir, leer y guardar un borrador no crean facturas, deuda, pagos ni movimientos de inventario.
 
-La confirmación registra cabecera y conceptos, conserva el original, actualiza la cuenta a pagar y guarda asociaciones entre códigos del proveedor y productos que el admin haya confirmado. No recibe stock ni paga al proveedor.
+| Paso | Qué genera |
+|---|---|
+| Orden de compra | Orden en borrador, numerada (OC), con los productos en unidades de stock. No mueve stock. |
+| Aprobación | La orden pasa a aprobada. |
+| Recepción | Recepción numerada (REC): suma el stock, crea el movimiento `recepcion_compra` y su capa de costo, el historial de costos del proveedor, la cuenta a pagar y el asiento contable. |
+| Factura | Registra cabecera y conceptos (en bultos, como el documento), conserva el original, ajusta la cuenta a pagar de la recepción al importe facturado (incluidos percepciones e impuestos) y guarda la asociación código del proveedor → producto con sus unidades por bulto. No paga al proveedor. |
+
+Una vez generada la orden, los conceptos, el proveedor, la moneda y el destino quedan fijos. Las cantidades facturadas se comparan con lo recibido en unidades de stock (cantidad × unidades por bulto). La recepción requiere la cuenta contable de inventario de la empresa (`account_inventory`).
 
 Si se vincula una recepción, se verifica empresa, proveedor, moneda y cantidades acumuladas. Se reemplaza el costo provisional de las cantidades facturadas y se agregan los ajustes explícitos una sola vez sobre la cuenta a pagar existente, conservando pagos anteriores.
 
@@ -84,7 +98,7 @@ php spark compras:procesar-facturas --limit 10
 
 En el Programador de tareas de Windows, utilizar la ruta absoluta de php.exe, pasar la ruta absoluta a spark y el comando anterior como argumentos, y establecer el directorio del proyecto en «Iniciar en». Configurar una única instancia. En Linux puede usarse cron con el mismo comando.
 
-En este equipo se configuró la tarea Codex-PurchaseInvoiceImports para ejecutarse oculta cada minuto, con el usuario actual y sin superponer instancias. Requiere que ese usuario tenga sesión iniciada. En un servidor permanente debe configurarse con una cuenta de servicio y permisos sobre el proyecto y su almacenamiento.
+En este equipo se configuró la tarea «Codex - Procesar facturas de compra» para ejecutarse oculta cada minuto (`conhost --headless`), con el usuario actual y sin superponer instancias. Requiere que ese usuario tenga sesión iniciada. En un servidor permanente debe configurarse con una cuenta de servicio y permisos sobre el proyecto y su almacenamiento.
 
 El worker no mantiene transacciones abiertas durante OCR ni llamadas HTTP. Reserva trabajos con una concesión temporal y reintenta errores hasta tres veces. Una ejecución interrumpida se puede recuperar al vencer la concesión. Un resultado tardío de otro worker no sustituye un trabajo más reciente. Cada trabajo registra su motor, método por página y resultado; los registros anteriores mantienen el motor Azure.
 
@@ -109,12 +123,12 @@ Los archivos OCR se tratan como datos: nunca se ejecutan instrucciones contenida
 Las pruebas utilizan SQLite aislado, documentos sintéticos y respuestas Azure simuladas. Las pruebas locales de integración ejecutan Tesseract y Poppler sobre imágenes y un PDF mixto generados para la prueba. Se omiten cuando faltan las herramientas o fuentes necesarias. No generan compras reales ni envían documentos externos.
 
 ~~~powershell
-php -d extension=sqlite3 vendor/phpunit/phpunit/phpunit --no-coverage --filter 'PurchaseImportTest|LocalInvoiceExtractorTest|InvoiceTextInterpreterTest|AzureInvoiceExtractorTest|PurchaseIntegrityTest|PurchasesDashboardTest' tests
+php -d extension=sqlite3 vendor/phpunit/phpunit/phpunit --no-coverage --filter 'PurchaseImportTest|PurchaseImportCircuitTest|LocalInvoiceExtractorTest|InvoiceTextInterpreterTest|AzureInvoiceExtractorTest|PurchaseIntegrityTest|PurchasesDashboardTest' tests
 node --test tests/javascript/purchase-imports.test.mjs
 ~~~
 
 Ejecutar un piloto representativo de proveedores, revisar encabezados, renglones, impuestos y páginas y medir las correcciones necesarias. El estado «disponible» confirma dependencias detectadas, no precisión para todos los formatos.
 
-Esta entrega no incluye carga masiva, consulta fiscal en línea ni pagos. La conciliación de impuestos sigue requiriendo revisión humana.
+Esta entrega no incluye carga masiva, consulta fiscal en línea ni pagos: al registrar la factura, el asistente ofrece ir a Compras para pagar la cuenta a pagar. La conciliación de impuestos sigue requiriendo revisión humana.
 
 Fuentes técnicas: [Tesseract](https://tesseract-ocr.github.io/tessdoc/), [Poppler para Windows](https://github.com/oschwartz10612/poppler-windows/releases), [PDF.js](https://mozilla.github.io/pdf.js/examples/), [Smalot PDF parser](https://github.com/smalot/pdfparser), [OWASP File Upload](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html).

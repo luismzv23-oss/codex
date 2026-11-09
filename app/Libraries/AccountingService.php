@@ -862,6 +862,11 @@ class AccountingService
                 $map[$key] = $s['value'];
             }
         }
+        // The default chart maps both keys to "Bienes de Cambio"; companies configured before
+        // 'inventory' existed only have 'goods_received'. Use it instead of blocking receipts.
+        if (empty($map['inventory']) && !empty($map['goods_received'])) {
+            $map['inventory'] = $map['goods_received'];
+        }
         return $map;
     }
 

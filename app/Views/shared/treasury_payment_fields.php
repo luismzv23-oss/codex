@@ -26,4 +26,4 @@ $treasuryConfig=['catalog'=>$treasuryCatalog,'operation'=>$treasuryOperation ?? 
 <div class="col-12 text-secondary small" id="treasury-policy" role="status"></div>
 <div class="col-12 row g-3 m-0 p-0" id="treasury-required"></div>
 <script id="treasury-config" type="application/json"><?= json_encode($treasuryConfig,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_THROW_ON_ERROR) ?></script>
-<script src="<?= base_url('assets/js/treasury-payments.js') ?>" defer></script>
+<script src="<?= base_url('assets/js/treasury-payments.js').'?v='.filemtime(FCPATH.'assets/js/treasury-payments.js') ?>" defer></script>

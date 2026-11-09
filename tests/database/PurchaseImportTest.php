@@ -23,6 +23,8 @@ final class PurchaseImportTest extends CIUnitTestCase
         (new \App\Database\Migrations\KeepPurchaseImportExtractionHistory(\Config\Database::forge('tests')))->up();
         require_once APPPATH.'Database/Migrations/2026-10-16-153000_RecordPurchaseImportProvider.php';
         (new \App\Database\Migrations\RecordPurchaseImportProvider(\Config\Database::forge('tests')))->up();
+        require_once APPPATH.'Database/Migrations/2026-11-07-120000_PurchaseAssistantCircuit.php';
+        (new \App\Database\Migrations\PurchaseAssistantCircuit(\Config\Database::forge('tests')))->up();
         $this->tables=array_merge($this->tables,['purchase_documents','purchase_imports','purchase_import_items','purchase_import_jobs','purchase_import_audit','supplier_product_links']);
         foreach (['a','b'] as $company) {
             $this->put('companies',['id'=>$company,'name'=>$company,'currency_code'=>'ARS','tax_id'=>'30712345678']);

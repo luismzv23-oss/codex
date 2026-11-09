@@ -68,17 +68,25 @@ class PurchaseIntegrityService
         foreach (db_connect()->table('purchase_receipt_items')->where('purchase_receipt_id', $receiptId)->get()->getResultArray() as $item) {
             $received[$item['product_id']] = ($received[$item['product_id']] ?? 0) + $item['quantity'];
         }
+        // Receipts are in stock units; invoice lines may be packages (quantity x units_per_package).
         $invoiced = [];
         foreach ($this->invoiceItems($companyId, $receiptId) as $item) {
-            $invoiced[$item['product_id']] = ($invoiced[$item['product_id']] ?? 0) + $item['quantity'];
+            $invoiced[$item['product_id']] = ($invoiced[$item['product_id']] ?? 0) + self::stockUnits($item);
         }
         foreach ($rows as $row) {
             $id = $row['product_id'] ?? '';
-            $invoiced[$id] = ($invoiced[$id] ?? 0) + $row['quantity'];
+            $invoiced[$id] = ($invoiced[$id] ?? 0) + self::stockUnits($row);
             if (! isset($received[$id]) || $invoiced[$id] > $received[$id] + 0.000001) {
                 throw new RuntimeException('La cantidad facturada acumulada supera la cantidad recibida del producto.');
             }
         }
+    }
+
+    public static function stockUnits(array $invoiceItem): float
+    {
+        $units = (float) ($invoiceItem['units_per_package'] ?? 1);
+
+        return (float) $invoiceItem['quantity'] * ($units > 0 ? $units : 1);
     }
 
     private function invoiceItems(string $companyId, string $receiptId): array
@@ -148,8 +156,9 @@ class PurchaseIntegrityService
             if (! $p || $p['qty'] <= 0) {
                 throw new RuntimeException('La factura historica no coincide con la recepcion; requiere conciliacion.');
             }
-            $total += $item['line_total'] - $item['quantity'] * $p['total'] / $p['qty'];
-            $invoiced += $item['quantity'];
+            $units = self::stockUnits($item);
+            $total += $item['line_total'] - $units * $p['total'] / $p['qty'];
+            $invoiced += $units;
         }
         $extra = db_connect()->table('purchase_invoices')->selectSum('adjustment_total','amount')
             ->where('company_id',$companyId)->where('purchase_receipt_id',$receiptId)->where('status !=','cancelled')->get()->getRowArray();

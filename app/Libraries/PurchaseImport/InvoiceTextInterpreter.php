@@ -26,7 +26,7 @@ class InvoiceTextInterpreter
     public function interpret(array $pages): array
     {
         $lines=[];$content='';$fields=[];$warnings=[];$identities=[];$totals=[];$taxes=[];$cuits=[];$items=[];$headers=null;$dates=[];$names=[];
-        $customerSection=false;$explicitAdjustments=[];$headerRate=null;
+        $customerSection=false;$explicitAdjustments=[];$headerRate=null;$tableClosed=false;
         foreach ($pages as $page) foreach ($page['lines'] ?? [] as $line) {
             $line['text']=trim((string)($line['text'] ?? ''));
             if ($line['text']==='') continue;
@@ -83,12 +83,14 @@ class InvoiceTextInterpreter
                     'TaxRate'=>'/^IVA\s*%$/u','Tax'=>'/^(?:IMPORTE\s+IVA|IVA\s+IMPORTE)$/u','LineAmount'=>'/^(?:IMPORTE|SUBTOTAL)$/u',
                     'Discount'=>'/^%?\s*(?:DTO\.?|DESC\.?|DESCUENTO)\s*%?$/u'] as $key=>$pattern) if (preg_match($pattern,$label)) $candidate[$key]=$position;
             }
-            if (isset($candidate['Description'],$candidate['Quantity'],$candidate['UnitPrice'])) {$headers=$candidate+['_count'=>count($columns)];continue;}
-            if ($headers && $items && count($columns)===1 && !preg_match('/\d|IVA|TOTAL|NETO|PERC\.|IMP\./ui',$text)) {
+            if (isset($candidate['Description'],$candidate['Quantity'],$candidate['UnitPrice'])) {$headers=$candidate+['_count'=>count($columns)];$tableClosed=false;continue;}
+            // The totals block ends the detail table: footer text must not be appended to the last line.
+            if ($headers && preg_match('/^(?:SUB\s*TOTAL|TOTAL|NETO|IMPORTE\s+TOTAL)\b/ui',$text)) $tableClosed=true;
+            if ($headers && $items && !$tableClosed && count($columns)===1 && !preg_match('/\d|IVA|TOTAL|NETO|PERC\.|IMP\./ui',$text)) {
                 $last=count($items)-1;$items[$last]['valueObject']['Description']['valueString'].=' '.$text;
                 continue;
             }
-            if ($headers && count($columns)===$headers['_count']) {
+            if ($headers && !$tableClosed && count($columns)===$headers['_count']) {
                 $quantity=$this->money($columns[$headers['Quantity']],6);$cost=$this->money($columns[$headers['UnitPrice']],6);
                 $description=trim($columns[$headers['Description']]);
                 $discount=isset($headers['Discount'])?$this->money($columns[$headers['Discount']]):'0.00';

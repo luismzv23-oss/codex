@@ -11,6 +11,34 @@ export function normalizeImportItem(item) {
     for(const key of ['unit_cost','tax_rate']) if(result[key]!=null && result[key]!=='') result[key]=importDecimal(result[key]);
     return result;
 }
+/** Invoice line in stock units: packages x units per package, cost per unit with 4 decimals (same rule as the server). */
+export function stockLine(item) {
+    const packages=Number(item?.quantity)||0;
+    const raw=item?.units_per_package;
+    const units=raw===undefined || raw===null || raw==='' ? 1 : Number(raw);
+    if(!(units>0)) return {packages,units:0,quantity:0,unitCost:0,valid:false};
+    return {packages,units,quantity:Math.round(packages*units*100)/100,unitCost:Math.round((Number(item?.unit_cost)||0)/units*10000)/10000,valid:true};
+}
+/** Assistant step to resume: 1 Subir, 2 Leer, 3 Revisar, 4 Productos, 5 Orden, 6 Aprobación, 7 Recepción, 8 Factura. */
+export function resumeStage(draft,circuit) {
+    if(!draft) return 1;
+    if(draft.review_status==='registered') return 8;
+    const steps=circuit?.steps || {};
+    if((draft.data?.purchase_kind || 'goods')!=='goods') return draft.purchase_order_id ? 8 : 3;
+    if(steps.receipt) return 8;
+    if(steps.approval) return 7;
+    if(steps.order) return 6;
+    return 3;
+}
+/** Whether the assistant can move forward from a step, and why not. */
+export function stepGate(stage,kind,circuit) {
+    if((kind || 'goods')!=='goods' || stage<5 || stage>7) return {ok:true};
+    const steps=circuit?.steps || {};
+    if(stage===5 && !steps.order) return {ok:false,reason:'Genera la orden de compra o vincula una existente para continuar.'};
+    if(stage===6 && !steps.approval) return {ok:false,reason:'Aprueba la orden de compra para continuar.'};
+    if(stage===7 && !steps.receipt) return {ok:false,reason:'Registra la recepción para ingresar la mercadería al stock.'};
+    return {ok:true};
+}
 export function totals(data) {
     let net=0,tax=0,extra=0;
     for(const item of data.items || []) {

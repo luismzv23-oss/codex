@@ -1,6 +1,6 @@
 <?php
 namespace App\Controllers;
-use App\Libraries\{PurchaseImportService,PurchaseDocumentStorage};
+use App\Libraries\{PurchaseImportService,PurchaseImportCircuit,PurchaseDocumentStorage};
 use App\Models\{PurchaseImportModel,PurchaseDocumentModel};
 use CodeIgniter\HTTP\RedirectResponse;
 use RuntimeException;
@@ -32,7 +32,6 @@ class PurchaseImportsController extends PurchasesController
                     (new PurchaseImportModel())->where('company_id',$companyId)->where('review_status','registered')->orderBy('created_at','DESC')->findAll(50)),
                 'suppliers'=>db_connect()->table('suppliers')->where('company_id',$companyId)->where('active',1)->orderBy('name')->get()->getResultArray(),
                 'products'=>db_connect()->table('inventory_products')->select('id,sku,name')->where('company_id',$companyId)->where('active',1)->orderBy('name')->get()->getResultArray(),
-                'receipts'=>db_connect()->table('purchase_receipts')->select('id,supplier_id,receipt_number,currency_code,status')->where('company_id',$companyId)->where('status !=','cancelled')->orderBy('created_at','DESC')->get()->getResultArray(),
                 'currencies'=>db_connect()->table('currencies')->select('code,name')->where('company_id',$companyId)->where('active',1)->orderBy('code')->get()->getResultArray(),
                 'ocrConfigured'=>\App\Libraries\PurchaseImport\InvoiceReaderFactory::make()->configured(),
             ]);
@@ -70,6 +69,26 @@ class PurchaseImportsController extends PurchasesController
     {
         try {$context=$this->importContext();return $this->reply(['draft'=>(new PurchaseImportService())->confirm($context['company']['id'],$id,$this->payloadInput(),$this->currentUser()['id'])]);}
         catch (\Throwable $e) {return $this->reply(['error'=>$e->getMessage()],422);}
+    }
+    public function circuit(string $id)
+    {
+        try {$context=$this->importContext();$companyId=$context['company']['id'];
+            return $this->reply(['draft'=>(new PurchaseImportService())->get($companyId,$id),'circuit'=>(new PurchaseImportCircuit())->state($companyId,$id)]);}
+        catch (\Throwable $e) {return $this->reply(['error'=>$e->getMessage()],404);}
+    }
+    public function circuitOrder(string $id) {return $this->circuitStep(fn($c,$u,$b)=>(new PurchaseImportCircuit())->createOrder($c,$id,$this->payloadInput(),$u,$b));}
+    public function circuitApprove(string $id) {return $this->circuitStep(fn($c,$u,$b)=>(new PurchaseImportCircuit())->approveOrder($c,$id,$this->payloadInput(),$u));}
+    public function circuitReceive(string $id) {return $this->circuitStep(fn($c,$u,$b)=>(new PurchaseImportCircuit())->receive($c,$id,$this->payloadInput(),$u,$b));}
+    public function circuitLinkReceipt(string $id) {return $this->circuitStep(fn($c,$u,$b)=>(new PurchaseImportCircuit())->linkReceipt($c,$id,$this->payloadInput(),$u));}
+    private function circuitStep(callable $operation)
+    {
+        try {
+            $context=$this->importContext();$companyId=$context['company']['id'];
+            return $this->reply($operation($companyId,$this->currentUser()['id'],$this->flowBranchId($companyId)));
+        } catch (\Throwable $e) {
+            log_message('error','Asistente de compras: {message}',['message'=>$e->getMessage()]);
+            return $this->reply(['error'=>$e->getMessage()],str_contains($e->getMessage(),'otra sesión')?409:422);
+        }
     }
     public function file(string $id)
     {

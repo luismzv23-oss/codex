@@ -1,8 +1,9 @@
-import {money,totals,mergeSuggestions,highlightRect,importDecimal,normalizeImportItem} from './purchase-import-utils.mjs?v=amounts-2';
+import {money,totals,mergeSuggestions,highlightRect,importDecimal,normalizeImportItem,stockLine,resumeStage,stepGate} from './purchase-import-utils.mjs?v=circuit-1';
 const configNode=document.getElementById('import-config');
 if(configNode) {
     const config=JSON.parse(configNode.textContent), byId=id=>document.getElementById(id);
     let draft=null,stage=1,dirty=false,revision=0,savePromise=null,saveTimer=null,pollTimer=null,blocked=false;
+    let circuit=null,circuitBusy=false,circuitTicket=0;
     let csrf=config.csrfToken,confirmationKey='',uploading=false,confirming=false,pdf=null,page=1,renderTask=null,previewEpoch=0;
     const data=()=>draft?.data || {};
     const url=(suffix='')=>{const value=new URL(config.baseUrl+suffix,window.location.href);value.searchParams.set('company_id',config.companyId);return value;};
@@ -32,17 +33,29 @@ if(configNode) {
             throw error;
         } finally {clearTimeout(timeout);}
     }
-    function setStage(next) {
-        stage=Math.max(draft?2:1,Math.min(5,next));
+    const isGoods=()=>(data().purchase_kind || 'goods')==='goods';
+    const isRegistered=()=>draft?.review_status==='registered';
+    const linesLocked=()=>isRegistered() || Boolean(draft?.purchase_order_id || draft?.purchase_receipt_id);
+    function markSteps() {
+        const steps=circuit?.steps || {};
         document.querySelectorAll('[data-import-step]').forEach(node=>{
-            if(Number(node.dataset.importStep)===stage) node.setAttribute('aria-current','step');else node.removeAttribute('aria-current');
+            const step=Number(node.dataset.importStep);
+            if(step===stage) node.setAttribute('aria-current','step');else node.removeAttribute('aria-current');
+            node.classList.toggle('is-skipped',Boolean(draft) && !isGoods() && step>=5 && step<=7);
+            node.classList.toggle('is-done',(step===5 && steps.order) || (step===6 && steps.approval) || (step===7 && steps.receipt) || (step===8 && (steps.invoice || isRegistered())));
         });
-        byId('import-reading-panel').hidden=stage!==2;byId('import-header-panel').hidden=stage!==3;
-        byId('import-link-panel').hidden=stage!==4;byId('import-confirm-panel').hidden=stage!==5;
-        byId('import-prev').disabled=stage<=2;byId('import-next').hidden=stage>=5;
-        byId('import-stage-title').textContent=({2:'Leer el documento',3:'Datos de la factura',4:'Conceptos y recepción',5:'Revisión final'})[stage] || 'Subir factura';
-        byId('import-stage-help').textContent=stage===2?'Puedes continuar aunque la lectura esté pendiente.':stage===5?'El registro se confirma una sola vez.':'Los cambios se guardan como borrador.';
-        updateTotals();if(stage===5) renderSummary();
+    }
+    function setStage(next) {
+        stage=Math.max(draft?2:1,Math.min(8,next));
+        const panels={2:'import-reading-panel',3:'import-header-panel',4:'import-link-panel',5:'import-order-panel',6:'import-approve-panel',7:'import-receipt-panel',8:'import-confirm-panel'};
+        for(const [number,id] of Object.entries(panels)) byId(id).hidden=stage!==Number(number);
+        byId('import-prev').disabled=stage<=2;byId('import-next').hidden=stage>=8;
+        byId('import-stage-title').textContent=({2:'Leer el documento',3:'Datos de la factura',4:'Productos y destino de la compra',5:'Orden de compra',6:'Aprobación de la orden',7:'Recepción e ingreso al stock',8:'Factura: revisión final'})[stage] || 'Subir factura';
+        byId('import-stage-caption').textContent=stage>=5 && stage<=7?'CIRCUITO DE COMPRA':'REVISIÓN ASISTIDA';
+        byId('import-stage-help').textContent=stage===2?'Puedes continuar aunque la lectura esté pendiente.':stage>=5 && stage<=7?'Cada documento se confirma por separado.':stage===8?'El registro se confirma una sola vez.':'Los cambios se guardan como borrador.';
+        markSteps();updateTotals();
+        if(stage>=5) {renderCircuit();loadCircuit();}
+        if(stage===8) renderSummary();
     }
     function renderConfidence() {
         document.querySelectorAll('[data-confidence]').forEach(node=>{
@@ -117,22 +130,18 @@ if(configNode) {
             const supplier=config.suppliers.find(s=>s.id===control.value);
             if(supplier && !data().supplier_tax_id) {data().supplier_tax_id=supplier.tax_id || '';document.querySelector('[data-field="supplier_tax_id"]').value=data().supplier_tax_id;}
         }
-        if(key==='purchase_kind' && control.value!=='goods') {data().purchase_receipt_id='';document.querySelector('[data-field="purchase_receipt_id"]').value='';}
+        if(key==='purchase_kind' && control.value!=='goods') data().purchase_receipt_id='';
         if(key==='purchase_kind' && control.value==='service') {for(const item of data().items || []) item.product_id='';renderItems();}
-        if(['supplier_id','currency_code','purchase_kind'].includes(key)) filterReceipts();
+        if(key==='purchase_kind') {circuit=null;markSteps();}
         changed();
-    }
-    function filterReceipts() {
-        const select=document.querySelector('[data-field="purchase_receipt_id"]');
-        select.disabled=data().purchase_kind!=='goods' || draft?.review_status==='registered';
-        for(const option of select.options) if(option.value) option.disabled=option.dataset.supplier!==data().supplier_id || option.dataset.currency!==data().currency_code;
     }
     function renderFields() {
         document.querySelectorAll('[data-field]').forEach(control=>{
             const value=data()[control.dataset.field];
             if(control.type==='checkbox') control.checked=Boolean(value);else control.value=String(value ?? '').slice(0,control.type==='date'?10:10000);
-            control.disabled=draft.review_status==='registered';
-        });filterReceipts();renderConfidence();
+            // Supplier, currency and destination are fixed once the purchase order exists.
+            control.disabled=isRegistered() || (['purchase_kind','supplier_id','currency_code'].includes(control.dataset.field) && linesLocked());
+        });renderConfidence();
     }
     const productLabel=product=>product.sku+' · '+product.name;
     let itemsPage=1;
@@ -158,9 +167,21 @@ if(configNode) {
                 Object.assign(item,normalizeImportItem(item));
             }
             const row=document.createElement('div');row.className='invoice-item';
-            row.innerHTML='<div class="invoice-item-head"><label class="invoice-field"><span>Descripción</span><input class="form-control" data-item-field="description" maxlength="500"></label><button type="button" class="btn btn-outline-danger icon-btn" title="Quitar concepto" aria-label="Quitar concepto"><i class="bi bi-trash"></i></button></div><div class="invoice-item-numbers"><label class="invoice-field"><span>Cantidad</span><input class="form-control" data-item-field="quantity" type="number" min="0.000001" step="0.000001"></label><label class="invoice-field"><span>Costo neto unitario</span><input class="form-control" data-item-field="unit_cost" type="number" min="0" step="0.000001"></label><label class="invoice-field"><span>IVA %</span><input class="form-control" data-item-field="tax_rate" type="number" min="0" max="100" step="0.0001"></label><label class="invoice-field"><span>Importe IVA</span><input class="form-control" data-item-field="tax_amount" type="number" min="0" step="0.01" placeholder="Calculado"></label></div><div class="invoice-item-link"><label class="invoice-field"><span>Producto interno</span><input class="form-control" data-product-search list="import-products" placeholder="Busca por código o nombre"></label><label class="invoice-field"><span>Código del proveedor</span><input class="form-control" data-item-field="supplier_code" maxlength="120"></label></div>';
+            row.innerHTML='<div class="invoice-item-head"><label class="invoice-field"><span>Descripción</span><input class="form-control" data-item-field="description" maxlength="500"></label><button type="button" class="btn btn-outline-danger icon-btn" title="Quitar concepto" aria-label="Quitar concepto"><i class="bi bi-trash"></i></button></div><div class="invoice-item-numbers"><label class="invoice-field"><span>Cantidad</span><input class="form-control" data-item-field="quantity" type="number" min="0.000001" step="0.000001"></label><label class="invoice-field"><span>Costo neto unitario</span><input class="form-control" data-item-field="unit_cost" type="number" min="0" step="0.000001"></label><label class="invoice-field"><span>IVA %</span><input class="form-control" data-item-field="tax_rate" type="number" min="0" max="100" step="0.0001"></label><label class="invoice-field"><span>Importe IVA</span><input class="form-control" data-item-field="tax_amount" type="number" min="0" step="0.01" placeholder="Calculado"></label></div><div class="invoice-item-link"><label class="invoice-field"><span>Producto interno</span><input class="form-control" data-product-search list="import-products" placeholder="Busca por código o nombre"></label><label class="invoice-field"><span>Código del proveedor</span><input class="form-control" data-item-field="supplier_code" maxlength="120"></label><label class="invoice-field"><span>Unidades por bulto</span><input class="form-control" data-item-field="units_per_package" type="number" min="0.0001" step="any" placeholder="1"></label><p class="invoice-item-stock" data-item-stock></p></div>';
+            const locked=linesLocked();
+            const refreshStock=()=>{
+                const line=stockLine(item),note=row.querySelector('[data-item-stock]');
+                note.textContent=!line.valid?'Las unidades por bulto deben ser mayores que cero.':line.units===1?'Ingresa al stock como '+line.quantity.toLocaleString('es-AR')+' unidades.'
+                    :line.packages.toLocaleString('es-AR')+' bultos × '+line.units.toLocaleString('es-AR')+' = '+line.quantity.toLocaleString('es-AR')+' unidades de stock a $ '+line.unitCost.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:4})+' cada una.';
+                note.hidden=data().purchase_kind==='service';
+            };
             row.querySelectorAll('[data-item-field]').forEach(control=>{
-                const key=control.dataset.itemField;control.value=item[key] ?? '';control.disabled=draft.review_status==='registered';
+                const key=control.dataset.itemField;control.value=item[key] ?? '';control.disabled=locked;
+                if(key==='units_per_package') {
+                    control.closest('label').hidden=data().purchase_kind==='service';
+                    control.addEventListener('input',()=>{item.units_per_package=control.value;refreshStock();data().identity_reviewed=false;changed();});
+                    return;
+                }
                 if(key==='quantity') {
                     control.min='1';control.step='1';
                     if(control.value!=='') control.value=String(Number(control.value));
@@ -181,10 +202,11 @@ if(configNode) {
                 }
                 control.addEventListener('focus',()=>highlight('items.'+index+'.'+key));
                 control.addEventListener('input',()=>{
-                    item[key]=control.value;if(['quantity','unit_cost','tax_rate'].includes(key)) {item.tax_amount='';refreshItemTax();}
+                    item[key]=control.value;if(['quantity','unit_cost','tax_rate'].includes(key)) {item.tax_amount='';refreshItemTax();refreshStock();}
                     data().identity_reviewed=false;changed();
                 });
             });
+            refreshStock();
             function refreshItemTax() {
                 const quantity=row.querySelector('[data-item-field="quantity"]');
                 quantity.setCustomValidity(quantity.value!=='' && !Number.isInteger(Number(quantity.value))?'La cantidad debe ser un número entero.':'');
@@ -193,13 +215,14 @@ if(configNode) {
             }
             refreshItemTax();
             const search=row.querySelector('[data-product-search]');search.value=productLabel(config.products.find(p=>p.id===item.product_id) || {sku:'',name:''}).replace(/^ · $/,'');
-            search.disabled=data().purchase_kind==='service' || draft.review_status==='registered';
+            search.disabled=data().purchase_kind==='service' || locked;
             search.addEventListener('change',()=>{item.product_id=config.products.find(p=>productLabel(p)===search.value)?.id || '';data().identity_reviewed=false;changed();});
-            const remove=row.querySelector('button');remove.disabled=draft.review_status==='registered';
+            const remove=row.querySelector('button');remove.disabled=locked;
             remove.addEventListener('click',()=>{data().items.splice(index,1);data().identity_reviewed=false;renderItems();changed();});
             container.append(row);
-            if(JSON.stringify(item)!==previous) changed();
+            if(JSON.stringify(item)!==previous && !locked) changed();
         });
+        byId('import-add-item').disabled=linesLocked();
         paginateItems();
     }
     function renderAdjustments() {
@@ -235,8 +258,154 @@ if(configNode) {
             ['Proveedor',config.suppliers.find(s=>s.id===data().supplier_id)?.name || 'Falta seleccionar'],
             ['Comprobante',(data().document_type || '')+' '+(data().point_of_sale || '')+'-'+(data().invoice_sequence || '')],
             ['Moneda',data().currency_code || 'Falta seleccionar'],['Conceptos',String(data().items?.length || 0)],
-            ['Recepción',config.receipts.find(r=>r.id===data().purchase_receipt_id)?.receipt_number || 'Sin recepción asociada'],
+            ['Orden de compra',!isGoods()?'No aplica':circuit?.order?.order_number || (circuit?.receipt?'Recepción registrada desde Compras':'Pendiente (paso 5)')],
+            ['Recepción',!isGoods()?'No aplica: '+(data().purchase_kind==='service'?'servicios o gastos':'mercadería ya ingresada al stock'):circuit?.receipt?.receipt_number || 'Pendiente (paso 7)'],
         ]) {const p=document.createElement('p'),strong=document.createElement('strong');strong.textContent=label+': ';p.append(strong,document.createTextNode(value));summary.append(p);}
+    }
+    // ---- Purchase circuit (steps 5-7): every document is generated by the server with the Compras rules. ----
+    function el(tag,props={},...children) {
+        const node=document.createElement(tag);
+        for(const [key,value] of Object.entries(props)) {
+            if(key==='class') node.className=value;else if(key==='text') node.textContent=value;
+            else if(key.startsWith('on')) node.addEventListener(key.slice(2),value);
+            else if(value!==false && value!==null && value!==undefined) node.setAttribute(key,value===true?'':String(value));
+        }
+        for(const child of children.flat()) if(child!==null && child!==undefined && child!==false) node.append(child instanceof Node?child:document.createTextNode(String(child)));
+        return node;
+    }
+    const quantityText=value=>(Number(value)||0).toLocaleString('es-AR',{maximumFractionDigits:2});
+    const costText=value=>'$ '+(Number(value)||0).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:4});
+    const productText=id=>{const product=config.products.find(p=>p.id===id);return product?productLabel(product):'Producto no disponible';};
+    const orderStatus={draft:'Borrador',approved:'Aprobada',received_partial:'Recibida parcialmente',received_total:'Recibida',cancelled:'Anulada'};
+    const skipBox=text=>el('div',{class:'invoice-circuit-skip'},text);
+    const doneBox=(title,detail)=>el('div',{class:'invoice-circuit-done',role:'status'},el('i',{class:'bi bi-check-circle','aria-hidden':'true'}),el('div',{},el('strong',{text:title}),detail?el('div',{class:'small mt-1',text:detail}):null));
+    function table(headers,rows,numeric=[]) {
+        return el('table',{class:'invoice-circuit-table'},el('thead',{},el('tr',{},headers.map((header,i)=>el('th',{class:numeric[i]?'num':null,text:header})))),
+            el('tbody',{},rows.map(cells=>el('tr',{},cells.map((cell,i)=>el('td',{class:numeric[i]?'num':null},cell))))));
+    }
+    const actionButton=(icon,label,onclick)=>el('button',{type:'button',class:'btn btn-dark',disabled:circuitBusy || isRegistered(),onclick},el('i',{class:'bi '+icon+' me-1','aria-hidden':'true'}),label);
+    const invoiceNumber=()=>[data().point_of_sale,data().invoice_sequence].filter(Boolean).join('-') || data().invoice_number || '';
+    async function loadCircuit() {
+        if(!draft) return;
+        const id=draft.id,ticket=++circuitTicket;
+        try {
+            if(dirty && !blocked) await save();
+            const result=await request('/'+encodeURIComponent(id)+'/circuito');
+            if(!draft || draft.id!==id || ticket!==circuitTicket) return;
+            circuit=result.circuit;markSteps();renderCircuit();if(stage===8) renderSummary();
+        } catch(error) {message(error.message,true);}
+    }
+    async function circuitAction(path,body,doneMessage) {
+        if(circuitBusy || !draft) return false;
+        circuitBusy=true;renderCircuit();
+        try {
+            clearTimeout(saveTimer);await save();
+            const result=await request('/'+encodeURIComponent(draft.id)+path,'POST',{version:draft.version,...body});
+            const remote=result.draft;
+            draft.version=remote.version;draft.review_status=remote.review_status;
+            draft.purchase_order_id=remote.purchase_order_id;draft.purchase_receipt_id=remote.purchase_receipt_id;
+            data().purchase_kind=remote.data.purchase_kind ?? data().purchase_kind;data().purchase_receipt_id=remote.data.purchase_receipt_id ?? '';
+            data().items=remote.data.items;
+            circuit=result.circuit;renderFields();renderItems();markSteps();message(doneMessage);
+            return true;
+        } catch(error) {message(error.message,true);return false;}
+        finally {circuitBusy=false;renderCircuit();}
+    }
+    function renderCircuit() {
+        if(!draft) return;
+        renderOrderPanel();renderApprovePanel();renderReceiptPanel();
+    }
+    function renderOrderPanel() {
+        const body=byId('import-order-body');body.replaceChildren();
+        if(!isGoods()) {body.append(skipBox('No aplica: esta factura no ingresa mercadería al stock. Continúa con el registro de la factura.'));return;}
+        if(!circuit) {body.append(el('p',{class:'invoice-help',text:'Consultando el estado de la compra…'}));return;}
+        const order=circuit.order;
+        if(!order && circuit.receipt) {body.append(doneBox('Factura vinculada a la recepción '+circuit.receipt.receipt_number,'La mercadería ya había ingresado al stock desde Compras; no se genera una orden nueva.'));return;}
+        if(order) {
+            body.append(doneBox('Orden de compra '+order.order_number,'Estado: '+(orderStatus[order.status] || order.status)+' · Depósito: '+(order.warehouse_name || '-')),
+                table(['Producto','Cantidad','Costo unitario'],order.lines.map(line=>[productLabel({sku:line.sku,name:line.product_name}),quantityText(line.quantity),costText(line.unit_cost)]),[false,true,true]),
+                el('p',{class:'invoice-help',text:'Los conceptos, el proveedor y la moneda de la factura quedan fijos para que coincidan con la orden y la recepción.'}));
+            return;
+        }
+        body.append(el('h3',{text:'Generar la orden de compra'}),
+            el('p',{class:'invoice-help',text:'Se crea con los productos de la factura convertidos a unidades de stock. Queda en borrador hasta aprobarla en el paso siguiente; todavía no mueve el stock.'}));
+        if(circuit.preview_error) {body.append(el('div',{class:'invoice-message is-error',text:circuit.preview_error+' Vuelve al paso 4 para completarlo.'}));return;}
+        body.append(table(['Producto','Bultos × unidades','Unidades de stock','Costo por unidad'],
+            circuit.preview.map(line=>[productText(line.product_id),quantityText(line.packages)+' × '+quantityText(line.units_per_package),quantityText(line.quantity),costText(line.unit_cost)]),[false,true,true,true]));
+        const warehouse=el('select',{class:'form-select','aria-label':'Depósito destino'},circuit.warehouses.map(w=>el('option',{value:w.id,selected:Number(w.is_default)===1},w.name)));
+        const warehouseField=el('label',{class:'invoice-field'},el('span',{text:'Depósito donde ingresa la mercadería'}),warehouse);
+        body.append(warehouseField);
+        if(circuit.pending_orders.length) {
+            const choice=(value,label,checked)=>el('label',{},el('input',{type:'radio',name:'import-order-source',value,checked,onchange:()=>{warehouseField.hidden=Boolean(value);}}),el('span',{text:label}));
+            body.append(el('p',{class:'invoice-help mt-3',text:'El proveedor tiene órdenes aprobadas con cantidades pendientes de recibir. Puedes recibir contra una de ellas en lugar de crear una nueva.'}),
+                el('div',{class:'invoice-circuit-options',role:'radiogroup','aria-label':'Origen de la orden'},choice('','Crear una orden nueva desde esta factura',true),
+                    circuit.pending_orders.map(o=>choice(o.id,'Usar la orden '+o.order_number+' ('+o.lines.length+' renglones pendientes de recibir)',false))));
+        }
+        body.append(el('div',{class:'invoice-circuit-actions'},actionButton('bi-file-earmark-plus','Generar orden de compra',async()=>{
+            const source=body.querySelector('input[name="import-order-source"]:checked')?.value || '';
+            if(!source && !warehouse.value) {message('Selecciona el depósito donde ingresa la mercadería.',true);return;}
+            const ok=await circuitAction('/orden',source?{order_id:source}:{warehouse_id:warehouse.value},source?'Orden vinculada. Continúa con la aprobación.':'Orden de compra generada. Continúa con la aprobación.');
+            if(ok) setStage(circuit?.steps?.approval?7:6);
+        })));
+        if(circuit.receipts.length) {
+            const receipt=el('select',{class:'form-select','aria-label':'Recepción registrada'},circuit.receipts.map(r=>el('option',{value:r.id},r.receipt_number+' · '+String(r.received_at || '').slice(0,10))));
+            body.append(el('details',{},el('summary',{text:'¿Ya recepcionaste esta mercadería desde Compras?'}),
+                el('p',{class:'invoice-help mt-2',text:'Vincula la factura con esa recepción. No se crea una orden nueva y el stock no se vuelve a sumar.'}),receipt,
+                el('div',{class:'invoice-circuit-actions'},el('button',{type:'button',class:'btn btn-outline-dark',disabled:circuitBusy || isRegistered(),onclick:async()=>{
+                    const ok=await circuitAction('/recepcion/vincular',{receipt_id:receipt.value},'Factura vinculada a la recepción existente.');
+                    if(ok) setStage(8);
+                }},el('i',{class:'bi bi-link-45deg me-1','aria-hidden':'true'}),'Vincular recepción'))));
+        }
+    }
+    function renderApprovePanel() {
+        const body=byId('import-approve-body');body.replaceChildren();
+        if(!isGoods()) {body.append(skipBox('No aplica: esta factura no genera orden de compra.'));return;}
+        if(!circuit) {body.append(el('p',{class:'invoice-help',text:'Consultando el estado de la compra…'}));return;}
+        const order=circuit.order;
+        if(!order && circuit.receipt) {body.append(skipBox('No aplica: la factura se vinculó a una recepción ya registrada en Compras.'));return;}
+        if(!order) {body.append(skipBox('Primero genera la orden de compra en el paso anterior.'));return;}
+        if(order.status!=='draft') {body.append(doneBox('Orden '+order.order_number+' aprobada','Ya se puede recibir la mercadería en '+(order.warehouse_name || 'el depósito de la orden')+'.'));return;}
+        body.append(el('h3',{text:'Aprobar la orden '+order.order_number}),
+            el('p',{class:'invoice-help',text:'La aprobación habilita la recepción. Revisa proveedor, depósito, cantidades y costos antes de aprobar.'}),
+            table(['Producto','Cantidad','Costo unitario'],order.lines.map(line=>[productLabel({sku:line.sku,name:line.product_name}),quantityText(line.quantity),costText(line.unit_cost)]),[false,true,true]),
+            el('p',{class:'small'},el('strong',{text:'Depósito: '}),order.warehouse_name || '-',' · ',el('strong',{text:'Total de la orden: '}),'$ '+money(order.total)),
+            el('div',{class:'invoice-circuit-actions'},actionButton('bi-check2-circle','Aprobar orden de compra',async()=>{
+                if(await circuitAction('/orden/aprobar',{},'Orden aprobada. Continúa con la recepción.')) setStage(7);
+            })));
+    }
+    function renderReceiptPanel() {
+        const body=byId('import-receipt-body');body.replaceChildren();
+        if(!isGoods()) {body.append(skipBox('No aplica: esta factura no ingresa mercadería al stock.'));return;}
+        if(!circuit) {body.append(el('p',{class:'invoice-help',text:'Consultando el estado de la compra…'}));return;}
+        const order=circuit.order,receipt=circuit.receipt;
+        if(receipt) {
+            const payable=receipt.payable;
+            body.append(doneBox('Recepción '+receipt.receipt_number+' registrada: la mercadería ingresó al stock',
+                (order?'Depósito: '+(order.warehouse_name || '-')+'. ':'')+(payable?'Cuenta a pagar '+payable.payable_number+' por $ '+money(payable.total_amount)+'; al registrar la factura se ajusta a su importe real.':'')));
+            return;
+        }
+        if(!order) {body.append(skipBox('Primero genera la orden de compra.'));return;}
+        if(order.status==='draft') {body.append(skipBox('Aprueba la orden '+order.order_number+' para registrar la recepción.'));return;}
+        const pending=order.lines.filter(line=>Number(line.pending_quantity)>0);
+        body.append(el('h3',{text:'Recibir la mercadería'}),
+            el('p',{class:'invoice-help',text:'Indica lo que efectivamente llegó. Al registrar, se suma el stock en '+(order.warehouse_name || 'el depósito de la orden')+', se crea la capa de costo, la cuenta a pagar y el asiento contable. Si recibes menos de lo facturado, la factura podrá registrarse cuando llegue el resto.'}));
+        const inputs=pending.map(line=>{
+            const quantity=el('input',{class:'form-control form-control-sm',type:'number',min:'0',max:String(line.pending_quantity),step:'any',value:String(Number(line.pending_quantity)),'aria-label':'Cantidad recibida de '+line.product_name});
+            const lot=Number(line.lot_control)===1?el('input',{class:'form-control form-control-sm',maxlength:'80','aria-label':'Lote de '+line.product_name}):null;
+            const expiration=Number(line.expiration_control)===1 || Number(line.lot_control)===1?el('input',{class:'form-control form-control-sm',type:'date','aria-label':'Vencimiento de '+line.product_name}):null;
+            const serial=Number(line.serial_control)===1?el('input',{class:'form-control form-control-sm',maxlength:'80','aria-label':'Serie de '+line.product_name}):null;
+            return {line,quantity,lot,expiration,serial};
+        });
+        body.append(table(['Producto','Pendiente','Recibido','Lote','Vence','Serie'],inputs.map(({line,quantity,lot,expiration,serial})=>[
+            productLabel({sku:line.sku,name:line.product_name}),quantityText(line.pending_quantity),quantity,lot || '—',expiration || '—',serial || '—']),[false,true,true]));
+        const supplierDocument=el('input',{class:'form-control',maxlength:'80',value:invoiceNumber()});
+        body.append(el('label',{class:'invoice-field'},el('span',{text:'Remito o comprobante del proveedor'}),supplierDocument),
+            el('div',{class:'invoice-circuit-actions'},actionButton('bi-box-arrow-in-down','Registrar recepción e ingresar al stock',async()=>{
+                const lines=inputs.map(({line,quantity,lot,expiration,serial})=>({purchase_order_item_id:line.id,quantity:quantity.value || '0',
+                    lot_number:lot?.value || '',expiration_date:expiration?.value || '',serial_number:serial?.value || ''}));
+                if(!lines.some(line=>Number(line.quantity)>0)) {message('Indica al menos una cantidad recibida.',true);return;}
+                if(await circuitAction('/recepcion',{lines,supplier_document:supplierDocument.value},'Recepción registrada: la mercadería ingresó al stock. Continúa con el registro de la factura.')) setStage(8);
+            })));
     }
     async function renderPage() {
         if(!draft) return;
@@ -278,7 +447,11 @@ if(configNode) {
         itemsPage=1;
         const result=await request('/'+encodeURIComponent(id));draft=result.draft;dirty=false;blocked=false;confirmationKey=crypto.randomUUID();
         byId('import-upload-panel').hidden=true;byId('import-workspace').hidden=false;byId('import-filename').textContent=draft.document.original_name;
-        renderFields();renderItems();renderAdjustments();processing();setStage(draft.review_status==='registered'?5:3);
+        renderFields();renderItems();renderAdjustments();processing();
+        // Resume on the first purchase document still missing (order, approval, receipt or invoice).
+        circuit=null;
+        try {circuit=(await request('/'+encodeURIComponent(id)+'/circuito')).circuit;} catch {circuit=null;}
+        setStage(resumeStage(draft,circuit));
         byId('import-save').disabled=draft.review_status==='registered';
         byId('import-confirm').hidden=draft.review_status==='registered';byId('import-success').hidden=draft.review_status!=='registered';
         if(draft.review_status==='registered') byId('import-success').textContent='Factura registrada. El original y los datos revisados quedaron conservados en Compras.';
@@ -322,7 +495,16 @@ if(configNode) {
     dropzone.addEventListener('dragover',event=>{event.preventDefault();dropzone.classList.add('is-dragging');});
     dropzone.addEventListener('dragleave',()=>dropzone.classList.remove('is-dragging'));
     dropzone.addEventListener('drop',event=>{event.preventDefault();dropzone.classList.remove('is-dragging');if(event.dataTransfer.files.length!==1){message('Sube una factura por archivo y una carga a la vez.',true);return;}upload(event.dataTransfer.files[0]);});
-    byId('import-next').addEventListener('click',()=>setStage(stage+1));byId('import-prev').addEventListener('click',()=>setStage(stage-1));
+    byId('import-next').addEventListener('click',async()=>{
+        if(stage===4) {
+            try {await save();} catch(error) {message(error.message,true);return;}
+            setStage(isGoods()?5:8);return;
+        }
+        const gate=stepGate(stage,data().purchase_kind,circuit);
+        if(!gate.ok) {message(gate.reason,true);return;}
+        setStage(stage+1);
+    });
+    byId('import-prev').addEventListener('click',()=>setStage(stage===8 && !isGoods()?4:stage-1));
     byId('import-save').addEventListener('click',()=>save().then(()=>message('Borrador guardado.')).catch(error=>message(error.message,true)));
     byId('import-analyze').addEventListener('click',async()=>{try {await save();const result=await request('/'+draft.id+'/analizar','POST',{});draft.processing_status=result.draft.processing_status;processing();message('Lectura solicitada. Puedes avanzar con la revisión mientras se procesa.');}catch(error){message(error.message,true);}});
     byId('import-apply').addEventListener('click',()=>{
@@ -337,7 +519,7 @@ if(configNode) {
         clearTimeout(saveTimer);
         try {
             await save();const values=totals(data());
-            if(data().purchase_kind==='goods' && !data().purchase_receipt_id) throw new Error('Selecciona la recepción o indica mercadería pendiente de recibir.');
+            if(isGoods() && !data().purchase_receipt_id) throw new Error('Antes de registrar la factura completa la orden de compra, su aprobación y la recepción (pasos 5 a 7), o indica en el paso 4 que la mercadería ya ingresó al stock.');
             const invalidQuantity=(data().items || []).findIndex(item=>!Number.isInteger(Number(item.quantity)) || Number(item.quantity)<=0);
             if(invalidQuantity!==-1) throw new Error('El concepto '+(invalidQuantity+1)+' requiere una cantidad entera mayor que cero.');
             if(values.difference===null || values.difference!==0) throw new Error('Completa el total del documento y resuelve la diferencia antes de registrar.');
@@ -345,7 +527,10 @@ if(configNode) {
             const result=await request('/'+draft.id+'/confirmar','POST',{version:draft.version,request_key:confirmationKey});
             draft=result.draft;dirty=false;renderFields();renderItems();renderAdjustments();processing();
             byId('import-save').disabled=true;byId('import-confirm').hidden=true;byId('import-success').hidden=false;
-            byId('import-success').textContent='Factura registrada correctamente. Puedes consultar su cuenta a pagar desde Compras.';
+            byId('import-success').replaceChildren(
+                el('strong',{text:circuit?.order?'Compra completa: orden '+circuit.order.order_number+', recepción '+(circuit.receipt?.receipt_number || '')+' y factura registradas.':'Factura registrada correctamente.'}),
+                el('div',{class:'mt-1'},'La cuenta a pagar quedó con el importe de la factura. ',el('a',{href:config.purchasesUrl+'?company_id='+encodeURIComponent(config.companyId),text:'Ir a Compras para pagarla'}),'.'));
+            loadCircuit();
             message('Registro completo. Se conservaron el original y la revisión.');
         } catch(error) {message(error.message,true);} finally {
             confirming=false;byId('import-form').inert=false;byId('import-confirm').disabled=false;

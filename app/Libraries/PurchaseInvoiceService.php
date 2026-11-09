@@ -70,10 +70,14 @@ class PurchaseInvoiceService
             $productId=self::text($item['product_id'] ?? '',36) ?: null;
             if ($productId && !$db->table('inventory_products')->where('company_id',$companyId)->where('id',$productId)->where('active',1)->countAllResults()) throw new RuntimeException('Producto no disponible en esta empresa.');
             if ($kind==='service' && $productId) throw new RuntimeException('Los servicios deben cargarse sin producto de inventario.');
+            // Stock units per invoiced package (e.g. a pack of 6). Invoice lines keep the document's own quantities.
+            $units=isset($item['units_per_package']) && $item['units_per_package']!=='' ? self::number($item['units_per_package'],4,100000) : 1.0;
+            if ($units<=0) throw new RuntimeException('Las unidades por bulto deben ser mayores que cero.');
+            if (!$productId) $units=1.0;
             $lineNet=round($quantity*$cost,2);
             if ($lineNet>999999999999.99) throw new RuntimeException('El concepto supera el importe admitido.');
             $lineTax=array_key_exists('tax_amount',$item) && $item['tax_amount']!=='' ? self::number($item['tax_amount']) : round($lineNet*$taxRate/100,2);
-            $rows[]=['product_id'=>$productId,'description'=>$description,'quantity'=>$quantity,'unit_cost'=>$cost,'tax_rate'=>$taxRate,'tax_amount'=>$lineTax,'line_total'=>round($lineNet+$lineTax,2)];
+            $rows[]=['product_id'=>$productId,'description'=>$description,'quantity'=>$quantity,'unit_cost'=>$cost,'tax_rate'=>$taxRate,'tax_amount'=>$lineTax,'line_total'=>round($lineNet+$lineTax,2),'units_per_package'=>$units];
             $net+=(int)round($lineNet*100);$tax+=(int)round($lineTax*100);
         }
         if (!$rows) throw new RuntimeException('Agrega al menos un concepto válido.');
@@ -154,7 +158,7 @@ class PurchaseInvoiceService
                 if (!(new PurchaseInvoiceItemModel())->insert($row+['purchase_invoice_id'=>$id])) throw new RuntimeException('No se pudo registrar el detalle.');
                 if ($row['product_id'] && !(new SupplierCostHistoryModel())->insert([
                     'company_id'=>$companyId,'supplier_id'=>$invoice['supplier_id'],'product_id'=>$row['product_id'],'purchase_invoice_id'=>$id,
-                    'currency_code'=>$invoice['currency_code'],'exchange_rate'=>$invoice['exchange_rate'],'unit_cost'=>$row['unit_cost'],'observed_at'=>$invoice['issue_date'],
+                    'currency_code'=>$invoice['currency_code'],'exchange_rate'=>$invoice['exchange_rate'],'unit_cost'=>round($row['unit_cost']/$row['units_per_package'],4),'observed_at'=>$invoice['issue_date'],
                 ])) throw new RuntimeException('No se pudo conservar el historial de costos.');
             }
             (new PurchaseIntegrityService())->syncInvoice($companyId,(string)$id);

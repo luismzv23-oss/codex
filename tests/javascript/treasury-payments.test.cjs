@@ -43,6 +43,35 @@ test('Supplier methods respect explicit enablement and point restrictions',()=>{
     assert.equal(app.controls.payment_method_id.options.find(o=>o.value==='card').disabled,true);
     assert.equal(app.controls.payment_method_id.options.find(o=>o.value==='cash').disabled,false);
 });
+test('Supplier payment without a chosen point assigns the enabled point of sale (cash limited to two points)',()=>{
+    const cash={id:'cash',code:'EFECTIVO',type:'cash',allow_supplier_payments:1,currency_ids:['ars'],branch_ids:['main'],point_of_sale_ids:['p1','p2'],required_fields:[]};
+    const app=ui({supplier:true,operation:'supplier',branchId:'',catalog:[cash],selected:''});
+    app.controls.point_of_sale_id.options=[{value:'',dataset:{}},{value:'p1',dataset:{branch:'main'},textContent:'PV1 · Kiosco'},{value:'p2',dataset:{branch:'main'}},{value:'px',dataset:{branch:'other'}}];
+    app.change(app.controls.currency_code);
+    assert.equal(app.controls.payment_method_id.options.find(o=>o.value==='cash').disabled,false,'Selectable before choosing a point.');
+    app.controls.payment_method_id.value='cash';app.change(app.controls.payment_method_id);
+    assert.equal(app.controls.point_of_sale_id.value,'p1');
+    assert.equal(app.controls.payment_method_id.error,'');
+    assert.match(app.policy.textContent,/PV1 · Kiosco/);
+});
+test('A method already selected when the form loads also gets its point of sale (restored form)',()=>{
+    const cash={id:'cash',code:'EFECTIVO',type:'cash',allow_supplier_payments:1,currency_ids:['ars'],branch_ids:['main'],point_of_sale_ids:['p1','p2'],required_fields:[]};
+    const app=ui({supplier:true,operation:'supplier',branchId:'',catalog:[cash],selected:'cash'});
+    app.controls.point_of_sale_id.options=[{value:'',dataset:{}},{value:'p2',dataset:{branch:'main'}}];
+    app.change(app.controls.currency_code);
+    assert.equal(app.controls.point_of_sale_id.value,'p2');
+    assert.equal(app.controls.payment_method_id.error,'');
+});
+test('A restricted method stays disabled when no enabled point of sale exists, and a foreign point is rejected',()=>{
+    const cash={id:'cash',type:'cash',allow_supplier_payments:1,currency_ids:['ars'],branch_ids:['main'],point_of_sale_ids:['p1'],required_fields:[]};
+    const app=ui({supplier:true,operation:'supplier',branchId:'',catalog:[cash]});
+    app.controls.point_of_sale_id.options=[{value:'',dataset:{}},{value:'px',dataset:{branch:'other'}}];
+    app.change(app.controls.currency_code);
+    assert.equal(app.controls.payment_method_id.options.find(o=>o.value==='cash').disabled,true);
+    app.controls.point_of_sale_id.options.push({value:'p1',dataset:{branch:'main'}});
+    app.controls.point_of_sale_id.value='px';app.change(app.controls.point_of_sale_id);
+    assert.equal(app.controls.payment_method_id.options.find(o=>o.value==='cash').disabled,true,'An explicitly chosen foreign point keeps it disabled.');
+});
 test('Required custom fields are restored and retained across refreshes',()=>{
     const app=ui({old:{fields:{entidad:'Banco uno'}},catalog:[{id:'cash',code:'CASH',type:'cash',allow_collections:1,required_fields:['entidad']}]});
     let input=app.fields.querySelectorAll()[0];assert.equal(input.name,'fields[entidad]');assert.equal(input.required,true);assert.equal(input.value,'Banco uno');

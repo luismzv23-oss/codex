@@ -47,7 +47,8 @@ class PurchaseImportService
         if (!$document) throw new RuntimeException('El adjunto no está disponible.');
         $extraction=json_decode($row['extraction_json'] ?: '{}',true,512,JSON_THROW_ON_ERROR);
         return ['id'=>$id,'version'=>(int)$row['version'],'processing_status'=>$row['processing_status'],'review_status'=>$row['review_status'],
-            'invoice_id'=>$row['invoice_id'],'data'=>$data,'extraction'=>$extraction,
+            'invoice_id'=>$row['invoice_id'],'purchase_order_id'=>$row['purchase_order_id'] ?? null,'purchase_receipt_id'=>$row['purchase_receipt_id'] ?? null,
+            'data'=>$data,'extraction'=>$extraction,
             'document'=>array_intersect_key($document,array_flip(['id','original_name','mime_type','byte_size','page_count'])),
             'last_error'=>(new PurchaseImportJobModel())->select('error_message')->where('company_id',$companyId)->where('import_id',$id)->where('generation',(int)$row['generation'])->orderBy('created_at','DESC')->first()['error_message'] ?? null];
     }
@@ -63,13 +64,22 @@ class PurchaseImportService
             $items=$data['items'] ?? [];
             if (!is_array($items) || count($items)>300) throw new RuntimeException('Se admiten hasta 300 conceptos.');
             unset($data['items']);$data=$this->cleanData($data);
-            $model=new PurchaseImportItemModel();$model->where('import_id',$id)->delete();
-            foreach (array_values($items) as $index=>$item) {
-                if (!is_array($item)) throw new RuntimeException('Concepto inválido.');
-                $item=array_intersect_key($item,array_flip(['description','quantity','unit_cost','tax_rate','tax_amount','product_id','supplier_code']));
-                foreach ($item as $value) PurchaseInvoiceService::text($value,500);
-                if (!$model->insert(['import_id'=>$id,'line_number'=>$index+1,'data_json'=>json_encode($item,JSON_THROW_ON_ERROR)])) throw new RuntimeException('No se pudo guardar el detalle.');
+            $model=new PurchaseImportItemModel();
+            if (!empty($row['purchase_order_id']) || !empty($row['purchase_receipt_id'])) {
+                // Once the order or receipt exists, lines, supplier and destination are fixed so the invoice matches what is received.
+                $stored=json_decode($row['data_json'] ?: '{}',true,512,JSON_THROW_ON_ERROR);
+                foreach (['supplier_id','currency_code'] as $fixed) $data[$fixed]=(string)($stored[$fixed] ?? '');
+                $data['purchase_kind']='goods';$data['purchase_receipt_id']=(string)($row['purchase_receipt_id'] ?? '');
+            } else {
+                $model->where('import_id',$id)->delete();
+                foreach (array_values($items) as $index=>$item) {
+                    if (!is_array($item)) throw new RuntimeException('Concepto inválido.');
+                    $item=array_intersect_key($item,array_flip(['description','quantity','unit_cost','tax_rate','tax_amount','product_id','supplier_code','units_per_package']));
+                    foreach ($item as $value) PurchaseInvoiceService::text($value,500);
+                    if (!$model->insert(['import_id'=>$id,'line_number'=>$index+1,'data_json'=>json_encode($item,JSON_THROW_ON_ERROR)])) throw new RuntimeException('No se pudo guardar el detalle.');
+                }
             }
+            $items=array_map(static fn($stored)=>json_decode($stored['data_json'],true,512,JSON_THROW_ON_ERROR),$model->where('import_id',$id)->orderBy('line_number')->findAll());
             $ready=false;
             try {PurchaseImportAmounts::validate($data+['items'=>$items]);(new PurchaseInvoiceService())->normalize($companyId,$data+['items'=>$items],true);$ready=true;} catch (RuntimeException $e) {}
             if (!(new PurchaseImportModel())->update($id,['data_json'=>json_encode($data,JSON_THROW_ON_ERROR),'version'=>(int)$row['version']+1,'review_status'=>$ready?'ready':'needs_review'])) throw new RuntimeException('No se pudo guardar el borrador.');
@@ -105,6 +115,8 @@ class PurchaseImportService
             }
             if ((string)($input['version'] ?? '')!==(string)$row['version']) throw new RuntimeException('El borrador cambió. Actualiza la revisión antes de registrar.');
             $draft=$this->get($companyId,$id);$data=PurchaseImportAmounts::normalize($draft['data']);$data['request_key']=$key;
+            if (!empty($row['purchase_receipt_id'])) {$data['purchase_kind']='goods';$data['purchase_receipt_id']=$row['purchase_receipt_id'];}
+            elseif (!empty($row['purchase_order_id'])) throw new RuntimeException('Completa la recepción de la orden de compra antes de registrar la factura.');
             PurchaseImportAmounts::validate($data);
             $invoice=(new PurchaseInvoiceService())->register($companyId,$data,$userId,true,$id);
             foreach ($data['items'] as $item) {
@@ -113,7 +125,8 @@ class PurchaseImportService
                 if (mb_strlen($code)>120) throw new RuntimeException('El código de proveedor supera 120 caracteres.');
                 $links=new SupplierProductLinkModel();
                 $link=$links->where('company_id',$companyId)->where('supplier_id',$invoice['supplier_id'])->where('supplier_code',$code)->first();
-                $value=['product_id'=>$product,'confirmed_by'=>$userId];
+                $units=(float)($item['units_per_package'] ?? 1);
+                $value=['product_id'=>$product,'units_per_package'=>$units>0?$units:1,'confirmed_by'=>$userId];
                 if ($link) $ok=$links->update($link['id'],$value);
                 else $ok=$links->insert($value+['company_id'=>$companyId,'supplier_id'=>$invoice['supplier_id'],'supplier_code'=>$code]);
                 if (!$ok) throw new RuntimeException('No se pudo conservar la asociación de producto.');

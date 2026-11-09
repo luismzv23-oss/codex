@@ -167,6 +167,11 @@ $routes->get('inventario/productos/(:segment)/kpi-xlsx', 'InventoryController::p
     $routes->post('compras/importaciones/(:segment)/analizar', 'PurchaseImportsController::analyze/$1', ['filter'=>'permission:systems.view']);
     $routes->post('compras/importaciones/(:segment)/confirmar', 'PurchaseImportsController::confirm/$1', ['filter'=>'permission:systems.view']);
     $routes->get('compras/importaciones/(:segment)/archivo', 'PurchaseImportsController::file/$1', ['filter'=>'permission:systems.view']);
+$routes->get('compras/importaciones/(:segment)/circuito', 'PurchaseImportsController::circuit/$1', ['filter'=>'permission:systems.view']);
+$routes->post('compras/importaciones/(:segment)/orden', 'PurchaseImportsController::circuitOrder/$1', ['filter'=>'permission:systems.view']);
+$routes->post('compras/importaciones/(:segment)/orden/aprobar', 'PurchaseImportsController::circuitApprove/$1', ['filter'=>'permission:systems.view']);
+$routes->post('compras/importaciones/(:segment)/recepcion', 'PurchaseImportsController::circuitReceive/$1', ['filter'=>'permission:systems.view']);
+$routes->post('compras/importaciones/(:segment)/recepcion/vincular', 'PurchaseImportsController::circuitLinkReceipt/$1', ['filter'=>'permission:systems.view']);
     $routes->get('compras/facturas/nueva', 'PurchasesController::createInvoiceForm', ['filter' => 'permission:systems.view']);
     $routes->post('compras/facturas', 'PurchasesController::storeInvoice', ['filter' => 'permission:systems.view']);
     $routes->get('compras/notas-credito/nueva', 'PurchasesController::createCreditNoteForm', ['filter' => 'permission:systems.view']);

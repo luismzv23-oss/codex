@@ -5,16 +5,16 @@
 $configuration=['companyId'=>$companyId,'baseUrl'=>site_url('compras/importaciones'),'csrfHeader'=>config('Security')->headerName,
     'csrfToken'=>csrf_hash(),'ocrConfigured'=>$ocrConfigured,'autoRead'=>$ocrConfigured && config('PurchaseImport')->provider==='local','maxBytes'=>config('PurchaseImport')->maxBytes,
     'suppliers'=>array_map(static fn($s)=>array_intersect_key($s,array_flip(['id','name','tax_id'])),$suppliers),
-    'products'=>$products,'receipts'=>$receipts,'currencies'=>$currencies,'pdfModule'=>base_url('assets/lib/pdfjs/pdf.mjs'),
+    'products'=>$products,'currencies'=>$currencies,'purchasesUrl'=>site_url('compras'),'pdfModule'=>base_url('assets/lib/pdfjs/pdf.mjs'),
     'pdfWorker'=>base_url('assets/lib/pdfjs/pdf.worker.mjs'),'pdfAssets'=>rtrim(base_url('assets/lib/pdfjs/'),'/').'/'];
 ?>
 <div class="invoice-assistant" id="invoice-assistant">
 <header class="invoice-assistant-head">
-    <div><span class="invoice-eyebrow">COMPRAS / DOCUMENTOS</span><h1>Asistente de facturas</h1><p>Del documento a tu registro de compras, con una revisión clara en cada paso.</p></div>
+    <div><span class="invoice-eyebrow">COMPRAS / DOCUMENTOS</span><h1>Asistente de facturas</h1><p>De la factura del proveedor al stock: orden de compra, aprobación, recepción y factura, con una revisión clara en cada paso.</p></div>
     <a href="<?= site_url('compras?company_id='.$companyId) ?>" class="btn btn-outline-dark icon-btn" title="Volver a Compras" aria-label="Volver a Compras"><i class="bi bi-arrow-left"></i></a>
 </header>
 <ol class="invoice-steps" aria-label="Etapas de carga">
-<?php foreach (['Subir','Leer','Revisar','Vincular','Registrar'] as $index=>$label): ?><li data-import-step="<?= $index+1 ?>"><span><?= $index+1 ?></span><?= esc($label) ?></li><?php endforeach; ?>
+<?php foreach (['Subir','Leer','Revisar','Productos','Orden de compra','Aprobación','Recepción','Factura'] as $index=>$label): ?><li data-import-step="<?= $index+1 ?>"><span><?= $index+1 ?></span><?= esc($label) ?></li><?php endforeach; ?>
 </ol>
 <div id="import-message" class="invoice-message" role="status" aria-live="polite" hidden></div>
 <section id="import-upload-panel" class="invoice-upload-layout">
@@ -85,10 +85,9 @@ $configuration=['companyId'=>$companyId,'baseUrl'=>site_url('compras/importacion
             </div>
             <div id="import-link-panel" class="invoice-section" hidden>
                 <div class="invoice-field-grid">
-                    <label class="invoice-field"><span>Destino de la compra</span><select data-field="purchase_kind" class="form-select"><option value="goods">Mercadería: vincular recepción existente</option><option value="pending_receipt">Mercadería pendiente de recibir</option><option value="service">Servicios o gastos</option></select></label>
-                    <label class="invoice-field"><span>Recepción asociada</span><select data-field="purchase_receipt_id" class="form-select"><option value="">Sin recepción</option><?php foreach ($receipts as $receipt): ?><option value="<?= esc($receipt['id']) ?>" data-supplier="<?= esc($receipt['supplier_id']) ?>" data-currency="<?= esc($receipt['currency_code']) ?>"><?= esc($receipt['receipt_number']) ?></option><?php endforeach; ?></select></label>
+                    <label class="invoice-field"><span>Destino de la compra</span><select data-field="purchase_kind" class="form-select"><option value="goods">Mercadería: orden de compra, recepción y stock</option><option value="pending_receipt">Mercadería ya ingresada al stock (sin recepción)</option><option value="service">Servicios o gastos</option></select></label>
                 </div>
-                <p class="invoice-help mt-3">Vincula productos usando su código o nombre. Registrar esta factura no ingresa mercadería al stock.</p>
+                <p class="invoice-help mt-3" id="import-kind-help">Vincula cada concepto con su producto y sus unidades por bulto. En los pasos siguientes se generan la orden de compra, su aprobación y la recepción que ingresa la mercadería al stock.</p>
                 <datalist id="import-products"><?php foreach ($products as $product): ?><option value="<?= esc($product['sku'].' · '.$product['name']) ?>"></option><?php endforeach; ?></datalist>
                 <div class="invoice-subheading"><h3 class="h6">Conceptos del documento</h3><button id="import-add-item" class="btn btn-outline-dark icon-btn" type="button" title="Agregar concepto" aria-label="Agregar concepto"><i class="bi bi-plus-lg"></i></button></div>
                 <div id="import-items"></div>
@@ -104,6 +103,9 @@ $configuration=['companyId'=>$companyId,'baseUrl'=>site_url('compras/importacion
                 <p class="invoice-help">Agrega únicamente importes que no estén incluidos en los conceptos. Revisa la clasificación de los impuestos detectados.</p>
                 <div id="import-adjustments"></div>
             </div>
+            <div id="import-order-panel" class="invoice-section" hidden><div id="import-order-body" class="invoice-circuit"></div></div>
+            <div id="import-approve-panel" class="invoice-section" hidden><div id="import-approve-body" class="invoice-circuit"></div></div>
+            <div id="import-receipt-panel" class="invoice-section" hidden><div id="import-receipt-body" class="invoice-circuit"></div></div>
             <div id="import-confirm-panel" class="invoice-section" hidden>
                 <div id="import-review-summary"></div>
                 <label class="invoice-field mt-3"><span>Total que figura en el documento</span><input data-field="reviewed_total" type="number" min="0.01" step="0.01" class="form-control"></label>

@@ -40,6 +40,17 @@ $routes->group('', ['filter' => 'auth'], static function (RouteCollection $route
     $routes->get('inventario', 'InventoryController::index', ['filter' => 'permission:systems.view']);
     $routes->get('inventario/configuracion', 'InventoryController::configuration', ['filter' => 'permission:systems.view']);
     $routes->get('inventario/kardex', 'InventoryController::kardex', ['filter' => 'permission:systems.view']);
+// Control semanal de stock (conteo ciclico + informe)
+$routes->get('inventario/control-semanal', 'InventoryControlController::controlIndex', ['filter' => 'permission:systems.view']);
+$routes->post('inventario/control-semanal', 'InventoryControlController::controlStart', ['filter' => 'permission:systems.view']);
+$routes->get('inventario/control-semanal/informe', 'InventoryControlController::controlReport', ['filter' => 'permission:systems.view']);
+$routes->get('inventario/control-semanal/informe/(:segment)', 'InventoryControlController::controlReport/$1', ['filter' => 'permission:systems.view']);
+$routes->get('inventario/control-semanal/(:segment)', 'InventoryControlController::controlShow/$1', ['filter' => 'permission:systems.view']);
+$routes->get('inventario/control-semanal/(:segment)/planilla', 'InventoryControlController::controlSheet/$1', ['filter' => 'permission:systems.view']);
+$routes->post('inventario/control-semanal/(:segment)/contar', 'InventoryControlController::controlRecord/$1', ['filter' => 'permission:systems.view']);
+$routes->post('inventario/control-semanal/(:segment)/cerrar', 'InventoryControlController::controlClose/$1', ['filter' => 'permission:systems.view']);
+$routes->post('inventario/control-semanal/(:segment)/aprobar', 'InventoryControlController::controlApprove/$1', ['filter' => 'permission:systems.view']);
+$routes->post('inventario/control-semanal/(:segment)/anular', 'InventoryControlController::controlCancel/$1', ['filter' => 'permission:systems.view']);
     $routes->get('inventario/kardex/pdf', 'InventoryController::kardexPdf', ['filter' => 'permission:systems.view']);
     $routes->get('inventario/kardex/productos/(:segment)/detalle', 'InventoryController::kardexDetail/$1', ['filter' => 'permission:systems.view']);
     $routes->get('inventario/kardex/productos/(:segment)/movimientos-pdf', 'InventoryController::kardexProductPdf/$1', ['filter' => 'permission:systems.view']);

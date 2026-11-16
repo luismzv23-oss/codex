@@ -17,6 +17,8 @@
     <div class="d-flex flex-wrap gap-2 align-items-center"><button type="button" id="inventory-refresh" class="btn btn-outline-dark icon-btn" title="Actualizar resumen" aria-label="Actualizar resumen"><i class="bi bi-arrow-clockwise"></i></button>
         <a href="<?= site_url('inventario/kardex' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
             class="btn btn-outline-dark icon-btn" title="Kardex" aria-label="Kardex"><i class="bi bi-journal-text" aria-hidden="true"></i></a>
+        <a href="<?= site_url('inventario/control-semanal' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
+            class="btn btn-outline-dark icon-btn" title="Control semanal de stock" aria-label="Control semanal de stock"><i class="bi bi-clipboard-check" aria-hidden="true"></i></a>
         <?php if ($context['canManage']): ?>
             <a href="<?= site_url('inventario/reservas/nueva' . (!empty($companies) ? '?company_id=' . $selectedCompanyId : '')) ?>"
                 class="btn btn-outline-dark icon-btn" data-popup="true" data-popup-title="Reserva de stock"

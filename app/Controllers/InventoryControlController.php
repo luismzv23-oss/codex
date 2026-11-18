@@ -34,6 +34,7 @@ class InventoryControlController extends InventoryController
             'counts' => $service->history($companyId),
             'warehouses' => db_connect()->table('inventory_warehouses')->select('id, name, is_default')->where('company_id', $companyId)->where('active', 1)->orderBy('is_default', 'DESC')->orderBy('name')->get()->getResultArray(),
             'alerts' => count($service->alertProducts($companyId)),
+            'companies' => $this->inventoryCompanies(), 'company' => $context['company'],
         ]);
     }
 
@@ -71,7 +72,8 @@ class InventoryControlController extends InventoryController
         return view('inventory/control/show', [
             'pageTitle' => 'Control ' . $count['count_number'], 'count' => $count, 'companyId' => $companyId, 'threshold' => $threshold ?: 10,
             'products' => db_connect()->table('inventory_products')->select('id, sku, name')->where('company_id', $companyId)->where('active', 1)->orderBy('name')->get()->getResultArray(),
-            'csrfHeader' => config('Security')->headerName,
+            'csrfHeader' => config('Security')->headerName, 'company' => $context['company'],
+            'traces' => $count['status'] === 'counted' ? (new StockControlService())->traceOptions($companyId, $count) : [],
         ]);
     }
 
@@ -102,7 +104,10 @@ class InventoryControlController extends InventoryController
     {
         $lines = [];
         foreach ((array) $this->request->getPost('items') as $itemId => $line) {
-            $lines[(string) $itemId] = ['approved' => ! empty($line['approved']), 'reason' => (string) ($line['reason'] ?? '')];
+            $line = (array) $line;
+            $lines[(string) $itemId] = ['approved' => ! empty($line['approved']), 'reason' => (string) ($line['reason'] ?? ''),
+                'lots' => (array) ($line['lots'] ?? []), 'serials' => (array) ($line['serials'] ?? []),
+                'lot_number' => (string) ($line['lot_number'] ?? ''), 'expiration_date' => (string) ($line['expiration_date'] ?? '')];
         }
 
         return $this->controlAction($id, fn(StockControlService $s, string $c) => $s->approve($c, $id, $lines, (string) $this->currentUser()['id']), 'Diferencias aprobadas: los ajustes se registraron en el stock.');
@@ -127,6 +132,23 @@ class InventoryControlController extends InventoryController
         }
 
         return redirect()->to($this->back($redirect ?? 'inventario/control-semanal/' . $id, $companyId))->with('message', $message);
+    }
+
+    /** Popup: products of a control. While it is open the count stays blind (no system stock). */
+    public function controlItems(string $id)
+    {
+        $context = $this->inventoryContext('view');
+        if ($context instanceof RedirectResponse) {
+            return $context;
+        }
+        $companyId = $this->companyOf($context);
+        try {
+            $count = (new StockControlService())->get($companyId, $id);
+        } catch (RuntimeException $e) {
+            return redirect()->to($this->back('inventario/control-semanal', $companyId))->with('error', $e->getMessage());
+        }
+
+        return view('inventory/control/items', ['count' => $count, 'companyId' => $companyId, 'pageTitle' => 'Productos ' . $count['count_number']]);
     }
 
     /** Blind count sheet (PDF): products and empty boxes, never the system stock. */
@@ -155,7 +177,7 @@ class InventoryControlController extends InventoryController
         $companyId = $this->companyOf($context);
         $days =max(1, min(90, (int) ($this->request->getGet('dias') ?: 7)));
         $report = (new StockControlService())->report($companyId, $days, (string) $this->currentUser()['id']);
-        $data = ['report' => $report, 'company' => $context['company'], 'companyId' => $companyId, 'pageTitle' => 'Informe semanal de stock'];
+        $data = ['report' => $report, 'company' => $context['company'], 'companyId' => $companyId, 'pageTitle' => 'Informe semanal de stock', 'canManage' => (bool) ($context['canManage'] ?? false), 'companies' => $this->inventoryCompanies()];
         if ($format === 'pdf') {
             return $this->pdf('inventory/control/pdf_report', $data, 'informe-stock-' . $report['week'] . '.pdf');
         }
@@ -184,11 +206,11 @@ class InventoryControlController extends InventoryController
         $book = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
         $book->removeSheetByIndex(0);
         $sheets = [
-            'Controles' => [['Control', 'Semana', 'Estado', 'Productos', 'Diferencia $'], array_map(static fn($r) => [$r['count_number'], $r['week'], $r['status'], (int) $r['items_count'], (float) $r['difference_value']], $report['counts'])],
+            'Controles' => [['Control', 'Semana', 'Deposito', 'Estado', 'Productos', 'Diferencia $'], array_map(static fn($r) => [$r['count_number'], $r['week'], $r['warehouse_name'] ?? '', $r['status'], (int) $r['items_count'], (float) $r['difference_value']], $report['counts'])],
             'Entradas sin comprobante' => [['Fecha', 'SKU', 'Producto', 'Cantidad', 'Motivo', 'Usuario'], array_map(static fn($r) => [$r['occurred_at'], $r['sku'], $r['name'], (float) $r['quantity'], $r['reason'], $r['user_name'] ?? ''], $report['manual_entries'])],
-            'Borradores cobrados' => [['Venta', 'Fecha', 'Cobrado', 'Usuario'], array_map(static fn($r) => [$r['sale_number'], $r['issue_date'], (float) $r['paid'], $r['user_name'] ?? ''], $report['paid_drafts'])],
-            'Sin rotacion' => [['SKU', 'Producto', 'Stock'], array_map(static fn($r) => [$r['sku'], $r['name'], (float) $r['stock']], $report['no_rotation'])],
-            'Stock negativo' => [['SKU', 'Producto', 'Stock'], array_map(static fn($r) => [$r['sku'], $r['name'], (float) $r['stock']], $report['negative_stock'])],
+            'Borradores cobrados' => [['Venta', 'Fecha', 'Cliente', 'Cobrado', 'Usuario'], array_map(static fn($r) => [$r['sale_number'], $r['issue_date'], $r['customer'] ?? '', (float) $r['paid'], $r['user_name'] ?? ''], $report['paid_drafts'])],
+            'Sin rotacion' => [['SKU', 'Producto', 'Stock', 'Valor $'], array_map(static fn($r) => [$r['sku'], $r['name'], (float) $r['stock'], (float) $r['value']], $report['no_rotation'])],
+            'Stock negativo' => [['SKU', 'Producto', 'Stock', 'Valor $'], array_map(static fn($r) => [$r['sku'], $r['name'], (float) $r['stock'], (float) $r['value']], $report['negative_stock'])],
         ];
         foreach ($sheets as $title => [$headers, $rows]) {
             $sheet = $book->createSheet();

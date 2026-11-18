@@ -18,7 +18,7 @@ final class InventoryDashboard
         $from = max($from, date('Y-m-d', strtotime($to . ' -89 days')));
         $warehouse = in_array($input['warehouse'] ?? '', array_column($warehouses, 'id'), true) ? $input['warehouse'] : '';
         $category = in_array($input['category'] ?? '', $categories, true) ? $input['category'] : '';
-        $products = $db->table('inventory_products')->select('id,sku,name,category,unit,min_stock,cost_price')->where('company_id', $companyId)->where('active', 1)->where('product_type !=', 'service');
+        $products = $db->table('inventory_products')->select('id,sku,name,category,unit,min_stock,cost_price,product_type')->where('company_id', $companyId)->where('active', 1)->where('product_type !=', 'service');
         if ($category !== '') { $products->where('category', $category); }
         $products = $products->get()->getResultArray();
         $stock = $db->table('inventory_stock_levels')->select('product_id')->selectSum('quantity')->selectSum('reserved_quantity')->where('company_id', $companyId);
@@ -31,6 +31,8 @@ final class InventoryDashboard
             $p['available'] = $qty - $reserved;
             $d['value'] += $qty * (float)$p['cost_price'];
             if ($reserved > 0) { $d['reserved']++; }
+            // Kits have no stock of their own (it depends on their components): never a replenishment alert.
+            if (($p['product_type'] ?? 'simple') === 'kit') { continue; }
             if ($p['available'] <= 0) { $d['out']++; $p['state'] = 'Sin disponible'; }
             elseif ($p['available'] <= (float)$p['min_stock']) { $d['low']++; $p['state'] = 'Bajo mínimo'; }
             else { continue; }

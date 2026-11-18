@@ -36,3 +36,6 @@
 @media(max-width:1000px){.insight-analysis-grid,.insight-secondary-grid{grid-template-columns:1fr}.insight-hero{padding:28px}.insight-hero-status{display:none}}
 @media(max-width:600px){.insight-hero{padding:25px 20px;border-radius:18px}.insight-hero h1{font-size:27px}.insight-hero p{font-size:12px}.insight-eyebrow{font-size:8px;letter-spacing:1.5px}.insight-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.insight-kpi{padding:17px 14px}.insight-kpi strong{font-size:23px}.insight-kpi-label{font-size:11px}.insight-kpi>span{font-size:10px}.insight-panel{padding:20px 16px}.insight-filters{padding:16px;gap:12px}.insight-filters label{min-width:calc(50% - 12px)}.insight-section-label{align-items:start;flex-direction:column;gap:7px}.insight-chart{min-height:150px}.insight-panel-heading{flex-wrap:wrap}}
 @media(prefers-reduced-motion:reduce){.insight-shell *{transition:none!important;scroll-behavior:auto!important}}
+
+/* Link-styled buttons keep Bootstrap button colors (the generic link rule above inherits the text color). */
+.insight-shell a.btn{color:var(--bs-btn-color)}.insight-shell a.btn:hover,.insight-shell .insight-panel a.btn:hover{color:var(--bs-btn-hover-color);text-decoration:none}.insight-shell a.btn:active{color:var(--bs-btn-active-color)}

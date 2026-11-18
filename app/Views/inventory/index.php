@@ -558,7 +558,7 @@
         let allRows = Array.from(tableBody.querySelectorAll('.product-row'));
         const noResultsRow = document.getElementById('no-results-row');
         const noProductsRow = document.getElementById('no-products-row');
-        const pageSize = 5;
+        const pageSize = 15;
         let currentPage = 1;
         let currentFilter = 'all';
         let searchQuery = '';
@@ -862,20 +862,21 @@
 
         // Generic Client-side Card List Pagination (5 items per page)
         function setupListPagination(containerId, itemSelector, pageSize = 5) {
-            const container = document.getElementById(containerId);
-            if (!container) return null;
-
-            let paginationWrapper = container.parentNode.querySelector(`.codex-pagination[data-for="${containerId}"]`);
-            if (!paginationWrapper) {
-                paginationWrapper = document.createElement('div');
-                paginationWrapper.className = 'codex-pagination mt-3';
-                paginationWrapper.dataset.for = containerId;
-                container.after(paginationWrapper);
-            }
+            if (!document.getElementById(containerId)) return null;
 
             let currentPage = 1;
 
+            // The container can be replaced by the AJAX refresh: look it up (and its pager) on every render.
             function render() {
+                const container = document.getElementById(containerId);
+                if (!container) return;
+                let paginationWrapper = container.parentNode.querySelector(`.codex-pagination[data-for="${containerId}"]`);
+                if (!paginationWrapper) {
+                    paginationWrapper = document.createElement('div');
+                    paginationWrapper.className = 'codex-pagination mt-3';
+                    paginationWrapper.dataset.for = containerId;
+                    container.after(paginationWrapper);
+                }
                 const items = Array.from(container.querySelectorAll(itemSelector));
                 const totalItems = items.length;
 
@@ -1013,6 +1014,8 @@
         const reservationsPaginator = setupListPagination('inventory-reservations-list', '.reservation-item', 5);
         const warehousesPaginator = setupListPagination('inventory-warehouses-list', '.warehouse-item', 5);
         const movementsPaginator = setupListPagination('recent-movements-list', '.recent-movement-item', 5);
+        // Replenishment priorities: 4 per page; the page is kept when the data refreshes.
+        const prioritiesPaginator = setupListPagination('inventory-priorities-table', '.priority-row', 4);
 
         // Bind liberation form handlers for instant AJAX execution without full reload
         function bindReservationReleaseForms() {
@@ -1071,6 +1074,7 @@
                 const curSummary = document.getElementById('inventory-summary-card');
                 if (newSummary && curSummary) {
                     curSummary.innerHTML = newSummary.innerHTML;
+                    prioritiesPaginator?.render();
                 }
 
                 // 2. Update Smart Alerts Card

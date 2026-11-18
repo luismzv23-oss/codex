@@ -46,6 +46,7 @@ $routes->post('inventario/control-semanal', 'InventoryControlController::control
 $routes->get('inventario/control-semanal/informe', 'InventoryControlController::controlReport', ['filter' => 'permission:systems.view']);
 $routes->get('inventario/control-semanal/informe/(:segment)', 'InventoryControlController::controlReport/$1', ['filter' => 'permission:systems.view']);
 $routes->get('inventario/control-semanal/(:segment)', 'InventoryControlController::controlShow/$1', ['filter' => 'permission:systems.view']);
+$routes->get('inventario/control-semanal/(:segment)/productos', 'InventoryControlController::controlItems/$1', ['filter' => 'permission:systems.view']);
 $routes->get('inventario/control-semanal/(:segment)/planilla', 'InventoryControlController::controlSheet/$1', ['filter' => 'permission:systems.view']);
 $routes->post('inventario/control-semanal/(:segment)/contar', 'InventoryControlController::controlRecord/$1', ['filter' => 'permission:systems.view']);
 $routes->post('inventario/control-semanal/(:segment)/cerrar', 'InventoryControlController::controlClose/$1', ['filter' => 'permission:systems.view']);

@@ -2475,7 +2475,7 @@ class InventoryController extends BaseController
         return (bool) ($context['canConfigure'] ?? false);
     }
 
-    private function inventoryCompanies(): array
+    protected function inventoryCompanies(): array
     {
         if (! $this->isSuperadmin()) {
             return [];

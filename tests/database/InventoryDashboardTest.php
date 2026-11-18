@@ -31,6 +31,13 @@ final class InventoryDashboardTest extends CIUnitTestCase
         $this->assertSame(3,$d['products']);$this->assertSame(2,$d['out']);$this->assertSame(0,$d['low']);$this->assertSame(2,$d['reserved']);$this->assertSame(110.0,$d['value']);
         $this->assertSame(2,$d['movement_count']);$this->assertSame(['ingreso'=>1,'egreso'=>0,'otros'=>1],$d['days']['2026-10-03']);$this->assertCount(2,$d['warehouses']);
     }
+    public function testKitsWithoutStockAreNotReplenishmentAlerts(): void {
+        db_connect()->table('inventory_products')->insert(['id'=>'kit','company_id'=>'a','sku'=>'kit','name'=>'kit','category'=>'Bebidas','unit'=>'unidad','min_stock'=>3,'cost_price'=>10,'active'=>1,'product_type'=>'kit']);
+        $d=(new InventoryDashboard())->build('a',['from'=>'2026-10-03','to'=>'2026-10-03']);
+        $this->assertSame(2,$d['out']);
+        $this->assertNotContains('kit',array_column($d['alerts'],'id'));
+    }
+
     public function testWarehouseFilterAndTransfersCountOnce(): void {
         $d=(new InventoryDashboard())->build('a',['warehouse'=>'w1','from'=>'2026-10-03','to'=>'2026-10-03']);
         $this->assertSame(1,$d['low']);$this->assertSame(60.0,$d['value']);$this->assertSame(2,$d['movement_count']);

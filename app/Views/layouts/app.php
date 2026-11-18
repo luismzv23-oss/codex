@@ -620,7 +620,14 @@ if (auth_check() && !$isPopup) {
                     render();
                 };
 
-                document.querySelectorAll('table[data-codex-pagination]').forEach(buildPagination);
+                // Re-callable after AJAX refreshes: only tables not paginated yet.
+                window.initCodexPagination = (root = document) => {
+                    root.querySelectorAll('table[data-codex-pagination]:not([data-codex-paginated])').forEach((table) => {
+                        table.dataset.codexPaginated = '1';
+                        buildPagination(table);
+                    });
+                };
+                window.initCodexPagination();
             })();
         </script>
         <script src="<?= base_url('assets/js/codex-assist-widget.js') ?>" defer></script>

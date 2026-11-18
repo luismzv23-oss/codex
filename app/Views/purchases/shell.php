@@ -13,6 +13,7 @@
     </div>
     <nav class="purchases-hero-actions" aria-label="Acciones de compras">
     <?php if (!$purchaseEditing): ?><button type="button" data-purchases-refresh class="btn btn-outline-dark icon-btn" title="Actualizar resumen" aria-label="Actualizar resumen"><i class="bi bi-arrow-clockwise"></i></button><?php else: ?><a class="btn btn-outline-dark icon-btn" href="<?= site_url('compras?'.$purchaseQuery) ?>" title="Volver a Compras" aria-label="Volver a Compras"><i class="bi bi-arrow-left"></i></a><?php endif; ?>
+    <a href="<?= site_url('compras/reposicion?'.$purchaseQuery) ?>" class="btn btn-outline-dark icon-btn" title="Reposición inteligente (IA)" aria-label="Reposición inteligente"><i class="bi bi-stars" aria-hidden="true"></i></a>
     <?php if ($context['canManage'] && in_array(auth_user()['role_slug'] ?? '',['admin','superadmin'],true)): ?>
         <a href="<?= site_url('compras/importaciones?'.$purchaseQuery) ?>" class="btn btn-outline-dark icon-btn" title="Cargar factura desde archivo" aria-label="Cargar factura desde archivo"><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i></a>
     <?php endif; ?>

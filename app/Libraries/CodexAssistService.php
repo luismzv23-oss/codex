@@ -59,6 +59,26 @@ class CodexAssistService
     }
 
     /**
+     * Completion with a custom system prompt (used by analytical modules such as replenishment).
+     * Throws on provider failure so callers can apply their own rule-based fallback.
+     */
+    public function complete(string $system, string $prompt, int $maxTokens = 1000, int $timeout = 90): string
+    {
+        $answer = $this->provider === 'openai'
+            ? $this->callOpenAI($system, $prompt, $maxTokens, $timeout)
+            : $this->callOllama($system, $prompt, $timeout);
+        $this->logInteraction('[analisis] ' . mb_substr($prompt, 0, 500), $answer, ['company_id' => (auth_user() ?: [])['company_id'] ?? null], 0);
+
+        return $answer;
+    }
+
+    /** Provider/model label for display, e.g. "ollama · llama3.2". */
+    public function label(): string
+    {
+        return $this->provider . ' · ' . $this->model;
+    }
+
+    /**
      * Analyze business data and generate proactive insights/alerts.
      */
     public function analyzeAlerts(string $companyId): array
@@ -213,14 +233,15 @@ class CodexAssistService
         return $base;
     }
 
-    private function callOllama(string $system, string $question): string
+    private function callOllama(string $system, string $question, int $timeout = 30): string
     {
         $ch = curl_init($this->apiUrl . '/api/chat');
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_POST           => true,
             CURLOPT_HTTPHEADER     => ['Content-Type: application/json'],
-            CURLOPT_TIMEOUT        => 30,
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT        => $timeout,
             CURLOPT_POSTFIELDS     => json_encode([
                 'model'    => $this->model,
                 'messages' => [
@@ -243,21 +264,25 @@ class CodexAssistService
         return $data['message']['content'] ?? 'Sin respuesta del asistente.';
     }
 
-    private function callOpenAI(string $system, string $question): string
+    private function callOpenAI(string $system, string $question, int $maxTokens = 1000, int $timeout = 30): string
     {
+        if ($this->apiKey === '') {
+            throw new \RuntimeException('OpenAI sin API key configurada.');
+        }
         $ch = curl_init('https://api.openai.com/v1/chat/completions');
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_POST           => true,
             CURLOPT_HTTPHEADER     => ['Content-Type: application/json', 'Authorization: Bearer ' . $this->apiKey],
-            CURLOPT_TIMEOUT        => 30,
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT        => $timeout,
             CURLOPT_POSTFIELDS     => json_encode([
                 'model'    => $this->model,
                 'messages' => [
                     ['role' => 'system', 'content' => $system],
                     ['role' => 'user', 'content' => $question],
                 ],
-                'max_tokens' => 1000,
+                'max_tokens' => $maxTokens,
             ]),
         ]);
 

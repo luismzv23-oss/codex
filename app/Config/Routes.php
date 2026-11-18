@@ -172,6 +172,10 @@ $routes->get('inventario/productos/(:segment)/kpi-xlsx', 'InventoryController::p
     $routes->post('compras/ordenes/(:segment)/confirmar', 'PurchasesController::confirmOrder/$1', ['filter' => 'permission:systems.view']);
     $routes->get('compras/ordenes/(:segment)/recepcionar', 'PurchasesController::createReceiptForm/$1', ['filter' => 'permission:systems.view']);
     $routes->post('compras/recepciones', 'PurchasesController::storeReceipt', ['filter' => 'permission:systems.view']);
+    $routes->get('compras/reposicion', 'PurchaseReplenishmentController::index', ['filter' => 'permission:systems.view']);
+    $routes->post('compras/reposicion/analizar', 'PurchaseReplenishmentController::analyze', ['filter' => 'permission:systems.view']);
+    $routes->post('compras/reposicion/(:segment)/ia', 'PurchaseReplenishmentController::ai/$1', ['filter' => 'permission:systems.view']);
+    $routes->post('compras/reposicion/(:segment)/ordenes', 'PurchaseReplenishmentController::orders/$1', ['filter' => 'permission:systems.view']);
     $routes->get('compras/importaciones', 'PurchaseImportsController::index', ['filter'=>'permission:systems.view']);
     $routes->post('compras/importaciones', 'PurchaseImportsController::upload', ['filter'=>'permission:systems.view']);
     $routes->get('compras/importaciones/(:segment)', 'PurchaseImportsController::show/$1', ['filter'=>'permission:systems.view']);

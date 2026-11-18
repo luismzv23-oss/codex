@@ -108,6 +108,35 @@
                     <option value="0" <?= (string) old('active', (string) ($product['active'] ?? '1')) === '0' ? 'selected' : '' ?>>Inactivo</option>
                 </select>
             </div>
+            <div class="col-12" x-show="!isKit">
+                <div class="border rounded-4 p-3">
+                    <h3 class="h6 mb-1"><i class="bi bi-stars me-1" aria-hidden="true"></i>Reposición</h3>
+                    <p class="text-secondary small mb-3">Parámetros que usa Compras &gt; Reposición inteligente. Si quedan vacíos, el sistema usa el último proveedor y el plazo observado en las compras.</p>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Proveedor habitual</label>
+                            <select name="preferred_supplier_id" class="form-select">
+                                <option value="">Automático (última compra)</option>
+                                <?php foreach ($suppliers ?? [] as $supplier): ?>
+                                    <option value="<?= esc($supplier['id']) ?>" <?= (string) old('preferred_supplier_id', (string) ($product['preferred_supplier_id'] ?? '')) === (string) $supplier['id'] ? 'selected' : '' ?>><?= esc($supplier['name']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Plazo de entrega (días)</label>
+                            <input type="number" step="1" min="0" max="365" name="lead_time_days" class="form-control" placeholder="Auto" value="<?= esc(old('lead_time_days', (string) ($product['lead_time_days'] ?? ''))) ?>">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Lote mínimo</label>
+                            <input type="number" step="1" min="0" name="min_order_qty" class="form-control" placeholder="—" value="<?= esc(old('min_order_qty', isset($product['min_order_qty']) ? rtrim(rtrim((string) $product['min_order_qty'], '0'), '.') : '')) ?>">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label" title="Ej.: 6 si el proveedor vende por caja de 6">Múltiplo de compra</label>
+                            <input type="number" step="1" min="0" name="order_multiple" class="form-control" placeholder="—" value="<?= esc(old('order_multiple', isset($product['order_multiple']) ? rtrim(rtrim((string) $product['order_multiple'], '0'), '.') : '')) ?>">
+                        </div>
+                    </div>
+                </div>
+            </div>
             <div class="col-12">
                 <label class="form-label">Descripcion</label>
                 <textarea name="description" class="form-control" rows="3"><?= esc(old('description', $product['description'] ?? '')) ?></textarea>

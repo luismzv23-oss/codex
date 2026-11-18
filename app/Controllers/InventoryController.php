@@ -970,6 +970,7 @@ class InventoryController extends BaseController
             'companyId' => $context['company']['id'],
             'isPopup' => $this->isPopupRequest(),
             'warehouses' => $this->activeWarehouses($context['company']['id']),
+            'suppliers' => $this->replenishmentSupplierOptions($context['company']['id']),
             'redirectTo' => $this->request->getGet('redirect_to') ?? '',
         ]);
     }
@@ -1043,7 +1044,7 @@ class InventoryController extends BaseController
             'serial_control' => (string) $this->request->getPost('serial_control') === '1' ? 1 : 0,
             'expiration_control' => (string) $this->request->getPost('expiration_control') === '1' ? 1 : 0,
             'active' => (string) $this->request->getPost('active') === '0' ? 0 : 1,
-        ], true);
+        ] + $this->replenishmentPayload($context['company']['id'], $productRules['product_type']), true);
 
         $this->syncKitItems($productId, $this->requestKitItems($context['company']['id'], $productId));
 
@@ -1153,6 +1154,7 @@ class InventoryController extends BaseController
             'warehouses' => $this->activeWarehouses($context['company']['id']),
             'currentWarehouseId' => $stockLevel['warehouse_id'] ?? '',
             'currentStock' => (float) ($stockLevel['quantity'] ?? 0),
+            'suppliers' => $this->replenishmentSupplierOptions($context['company']['id']),
             'redirectTo' => $this->request->getGet('redirect_to') ?? '',
         ]);
     }
@@ -1268,7 +1270,7 @@ class InventoryController extends BaseController
             'serial_control' => (string) $this->request->getPost('serial_control') === '1' ? 1 : 0,
             'expiration_control' => (string) $this->request->getPost('expiration_control') === '1' ? 1 : 0,
             'active' => (string) $this->request->getPost('active') === '0' ? 0 : 1,
-        ];
+        ] + $this->replenishmentPayload($context['company']['id'], $productRules['product_type']);
 
         $productModel->update($id, $payload);
         $this->syncProductMinimums($context['company']['id'], $id, (float) $payload['min_stock']);
@@ -2979,6 +2981,39 @@ class InventoryController extends BaseController
             ->where('active', 1)
             ->orderBy('name', 'ASC')
             ->findAll();
+    }
+
+    private function replenishmentSupplierOptions(string $companyId): array
+    {
+        return db_connect()->table('suppliers')->select('id, name')->where('company_id', $companyId)->where('active', 1)->orderBy('name', 'ASC')->get()->getResultArray();
+    }
+
+    /** Parámetros de compra usados por Compras > Reposición inteligente (los kits no se compran). */
+    private function replenishmentPayload(string $companyId, string $productType): array
+    {
+        if ($productType === 'kit') {
+            return ['preferred_supplier_id' => null, 'lead_time_days' => null, 'min_order_qty' => null, 'order_multiple' => null];
+        }
+        $supplierId = trim((string) $this->request->getPost('preferred_supplier_id'));
+        if ($supplierId !== '' && ! db_connect()->table('suppliers')->where('company_id', $companyId)->where('id', $supplierId)->countAllResults()) {
+            $supplierId = '';
+        }
+        $number = function (string $field, int $max): ?float {
+            $raw = trim(str_replace(',', '.', (string) $this->request->getPost($field)));
+            if ($raw === '' || ! is_numeric($raw) || (float) $raw <= 0) {
+                return null;
+            }
+
+            return min((float) $raw, $max);
+        };
+        $leadTime = $number('lead_time_days', 365);
+
+        return [
+            'preferred_supplier_id' => $supplierId ?: null,
+            'lead_time_days' => $leadTime !== null ? (int) ceil($leadTime) : null,
+            'min_order_qty' => $number('min_order_qty', 1000000),
+            'order_multiple' => $number('order_multiple', 1000000),
+        ];
     }
 
     private function activeLocations(string $companyId): array

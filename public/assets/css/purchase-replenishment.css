@@ -1,0 +1,59 @@
+/* Compras > Reposición inteligente (complementa dashboard-insights.css) */
+.repl-shell .insight-hero .btn-outline-light{border-color:#ffffff55}
+.repl-shell .insight-filters label{min-width:150px}
+.repl-shell .repl-analyze[aria-busy=true] i{animation:repl-spin 1s linear infinite}
+@keyframes repl-spin{to{transform:rotate(360deg)}}
+
+.repl-subtitle{font-size:12px;font-weight:800;letter-spacing:.4px;color:var(--muted);margin:22px 0 10px;text-transform:uppercase}
+.repl-insights{list-style:none;padding:0;margin:0;display:grid;gap:8px}
+.repl-insights li{display:flex;gap:10px;align-items:start;font-size:12px;line-height:1.55;padding:10px 12px;border-radius:10px;background:#f7f8fc}
+.repl-insights i{font-size:14px;margin-top:1px}
+.repl-insight-danger{background:#fdf0ef!important}.repl-insight-danger i{color:#b85149}
+.repl-insight-warning{background:#fff6e9!important}.repl-insight-warning i{color:#b46a35}
+.repl-insight-success{background:#ebf7f3!important}.repl-insight-success i{color:#24836c}
+.repl-insight-info i{color:#6354db}
+
+.repl-ai-output{white-space:pre-wrap;font-size:13px;line-height:1.7;background:linear-gradient(125deg,#f4f2ff,#fbfbff);border:1px solid #e0dbff;border-radius:14px;padding:18px 20px;max-height:460px;overflow:auto}
+.repl-ai-output.is-loading{color:var(--muted);font-style:italic}
+.repl-ai-btn{white-space:nowrap;border-radius:9px}
+
+.repl-orders{padding-bottom:0;overflow:hidden}
+.repl-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.repl-toolbar input{max-width:220px}
+.repl-table-scroll{overflow:auto;max-height:640px;margin:0 -26px;border-top:1px solid var(--line)}
+.repl-table{width:100%;border-collapse:collapse;font-size:12px}
+.repl-table th{font-size:10px;font-weight:600;color:#77839a;background:#f7f9fc;text-align:left;padding:11px 10px;position:sticky;top:0;z-index:2;white-space:nowrap}
+.repl-table td{padding:11px 10px;border-bottom:1px solid #eef0f5;vertical-align:top}
+.repl-table th:first-child,.repl-table td:first-child{padding-left:26px}
+.repl-table td small{display:block;color:var(--muted);font-size:10px;margin-top:3px;white-space:nowrap}
+.repl-product{min-width:220px;max-width:300px}
+.repl-product strong{font-weight:650;display:block}
+.repl-product details{margin-top:4px}
+.repl-product summary{font-size:10px;color:#6658b4;cursor:pointer}
+.repl-product details ul{padding-left:16px;margin:6px 0 0;font-size:11px;color:var(--muted);line-height:1.5;white-space:normal}
+.repl-row-critica{background:#fffafa}
+.repl-row[hidden]{display:none}
+.repl-qty{width:78px}.repl-cost{width:100px}.repl-supplier{min-width:150px;max-width:190px}
+.repl-cost.is-warning{border-color:#f0c27c;background:#fffaf0}
+.repl-subtotal{font-weight:650;white-space:nowrap}
+
+.repl-class{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:6px;font-size:10px;font-weight:800;margin-right:3px;background:#eef0f6;color:#65718a}
+.repl-abc-A{background:#e9e6ff;color:#4a3bb5}.repl-abc-B{background:#e4f1fb;color:#2a6390}.repl-abc-C{background:#f1f2f5;color:#7c8598}
+.repl-demand{display:flex;align-items:center;gap:8px;white-space:nowrap}
+.repl-spark{width:64px;height:20px}.repl-spark polyline{fill:none;stroke:#6354db;stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round}
+
+.repl-badge{display:inline-block;font-size:10px;font-weight:700;padding:4px 8px;border-radius:6px;white-space:nowrap}
+.repl-badge-critica{background:#fbe3e1;color:#a2382f}
+.repl-badge-alta{background:#fff0dc;color:#9a5a1c}
+.repl-badge-media{background:#eef0f6;color:#59647b}
+.repl-badge-frozen{background:#e7f0fb;color:#2f5f93}
+.repl-badge-excess{background:#fff0dc;color:#9a5a1c}
+
+.repl-footer{position:sticky;bottom:0;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 26px;margin:0 -26px;background:#fff;border-top:1px solid var(--line);box-shadow:0 -6px 16px #1c29420a;font-size:12px}
+.repl-footer select{max-width:220px}
+.repl-excess-scroll{max-height:420px}
+.repl-current td{background:#f4f2ff}
+.repl-method ul{padding-left:18px;margin:0;font-size:12px;line-height:1.7;color:var(--muted)}
+.repl-method strong{color:var(--ink)}
+
+@media(max-width:600px){.repl-table-scroll,.repl-footer{margin:0 -16px}.repl-toolbar{justify-content:flex-start}}

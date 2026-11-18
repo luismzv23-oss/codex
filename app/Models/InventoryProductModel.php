@@ -25,6 +25,10 @@ class InventoryProductModel extends BaseUuidModel
         'serial_control',
         'expiration_control',
         'active',
+        'preferred_supplier_id',
+        'lead_time_days',
+        'min_order_qty',
+        'order_multiple',
         'created_at',
         'updated_at',
     ];

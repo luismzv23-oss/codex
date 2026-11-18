@@ -40,7 +40,11 @@ class ErpAdvancedController extends ResourceController
 
         $warehouseId = $this->request->getVar('warehouse_id') ?: null;
         $mrpService = new MrpService();
-        $results = $mrpService->calculateRequirements($companyId, $warehouseId);
+        try {
+            $results = $mrpService->calculateRequirements($companyId, $warehouseId, array_intersect_key((array) $this->request->getVar(), array_flip(['history_days', 'service_level', 'review_days', 'default_lead_time'])));
+        } catch (\RuntimeException $e) {
+            return $this->failValidationErrors($e->getMessage());
+        }
 
         return $this->respond([
             'status'  => 200,
